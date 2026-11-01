@@ -5,34 +5,110 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Minecraft Web</title>
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; user-select: none; }
     canvas#game { display: block; width: 100%; height: 100%; }
+    .hidden { display: none !important; }
     #crosshair { position: fixed; left: 50%; top: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
     #crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,.85); mix-blend-mode: difference; }
     #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
     #crosshair::after { left: 0; top: 9px; width: 20px; height: 2px; }
-    #hotbar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 4px; padding: 4px; background: rgba(0,0,0,.45); border-radius: 4px; }
-    .slot { width: 48px; height: 48px; border: 3px solid #555; background-color: #333; image-rendering: pixelated; position: relative; box-sizing: border-box; }
-    .slot.active { border-color: #fff; }
-    .slot span { position: absolute; left: 2px; top: 0; font-size: 11px; color: #fff; text-shadow: 1px 1px #000; }
+    #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(220,0,0,.0); transition: box-shadow .5s; }
+    #vignette.hurt { box-shadow: inset 0 0 160px 60px rgba(220,0,0,.7); transition: none; }
+    #water { position: fixed; inset: 0; pointer-events: none; background: rgba(20,60,160,.35); }
+    #hud { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+    #bars { display: flex; justify-content: space-between; width: 100%; font-size: 17px; text-shadow: 1px 1px #000; min-height: 22px; }
+    #hearts, #food, #air { display: flex; gap: 1px; }
+    #food { flex-direction: row-reverse; }
+    #air { position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%); }
+    .ic { width: 18px; text-align: center; }
+    .ic.full { color: #e22; } .ic.half { background: linear-gradient(90deg, #e22 50%, #444 50%); -webkit-background-clip: text; background-clip: text; color: transparent; } .ic.empty { color: #444; }
+    #food .ic.full { color: #d9852b; } #food .ic.half { background: linear-gradient(90deg, #d9852b 50%, #444 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #air .ic { color: #7cf; }
+    #hotbar { display: flex; gap: 3px; padding: 4px; background: rgba(0,0,0,.45); border-radius: 4px; pointer-events: auto; }
+    .slot { width: 46px; height: 46px; border: 3px solid #555; background: #3a3a3a; position: relative; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+    .slot img { width: 32px; height: 32px; image-rendering: pixelated; pointer-events: none; }
+    .slot img.flat { width: 36px; height: 36px; }
+    .slot.active { border-color: #fff; background: #5a5a5a; }
+    .slot .n { position: absolute; right: 2px; bottom: 0; font-size: 13px; color: #fff; text-shadow: 1px 1px #000; font-weight: bold; pointer-events: none; }
+    .slot .k { position: absolute; left: 2px; top: -1px; font-size: 10px; color: #bbb; text-shadow: 1px 1px #000; pointer-events: none; }
+    .slot .dur { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 3px; background: #222; pointer-events: none; }
+    .slot .dur i { display: block; height: 100%; background: #6f6; }
     #info { position: fixed; left: 8px; top: 8px; color: #fff; font: 12px monospace; text-shadow: 1px 1px #000; white-space: pre; pointer-events: none; }
-    #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; text-align: center; }
-    #overlay h1 { margin: 0; font-size: 44px; letter-spacing: 2px; }
-    #overlay p { margin: 2px; color: #ccc; }
-    #overlay.hidden { display: none; }
+    #toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); color: #fff; font-size: 16px; text-shadow: 1px 1px #000; pointer-events: none; transition: opacity .6s; }
+    #breakbar { position: fixed; left: 50%; top: 56%; width: 60px; height: 4px; background: rgba(0,0,0,.5); transform: translateX(-50%); }
+    #breakbar i { display: block; height: 100%; background: #fff; width: 0; }
+    /* pantallas */
+    .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #fff; z-index: 10; }
+    .panel { background: #c6c6c6; border: 3px solid #333; padding: 14px; color: #222; box-shadow: 0 0 0 3px #888 inset; display: flex; flex-direction: column; gap: 8px; max-height: 94vh; overflow: auto; }
+    .panel h3 { margin: 0; font-size: 15px; }
+    .grid { display: grid; gap: 2px; }
+    .panel .slot { background: #8b8b8b; border: 2px solid #373737; border-right-color: #fff; border-bottom-color: #fff; }
+    .panel .slot:hover { background: #a8a8a8; }
+    #craftArea { display: flex; align-items: center; gap: 14px; }
+    #craftArea .arrow { font-size: 26px; }
+    #palette { display: grid; grid-template-columns: repeat(9, 46px); gap: 2px; max-height: 160px; overflow: auto; }
+    #cursorItem { position: fixed; pointer-events: none; z-index: 20; width: 36px; height: 36px; transform: translate(-50%, -50%); }
+    #cursorItem img { width: 36px; height: 36px; image-rendering: pixelated; }
+    #cursorItem .n { position: absolute; right: 0; bottom: 0; color: #fff; font-size: 13px; font-weight: bold; text-shadow: 1px 1px #000; }
+    #overlay { z-index: 30; background: rgba(0,0,0,.65); flex-direction: column; gap: 10px; text-align: center; }
+    #overlay h1 { margin: 0 0 6px; font-size: 46px; letter-spacing: 3px; text-shadow: 3px 3px #333; }
+    #overlay p { margin: 2px; color: #ccc; max-width: 640px; font-size: 14px; }
+    .btn { background: #777; color: #fff; border: 3px solid #222; border-top-color: #bbb; border-left-color: #bbb; padding: 10px 24px; min-width: 300px; font-size: 16px; cursor: pointer; text-shadow: 1px 1px #222; }
+    .btn:hover { background: #8a9ad8; }
+    .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-width: 300px; font-size: 14px; }
+    #msg { color: #ff8; }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
+  <div id="water" class="hidden"></div>
+  <div id="vignette"></div>
   <div id="crosshair"></div>
-  <div id="hotbar"></div>
+  <div id="breakbar" class="hidden"><i></i></div>
+  <div id="air"></div>
+  <div id="hud">
+    <div id="bars"><div id="hearts"></div><div id="food"></div></div>
+    <div id="hotbar"></div>
+  </div>
   <div id="info"></div>
-  <div id="overlay">
-    <h1>MINECRAFT WEB</h1>
-    <p id="status">Generando mundo…</p>
-    <p><b>Clic</b> para jugar</p>
-    <p>WASD mover · Espacio saltar · Shift correr · F volar (Espacio/Q subir/bajar)</p>
-    <p>Clic izq. romper · Clic der. colocar · 1-8 o rueda: elegir bloque · Esc pausa</p>
+  <div id="toast"></div>
+
+  <div id="inv" class="screen hidden">
+    <div class="panel">
+      <h3 id="invTitle">Inventario</h3>
+      <div id="craftArea"><div id="craftGrid" class="grid"></div><span class="arrow">➜</span><div id="craftOut"></div></div>
+      <div id="paletteWrap" class="hidden"><h3>Bloques e ítems (clic para coger; soltar aquí para borrar)</h3><div id="palette"></div></div>
+      <div id="invMain" class="grid" style="grid-template-columns: repeat(9, 46px)"></div>
+      <div id="invHot" class="grid" style="grid-template-columns: repeat(9, 46px)"></div>
+    </div>
+  </div>
+  <div id="cursorItem" class="hidden"></div>
+
+  <div id="overlay" class="screen">
+    <div id="menu">
+      <h1>MINECRAFT WEB</h1>
+      <p id="msg">Cargando…</p>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:center;margin-top:10px">
+        <button class="btn hidden" id="bContinue">Continuar mundo guardado</button>
+        <button class="btn" id="bSurvival">Nuevo mundo · Supervivencia</button>
+        <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+      </div>
+      <p style="margin-top:14px"><b>WASD</b> mover · <b>Espacio</b> saltar/nadar · <b>Shift</b> correr · <b>E</b> inventario · <b>1-9</b>/rueda elegir ranura<br>
+        <b>Clic izq.</b> (mantener) romper / atacar · <b>Clic der.</b> colocar / comer / mesa de crafteo · <b>Q</b> tirar ítem · <b>F</b> volar (creativo) · <b>G</b> cambiar modo</p>
+    </div>
+    <div id="pause" class="hidden">
+      <h1>Pausa</h1>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+        <button class="btn" id="bResume">Reanudar</button>
+        <div class="row"><span>Distancia de render</span><input id="rRadius" type="range" min="3" max="10" step="1" value="6" /><b id="vRadius">6</b></div>
+        <div class="row"><span>Volumen</span><input id="rVol" type="range" min="0" max="1" step="0.05" value="0.5" /></div>
+        <button class="btn" id="bSave">Guardar y salir al menú</button>
+      </div>
+    </div>
+    <div id="death" class="hidden">
+      <h1 style="color:#e33">Has muerto</h1>
+      <button class="btn" id="bRespawn">Reaparecer</button>
+    </div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
