@@ -435,7 +435,12 @@ const check = (name, cond, extra = '') => {
     SAVE.hat = 2;
     SAVE.visor = 3;
     const crew = makeCrew('#c51111', false, SAVE.hat, SAVE.visor);
-    const tieneSombrero = crew.children.length > makeCrew('#c51111', false, 0, 0).children.length;
+    const count = o => {
+        let n = 0;
+        o.traverse(() => n++);
+        return n;
+      },
+      tieneSombrero = count(crew) > count(makeCrew('#c51111', false, 0, 0));
     SAVE.hat = 0;
     SAVE.visor = 0;
     return { hats, tieneSombrero, bot: cosmeticsFor({ isP: false, id: 4 }).length };
@@ -576,9 +581,13 @@ const check = (name, cond, extra = '') => {
       pets = [1, 2, 3].map(i => makePet(i).children.length);
     const u = crew.userData;
     return {
-      piezas: crew.children.length,
+      piezas: (() => {
+        let n = 0;
+        crew.traverse(() => n++);
+        return n;
+      })(),
       suit: u.suit.length,
-      garras: zomb.userData.arms.length === 2,
+      garras: zomb.userData.rig.armR.hand.children.length >= 4,
       mascotas: pets.every(n => n > 0),
       iconos: [
         'heart',
@@ -598,7 +607,7 @@ const check = (name, cond, extra = '') => {
   });
   check(
     'el modelo rediseñado tiene cuerpo, visor, mochila y piernas',
-    dz.piezas >= 12 && dz.suit === 3 && dz.garras,
+    dz.piezas >= 40 && dz.suit === 3 && dz.garras,
     JSON.stringify(dz)
   );
   check(
@@ -629,6 +638,78 @@ const check = (name, cond, extra = '') => {
   });
   await wait(600);
   check('el HUD con indicador de daño y marca de impacto se dibuja sin errores', true);
+
+  console.log('Articulación, emotes y ambiente');
+  const rig = await ev(() => {
+    const c = makeCrew('#c51111', false, 0, 0),
+      u = c.userData,
+      r = u.rig;
+    const has = ['torso', 'upper', 'armL', 'armR', 'legL', 'legR', 'pack', 'hold'].every(
+      k => !!r[k]
+    );
+    const joints = !!(r.armL.sh && r.armL.el && r.armL.hand && r.legL.hip && r.legL.knee);
+    // al correr, rodillas y codos se doblan y las piernas se desfasan
+    for (let i = 0; i < 60; i++)
+      animateCrew(u, { t: i * 0.016, phase: i * 0.3, speed: 1, sprint: 1 }, 0.016);
+    const run = {
+      knee: Math.abs(r.legL.knee.rotation.x) + Math.abs(r.legR.knee.rotation.x),
+      hips: r.legL.hip.rotation.x * r.legR.hip.rotation.x,
+      lean: r.torso.rotation.x,
+    };
+    // pose de apuntar
+    for (let i = 0; i < 60; i++)
+      animateCrew(
+        u,
+        { t: i * 0.016, phase: 0, speed: 0, aim: true, wep: 'pistola', twist: 0.5 },
+        0.016
+      );
+    const aim = { arm: r.armR.sh.rotation.x, twist: r.torso.rotation.y };
+    return { has, joints, run, aim };
+  });
+  check(
+    'el personaje tiene torso, brazos y piernas articulados',
+    rig.has && rig.joints,
+    JSON.stringify(rig)
+  );
+  check(
+    'al correr se doblan las rodillas, las piernas van en oposición y el torso se inclina',
+    rig.run.knee > 0.2 && rig.run.hips <= 0 && rig.run.lean > 0.08,
+    JSON.stringify(rig.run)
+  );
+  check(
+    'al apuntar el brazo se eleva y el torso gira',
+    rig.aim.arm < -1.2 && Math.abs(rig.aim.twist - 0.5) < 0.1,
+    JSON.stringify(rig.aim)
+  );
+  const emo = await ev(() => {
+    gmode = 'classic';
+    newGame();
+    G.intro = 0;
+    doEmote(1);
+    return { i: G.emote.i, t: G.emote.t };
+  });
+  check('los emotes se activan', emo.i === 1 && emo.t > 2, JSON.stringify(emo));
+  await ev(() => {
+    SAVE.quality = 2;
+    gmode = 'sandbox';
+    newGame();
+    G.intro = 0;
+  });
+  await wait(2500);
+  const amb = await ev(() => ({
+    glow: !!R3.sb.glow,
+    fly: R3.sb.fly.count === 18,
+    sol: !!R3.sb.sky.material.uniforms.sunDir,
+    abedul: [...TREES.values()].some(t => treeKind(t) === 1) && R3.sb.o[14].count > 0,
+  }));
+  check(
+    'hay mariposas, luciérnagas, cielo con sol y abedules',
+    amb.glow && amb.fly && amb.sol && amb.abedul,
+    JSON.stringify(amb)
+  );
+  await ev(() => {
+    SAVE.quality = 1;
+  });
 
   console.log('Fallback 2D');
   await ev(() => {

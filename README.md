@@ -31,6 +31,7 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | Granada · tienda (zombi) | `G` · `B` | cruceta ↓ · Y |
 | Crafteo (cubo) · ventilación (impostor) | `C` · `V` | Y |
 | Sabotaje (impostor) | `F` | cruceta ↑ |
+| Emotes | `T` `Y` `U` | — |
 | Pausa y ajustes | `P` | Start |
 
 Ajustes (en pausa y en el menú): calidad gráfica, dificultad, sensibilidad, campo de visión,
@@ -43,6 +44,7 @@ música y vista 3D/2D.
 - **Mundo cubo:** hambre, animales, horno y carne asada, cama (duerme de noche), brotes que crecen
   hasta ser árboles, lluvia con tormentas, cielo con sol, luna, estrellas y nubes.
 - **HUD:** kit propio (paneles de cristal, iconos vectoriales, barras con estela de daño, botones circulares con tecla y recarga, mira dinámica con marca de impacto e indicador de dirección del daño, minimapa con cono de visión).
+- **Animación:** rig articulado (torso con inclinación y giro, hombros, codos, caderas y rodillas) con ciclo de marcha y carrera, poses al apuntar con pistola, escopeta y subfusil, bate, picar, trabajar, zombis con brazos extendidos y zarpazo, reacción al daño y emotes (`T` saludar, `Y` bailar, `U` señalar).
 - **Personajes:** cuerpo en forma de judía con oclusión horneada, visor de cristal con marco y reflejos, mochila redondeada con tira de luz, botas, zombis con garras, ojos brillantes y heridas, Alfa con púas, y 3 mascotas que te siguen.
 - **Meta-juego:** armario (7 sombreros, 5 visores y 3 mascotas), 18 logros con estadísticas, reto diario y
   contador de FPS.
@@ -51,7 +53,8 @@ música y vista 3D/2D.
 - **Gráficos:** postprocesado HDR (MSAA, bloom, gradación de color, aberración cromática, viñeta de
   daño y grano), reflejos con mapas de entorno, luz de contorno en los personajes, haz de linterna
   volumétrico y polvo, suelo con detalle de juntas y remaches, hierba y hojas que se mecen con el
-  viento, montañas en el horizonte, fogonazo, trazadoras, escombros 3D y zombis que caen.
+  viento, abedules y robles de otoño, mariposas de día y luciérnagas de noche, cielo con resplandor
+  solar, montañas en el horizonte, reactor, ventiladores y holograma en movimiento, fogonazo, trazadoras, escombros 3D y zombis que caen.
 
 ## Estructura
 

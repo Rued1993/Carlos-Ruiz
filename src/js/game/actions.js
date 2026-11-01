@@ -138,6 +138,12 @@ function doUse() {
     startMeeting(p, null);
   }
 }
+/** Emotes del jugador: 1 saludar, 2 bailar, 3 señalar (se cancelan al moverse). */
+function doEmote(i) {
+  if (scene !== 'play' || !G || G.intro > 0 || !G.player.alive) return;
+  G.emote = { i, t: 3 };
+  sfx.ui();
+}
 function doReport() {
   if (scene === 'play' && G.intro <= 0 && G.player.alive && G.nearBody && G.player.inVent === null)
     startMeeting(G.player, G.nearBody);

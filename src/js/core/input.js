@@ -27,6 +27,8 @@ addEventListener('keydown', e => {
   else if (scene == 'play' && k == 'p' && G.intro <= 0) scene = 'pause';
   else if (scene == 'cut' && (k == ' ' || k == 'enter')) cutAdvance();
   else if (scene == 'cut' && k == 'escape') cutSkip();
+  else if (scene == 'play' && (k == 't' || k == 'y' || k == 'u'))
+    doEmote(k == 't' ? 1 : k == 'y' ? 2 : 3);
   else if (scene == 'meeting' && k == 'm') {
     voiceOn = !voiceOn;
     if (!voiceOn) stopSpeech();

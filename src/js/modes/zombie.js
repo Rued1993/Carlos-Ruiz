@@ -402,6 +402,7 @@ function shoot(tx, ty) {
   g.muzzle = 0.09;
   g.shake = Math.max(g.shake, w == 'escopeta' ? 0.25 : 0.08);
   sfx.shot(w, p.x, p.y);
+  debris3D(p.x, 42, p.y, '#d9a441', 1);
 }
 /** Llena el cargador la primera vez que se usa un arma, tomando de la reserva. */
 function ensureMag(w) {

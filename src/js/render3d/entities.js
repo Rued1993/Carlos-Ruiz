@@ -32,6 +32,9 @@ function getEnt(q, zombie) {
       hpLast: q.hp,
       flash: 0,
       dustT: 0,
+      turn: 0,
+      spr: 0,
+      lunge: 0,
       label: null,
       lc: '',
       ghost: false,
@@ -68,10 +71,11 @@ function syncEnts() {
       sp = Math.hypot(dx, dy);
     r.lx = q.x;
     r.ly = q.y;
+    const aimNow =
+      q.isP && G.mode !== 'classic' && (G.firing || G.mining || keys[' '] || now < R3.aimUntil);
     let tgt = r.heading;
     if (sp > 0.12) tgt = Math.atan2(dy, dx);
-    if (q.isP && G.mode !== 'classic' && (G.firing || G.mining || keys[' '] || now < R3.aimUntil))
-      tgt = CAM.yaw;
+    else if (aimNow) tgt = CAM.yaw; // parado: el cuerpo se orienta hacia donde apunta
     if (zomb && G.player.alive) {
       const ddx = p.x - q.x,
         ddy = p.y - q.y;
@@ -80,18 +84,10 @@ function syncEnts() {
     const da = Math.atan2(Math.sin(tgt - r.heading), Math.cos(tgt - r.heading));
     r.heading += da * Math.min(1, dt * 14);
     g.rotation.y = Math.PI / 2 - r.heading;
-    const walking = sp > 0.12;
-    if (walking) r.ph += sp * 0.085;
-    const sw = walking ? Math.sin(r.ph) * 0.75 : 0,
+    r.turn += (da * 3 - r.turn) * Math.min(1, dt * 8);
+    const walking = sp > 0.12,
       u = g.userData;
-    u.legs[0].rotation.x = sw;
-    u.legs[1].rotation.x = -sw;
-    u.body.position.y =
-      36 + (walking ? Math.abs(Math.sin(r.ph)) * 2.5 : Math.sin(now / 600 + r.ph) * 0.6);
-    u.arms.forEach((a, i) => {
-      a.rotation.x = (zomb ? -0.1 : 0) + Math.sin(now / 260 + i) * 0.12;
-    });
-    if (zomb) g.rotation.z = Math.sin(r.ph) * 0.06;
+    if (walking) r.ph += sp * 0.085;
     if (zomb && q.hp < r.hpLast) r.flash = 0.14;
     r.hpLast = q.hp;
     if (r.flash > 0) r.flash -= dt;
@@ -104,15 +100,48 @@ function syncEnts() {
         burst(q.x, q.y + 14, 1, '#a09a8c', 24, 0.5);
       }
     }
-    if (q.isP && G.mode === 'zombie') {
-      const w = G.wep;
-      u.wep.bat.visible = w == 'bate';
-      u.wep.pis.visible = w == 'pistola';
-      u.wep.sho.visible = w == 'escopeta';
-      u.wep.smg.visible = w == 'subfusil';
-      if (G.swing > 0) u.hold.rotation.x = -1.2 + G.swing * 6;
-      else u.hold.rotation.x = 0;
+    r.spr += ((q.sprinting ? 1 : 0) - r.spr) * Math.min(1, dt * 6);
+    r.lunge +=
+      ((zomb && G.player.alive && Math.hypot(p.x - q.x, p.y - q.y) < 72 ? 1 : 0) - r.lunge) *
+      Math.min(1, dt * 8);
+    if (q.isP && G.emote && G.emote.t > 0) {
+      G.emote.t -= dt;
+      if (sp > 2) G.emote.t = 0;
     }
+    const wep = q.isP && G.mode === 'zombie' ? G.wep : null,
+      minning = q.isP && G.mode === 'sandbox' && (G.mining || G.autoMine);
+    u.wep.bat.visible = wep == 'bate';
+    u.wep.pis.visible = wep == 'pistola';
+    u.wep.sho.visible = wep == 'escopeta';
+    u.wep.smg.visible = wep == 'subfusil';
+    u.wep.pick.visible = !!minning;
+    let twist = 0;
+    if (aimNow) {
+      const dd = Math.atan2(Math.sin(r.heading - CAM.yaw), Math.cos(r.heading - CAM.yaw));
+      twist = clamp(dd, -1.1, 1.1);
+    }
+    animateCrew(
+      u,
+      {
+        t: now / 1000,
+        speed: Math.min(1.3, sp / Math.max(dt, 0.001) / 250),
+        phase: r.ph,
+        sprint: r.spr,
+        zomb,
+        aim: aimNow,
+        wep,
+        swing: q.isP ? G.swing : 0,
+        recoil: q.isP && G.muzzle > 0 ? G.muzzle / 0.09 : 0,
+        mining: !!minning,
+        emote: q.isP && G.emote && G.emote.t > 0 ? G.emote.i : 0,
+        lunge: r.lunge,
+        flinch: fl,
+        twist,
+        turn: r.turn,
+        work: !zomb && !q.isP && !q.imp && q.wait > 0,
+      },
+      dt
+    );
     if (ghost !== r.ghost) {
       r.ghost = ghost;
       u.mats.forEach(m => {

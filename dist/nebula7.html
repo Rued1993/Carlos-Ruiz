@@ -1263,6 +1263,12 @@ function doUse() {
     startMeeting(p, null);
   }
 }
+/** Emotes del jugador: 1 saludar, 2 bailar, 3 señalar (se cancelan al moverse). */
+function doEmote(i) {
+  if (scene !== 'play' || !G || G.intro > 0 || !G.player.alive) return;
+  G.emote = { i, t: 3 };
+  sfx.ui();
+}
 function doReport() {
   if (scene === 'play' && G.intro <= 0 && G.player.alive && G.nearBody && G.player.inVent === null)
     startMeeting(G.player, G.nearBody);
@@ -3784,6 +3790,7 @@ function shoot(tx, ty) {
   g.muzzle = 0.09;
   g.shake = Math.max(g.shake, w == 'escopeta' ? 0.25 : 0.08);
   sfx.shot(w, p.x, p.y);
+  debris3D(p.x, 42, p.y, '#d9a441', 1);
 }
 /** Llena el cargador la primera vez que se usa un arma, tomando de la reserva. */
 function ensureMag(w) {
@@ -4888,6 +4895,27 @@ function buildTex() {
     x.fillStyle = 'rgba(0,0,0,.35)';
     x.fillRect(0, 7, 16, 1);
     x.fillRect(7, 0, 1, 16);
+  });
+  T.o[14] = mkTex(['#e9e5da', '#ddd8cb', '#f1ede3'], x => {
+    x.fillStyle = '#2a2a28';
+    x.fillRect(0, 0, 16, 1);
+    x.fillRect(0, 15, 16, 1);
+    x.fillRect(0, 0, 1, 16);
+    x.fillRect(15, 0, 1, 16);
+    x.fillStyle = '#cbbf9c';
+    x.fillRect(3, 3, 10, 10);
+    x.fillStyle = '#b3a57e';
+    x.fillRect(5, 5, 6, 6);
+    x.fillStyle = '#cbbf9c';
+    x.fillRect(7, 7, 2, 2);
+    x.fillStyle = '#3a3a36';
+    for (const [bx0, by0] of [
+      [2, 1],
+      [11, 2],
+      [1, 12],
+      [12, 13],
+    ])
+      x.fillRect(bx0, by0, 3, 1);
   });
   T.o[1] = mkTex(['#6b4a28', '#5b3f22', '#76532d'], x => {
     x.fillStyle = '#2a1a0a';
@@ -7045,22 +7073,31 @@ function makeCrew(color, zombie, hat, visorIdx) {
   const rimC = zombie ? 0xff3a2a : 0x7fd0ff,
     suit = M({ color: c, roughness: 0.42, metalness: 0.18 }),
     suitV = M({ color: c, roughness: 0.4, metalness: 0.2, vertexColors: true }),
-    dark = M({ color: c.clone().multiplyScalar(0.5), roughness: 0.6, metalness: 0.1 });
+    dark = M({ color: c.clone().multiplyScalar(0.5), roughness: 0.6, metalness: 0.1 }),
+    glove = M({ color: 0x1b1e25, roughness: 0.6, metalness: 0.25 });
   addRim(suit, rimC, zombie ? 0.85 : 0.5);
   addRim(suitV, rimC, zombie ? 0.85 : 0.5);
   addRim(dark, rimC, zombie ? 0.6 : 0.3);
+  // Jerarquía: g (rumbo) -> torso (pivote en la cadera: inclinación, giro, vaivén) -> upper
+  // (geometría del tronco en coordenadas de modelo). Las piernas cuelgan de g.
+  const torso = new THREE.Group();
+  torso.position.y = 28;
+  g.add(torso);
+  const upper = new THREE.Group();
+  upper.position.y = -28;
+  torso.add(upper);
   const body = new THREE.Mesh(beanGeometry(), suitV);
   body.position.y = 36;
   body.scale.set(1, 1, 0.95);
   body.castShadow = true;
-  g.add(body);
+  upper.add(body);
   const belt = new THREE.Mesh(
     new THREE.CylinderGeometry(17.3, 17.3, 2.6, 36),
     M({ color: 0x14161b, roughness: 0.8 })
   );
   belt.position.y = 28;
   belt.scale.z = 0.95;
-  g.add(belt);
+  upper.add(belt);
   for (const sx of [-6, 6]) {
     const led = new THREE.Mesh(
       new THREE.BoxGeometry(5, 2, 1),
@@ -7069,7 +7106,7 @@ function makeCrew(color, zombie, hat, visorIdx) {
       })
     );
     led.position.set(sx, 32, 15.9);
-    g.add(led);
+    upper.add(led);
   }
   // visor: marco metálico + cristal con textura
   const visor = new THREE.Mesh(
@@ -7092,73 +7129,104 @@ function makeCrew(color, zombie, hat, visorIdx) {
   frame.scale.set(14.8, 9.8, 12.4);
   visor.position.set(0, 45, 4);
   frame.position.set(0, 45, 4);
-  g.add(frame, visor);
+  upper.add(frame, visor);
   // mochila redondeada con tira de luz del color del traje
-  const pack = new THREE.Mesh(roundBox(21, 26, 9, 5), dark);
+  const pack = new THREE.Group();
   pack.position.set(0, 36, -19);
-  pack.castShadow = true;
-  g.add(pack);
+  upper.add(pack);
+  const shell = new THREE.Mesh(roundBox(21, 26, 9, 5), dark);
+  shell.castShadow = true;
+  pack.add(shell);
   const strip = new THREE.Mesh(
     new THREE.BoxGeometry(12, 2, 0.8),
     new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(zombie ? 2 : 2.6) })
   );
-  strip.position.set(0, 30, -23.7);
-  g.add(strip);
+  strip.position.set(0, -6, -4.7);
+  pack.add(strip);
   for (const sx of [-6, 6]) {
     const tank = new THREE.Mesh(
       new THREE.CylinderGeometry(2.6, 2.6, 8, 10),
       M({ color: 0x2a2f38, roughness: 0.35, metalness: 0.85 })
     );
-    tank.position.set(sx, 51, -19);
-    g.add(tank);
+    tank.position.set(sx, 15, 0);
+    pack.add(tank);
   }
-  const legs = [];
-  for (const sx of [-8, 8]) {
-    const lg = new THREE.Group();
-    lg.position.set(sx, 16, 0);
-    const l = new THREE.Mesh(new THREE.CapsuleGeometry(6.6, 7, 6, 14), dark);
-    l.position.y = -6;
-    l.castShadow = true;
-    lg.add(l);
+  // brazos articulados: hombro -> codo -> mano (guante)
+  const mkArm = sx => {
+    const sh = new THREE.Group();
+    sh.position.set(sx * 16.6, 46, 0);
+    upper.add(sh);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(4, 12, 10), suit);
+    sh.add(ball);
+    const up = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.1, 8.6, 10), suit);
+    up.position.y = -5;
+    up.castShadow = true;
+    sh.add(up);
+    const el = new THREE.Group();
+    el.position.y = -9.6;
+    sh.add(el);
+    el.add(new THREE.Mesh(new THREE.SphereGeometry(3.3, 10, 8), suit));
+    const fo = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 2.9, 7.6, 10), suit);
+    fo.position.y = -4.2;
+    fo.castShadow = true;
+    el.add(fo);
+    const hand = new THREE.Group();
+    hand.position.y = -9;
+    el.add(hand);
+    const gl = new THREE.Mesh(new THREE.SphereGeometry(3.7, 12, 10), glove);
+    gl.scale.set(1, 1.1, 1);
+    hand.add(gl);
+    if (zombie)
+      for (const cx of [-2.2, 0, 2.2]) {
+        const claw = new THREE.Mesh(
+          new THREE.ConeGeometry(1.2, 6, 5),
+          M({ color: 0xd8d4c0, roughness: 0.6 })
+        );
+        claw.rotation.x = Math.PI;
+        claw.position.set(cx, -5.4, 0.6);
+        hand.add(claw);
+      }
+    return { sh, el, hand };
+  };
+  const armL = mkArm(-1),
+    armR = mkArm(1);
+  // piernas articuladas: cadera -> rodilla -> bota
+  const mkLeg = sx => {
+    const hip = new THREE.Group();
+    hip.position.set(sx, 16, 0);
+    g.add(hip);
+    hip.add(new THREE.Mesh(new THREE.SphereGeometry(6.4, 12, 10), dark));
+    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(6.3, 5.8, 8.4, 14), dark);
+    thigh.position.y = -4;
+    thigh.castShadow = true;
+    hip.add(thigh);
+    const knee = new THREE.Group();
+    knee.position.y = -8;
+    hip.add(knee);
+    knee.add(new THREE.Mesh(new THREE.SphereGeometry(5.8, 12, 10), dark));
+    const shin = new THREE.Mesh(new THREE.CylinderGeometry(5.6, 5.2, 6.4, 14), dark);
+    shin.position.y = -3.3;
+    shin.castShadow = true;
+    knee.add(shin);
     const boot = new THREE.Mesh(
       new THREE.SphereGeometry(1, 14, 10),
       M({ color: 0x1b1e25, roughness: 0.55, metalness: 0.3 })
     );
     boot.scale.set(7.6, 5.2, 10.6);
-    boot.position.set(0, -14, 2.2);
+    boot.position.set(0, -5.2, 2.2);
     boot.castShadow = true;
-    lg.add(boot);
+    knee.add(boot);
     const sole = new THREE.Mesh(
       new THREE.BoxGeometry(14.4, 1.4, 20),
       M({ color: 0x0c0d11, roughness: 0.9 })
     );
-    sole.position.set(0, -18.6, 2.2);
-    lg.add(sole);
-    g.add(lg);
-    legs.push(lg);
-  }
-  const arms = [];
-  if (zombie)
-    for (const sx of [-17, 17]) {
-      const ag = new THREE.Group();
-      ag.position.set(sx, 44, 6);
-      const a = new THREE.Mesh(new THREE.CapsuleGeometry(4.5, 20, 4, 8), suit);
-      a.rotation.x = Math.PI / 2;
-      a.position.z = 14;
-      a.castShadow = true;
-      ag.add(a);
-      for (const cx of [-2.6, 0, 2.6]) {
-        const claw = new THREE.Mesh(
-          new THREE.ConeGeometry(1.3, 6, 5),
-          M({ color: 0xd8d4c0, roughness: 0.6 })
-        );
-        claw.rotation.x = Math.PI / 2;
-        claw.position.set(cx, 0, 31.5);
-        ag.add(claw);
-      }
-      g.add(ag);
-      arms.push(ag);
-    }
+    sole.position.set(0, -9, 2.2);
+    knee.add(sole);
+    return { hip, knee };
+  };
+  const legL = mkLeg(-8),
+    legR = mkLeg(8);
+  // heridas y púas del zombi
   if (zombie) {
     for (const [wx, wy] of [
       [-7, 40],
@@ -7173,7 +7241,7 @@ function makeCrew(color, zombie, hat, visorIdx) {
         })
       );
       w.position.set(wx, wy, 16.4);
-      g.add(w);
+      upper.add(w);
     }
     if (color === '#8a3030')
       for (let k = 0; k < 5; k++) {
@@ -7183,13 +7251,14 @@ function makeCrew(color, zombie, hat, visorIdx) {
         );
         sp.position.set((k - 2) * 4.4, 56 - Math.abs(k - 2) * 2, -23);
         sp.rotation.x = -1.1;
-        g.add(sp);
+        upper.add(sp);
       }
   }
-  // arma en mano (modo zombi)
+  // arma / herramienta en la mano derecha (el modelo mira a +Z; la mano apunta a -Y)
   const hold = new THREE.Group();
-  hold.position.set(17, 34, 12);
-  g.add(hold);
+  hold.position.set(0, -1.5, 0);
+  hold.rotation.x = Math.PI / 2;
+  armR.hand.add(hold);
   const bat = new THREE.Mesh(
     new THREE.CylinderGeometry(2.5, 4, 44, 10),
     M({ color: 0xa67c52, roughness: 0.8 })
@@ -7205,7 +7274,7 @@ function makeCrew(color, zombie, hat, visorIdx) {
   sho.add(
     new THREE.Mesh(
       new THREE.BoxGeometry(5, 6, 40),
-      M({ color: 0x222, roughness: 0.4, metalness: 0.7 })
+      M({ color: 0x222222, roughness: 0.4, metalness: 0.7 })
     )
   );
   const stock = new THREE.Mesh(
@@ -7215,25 +7284,33 @@ function makeCrew(color, zombie, hat, visorIdx) {
   stock.position.z = -16;
   sho.add(stock);
   sho.position.z = 16;
-  bat.visible = pis.visible = sho.visible = false;
-  hold.add(bat, pis, sho);
   const smg = new THREE.Mesh(
     new THREE.BoxGeometry(5, 8, 26),
     M({ color: 0x2a2a30, roughness: 0.4, metalness: 0.7 })
   );
   smg.position.z = 14;
-  smg.visible = false;
-  hold.add(smg);
-  if (hat && !zombie) g.add(makeHat(hat));
+  const pick = new THREE.Group();
+  const handle = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 2.6, 30),
+    M({ color: 0x7a5530, roughness: 0.9 })
+  );
+  handle.position.z = 12;
+  pick.add(handle);
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(22, 3.4, 3.4),
+    M({ color: 0x9aa4ae, roughness: 0.35, metalness: 0.8 })
+  );
+  head.position.z = 26;
+  pick.add(head);
+  for (const o of [bat, pis, sho, smg, pick]) o.visible = false;
+  hold.add(bat, pis, sho, smg, pick);
+  if (hat && !zombie) upper.add(makeHat(hat));
   g.userData = {
-    legs,
-    arms,
-    body,
+    rig: { torso, upper, armL, armR, legL, legR, pack, hold },
     visor,
     mats,
-    hold,
     suit: [suit, suitV, dark],
-    wep: { bat, pis, sho, smg },
+    wep: { bat, pis, sho, smg, pick },
   };
   return g;
 }
@@ -7253,6 +7330,136 @@ function makeBody3D(color) {
   knob.position.set(-20, 24, 18);
   g.add(knob);
   return g;
+}
+
+/* ---- src/js/render3d/anim.js ---- */
+/**
+ * Animación procedural de los personajes articulados.
+ *
+ * `animateCrew(u, s, dt)` recibe el rig (u.rig) y un estado `s` y calcula el ángulo objetivo de
+ * cada articulación (cadera, rodilla, hombro, codo, torso); después las suaviza con un filtro
+ * exponencial para evitar tirones. Cubre caminar/correr con rodillas y codos que se doblan,
+ * respiración, inclinación al correr, giro del torso al apuntar, poses con arma, bate, picar,
+ * emotes (saludar, bailar, señalar), zombis que avanzan con los brazos extendidos y reacción al daño.
+ *
+ * Estado: { t, speed (0..1.3), phase, sprint (0..1), zomb, aim, wep, swing, recoil, mining,
+ *           emote, lunge, flinch, twist, turn, speaking, work }
+ */
+'use strict';
+
+function animateCrew(u, s, dt) {
+  const r = u.rig,
+    k = Math.min(1, dt * 14),
+    t = s.t,
+    ph = s.phase,
+    sp = Math.min(1.3, s.speed || 0),
+    moving = sp > 0.06,
+    A = (0.5 + 0.45 * (s.sprint || 0)) * Math.min(1, sp * 1.5),
+    sw = Math.sin(ph),
+    cw = Math.cos(ph);
+  const T = {
+    lean: 0.03 + sp * 0.06 + (s.sprint || 0) * sp * 0.2,
+    bank: clamp(-(s.turn || 0) * 0.06, -0.2, 0.2),
+    twist: s.twist || 0,
+    bob: moving ? Math.abs(sw) * 2.4 * Math.min(1, sp) : Math.sin(t * 1.9) * 0.45,
+    hipL: moving ? sw * A : 0,
+    hipR: moving ? -sw * A : 0,
+    kneeL: moving ? Math.max(0, cw) * (0.5 + 0.7 * A) : 0,
+    kneeR: moving ? Math.max(0, -cw) * (0.5 + 0.7 * A) : 0,
+    shLx: moving ? -sw * A * 0.85 : Math.sin(t * 1.3) * 0.04,
+    shRx: moving ? sw * A * 0.85 : Math.sin(t * 1.3 + 1) * 0.04,
+    shLz: 0.08,
+    shRz: -0.08,
+    elL: -(0.12 + 0.55 * sp * 0.7),
+    elR: -(0.12 + 0.55 * sp * 0.7),
+    sway: 0,
+  };
+  if (!moving && !s.zomb) T.twist += Math.sin(t * 0.5) * 0.05 + Math.sin(t * 1.7) * 0.02;
+  if (s.work) {
+    T.shRx = -0.9 + Math.sin(t * 5) * 0.25;
+    T.elR = -0.9 + Math.sin(t * 5.5) * 0.3;
+    T.lean += 0.08;
+  }
+  // armas y herramientas (jugador)
+  const fire = s.wep === 'pistola' || s.wep === 'escopeta' || s.wep === 'subfusil';
+  if (fire && s.aim) {
+    T.shRx = -1.38 - (s.recoil || 0) * 0.35;
+    T.elR = -0.12;
+    T.shRz = -0.04;
+    T.shLx = -1.28;
+    T.shLz = 0.62;
+    T.elL = -0.45;
+    T.lean += 0.05;
+  } else if (s.wep === 'bate') {
+    const sg = s.swing || 0;
+    T.shRx = sg > 0 ? -2.5 + (1 - sg / 0.2) * 2.3 : -0.55;
+    T.elR = sg > 0 ? -0.3 : -0.9;
+    if (sg > 0) T.lean += 0.2;
+  }
+  if (s.mining) {
+    T.shRx = -1.1 + Math.sin(t * 13) * 0.95;
+    T.elR = -0.95 + Math.sin(t * 13) * 0.25;
+    T.lean += 0.1;
+    T.twist += Math.sin(t * 13) * 0.12;
+  }
+  // zombis: brazos extendidos, torso adelantado, pierna arrastrada
+  if (s.zomb) {
+    const l = s.lunge || 0;
+    T.shLx = T.shRx = -1.36 - l * 0.3 + Math.sin(ph * 0.9) * 0.12;
+    T.shLz = 0.14;
+    T.shRz = -0.14;
+    T.elL = T.elR = -0.2 + Math.sin(ph * 0.9 + 1) * 0.08 - l * 0.2;
+    T.lean = 0.2 + 0.08 * Math.sin(ph) + l * 0.3;
+    T.hipR *= 0.55;
+    T.kneeR *= 0.4;
+    T.bank = Math.sin(ph) * 0.06;
+  }
+  // emotes
+  const e = s.emote;
+  if (e === 1) {
+    T.shRx = -2.9;
+    T.shRz = -0.25;
+    T.elR = -0.3 + Math.sin(t * 9) * 0.6;
+  } else if (e === 2) {
+    T.bank = Math.sin(t * 6) * 0.2;
+    T.bob = 1.5 + Math.abs(Math.sin(t * 6)) * 3.4;
+    T.shLx = -2.5 + Math.sin(t * 6) * 0.55;
+    T.shRx = -2.5 + Math.cos(t * 6) * 0.55;
+    T.elL = T.elR = -0.35;
+    T.hipL = Math.sin(t * 6) * 0.35;
+    T.hipR = -Math.sin(t * 6) * 0.35;
+    T.kneeL = Math.max(0, Math.sin(t * 6)) * 0.7;
+    T.kneeR = Math.max(0, -Math.sin(t * 6)) * 0.7;
+    T.twist += Math.sin(t * 3) * 0.4;
+  } else if (e === 3) {
+    T.shRx = -1.5;
+    T.elR = -0.05;
+    T.twist += 0.2;
+  }
+  if (s.speaking) {
+    T.shRx = -0.95 + Math.sin(t * 4.7) * 0.4;
+    T.elR = -0.95 + Math.sin(t * 6.1) * 0.35;
+    T.shLx = -0.3 + Math.sin(t * 3.3) * 0.15;
+    T.bob += Math.abs(Math.sin(t * 9)) * 1.6;
+  }
+  T.lean -= (s.flinch || 0) * 0.55;
+  const sm = (o, key, v) => (o[key] += (v - o[key]) * k);
+  sm(r.torso.rotation, 'x', T.lean);
+  sm(r.torso.rotation, 'z', T.bank);
+  sm(r.torso.rotation, 'y', T.twist);
+  sm(r.torso.position, 'y', 28 + T.bob);
+  sm(r.pack.rotation, 'x', -T.lean * 0.9 + Math.sin(ph * 2) * 0.04 * sp);
+  sm(r.legL.hip.rotation, 'x', T.hipL);
+  sm(r.legR.hip.rotation, 'x', T.hipR);
+  sm(r.legL.knee.rotation, 'x', T.kneeL);
+  sm(r.legR.knee.rotation, 'x', T.kneeR);
+  sm(r.armL.sh.rotation, 'x', T.shLx);
+  sm(r.armR.sh.rotation, 'x', T.shRx);
+  sm(r.armL.sh.rotation, 'z', T.shLz);
+  sm(r.armR.sh.rotation, 'z', T.shRz);
+  sm(r.armL.el.rotation, 'x', T.elL);
+  sm(r.armR.el.rotation, 'x', T.elR);
+  r.torso.scale.y = 1 + Math.sin(t * 1.9) * 0.008;
 }
 
 /* ---- src/js/render3d/postfx.js ---- */
@@ -7293,7 +7500,7 @@ const PFX_COMP = `
   void main(){
     vec2 c = vUv - 0.5;
     float d = dot(c, c);
-    float ab = (0.0012 + 0.006 * uSprint + 0.012 * uHurt) * d * 4.0;
+    float ab = (0.0006 + 0.003 * uSprint + 0.007 * uHurt) * d * 4.0;
     vec3 col;
     col.r = texture2D(tScene, vUv + c * ab).r;
     col.g = texture2D(tScene, vUv).g;
@@ -7955,6 +8162,37 @@ function buildClassic3D(scene) {
   });
   scene.add(core);
   R3.core = core;
+  R3.spin = [];
+  // anillos del reactor y holograma de la cafetería: piezas en rotación continua
+  for (const [rad, ax, sp] of [
+    [66, 'x', 0.9],
+    [74, 'z', -0.6],
+    [58, 'y', 1.4],
+  ]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(rad, 2.6, 10, 56),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.8, 3.2) })
+    );
+    ring.position.set(360, 80, 850);
+    scene.add(ring);
+    R3.spin.push({ o: ring, ax, sp });
+  }
+  {
+    const holo = new THREE.Group();
+    holo.position.set(1200, 70, 300);
+    const hm = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.5, 2.2, 3),
+      wireframe: true,
+      transparent: true,
+      opacity: 0.8,
+    });
+    holo.add(new THREE.Mesh(new THREE.IcosahedronGeometry(18, 1), hm));
+    holo.add(new THREE.Mesh(new THREE.TorusGeometry(30, 0.9, 6, 40), hm));
+    const hl = new THREE.PointLight(0x40d8ff, 0.9, 260, 1.6);
+    holo.add(hl);
+    scene.add(holo);
+    R3.spin.push({ o: holo, ax: 'y', sp: 0.7 });
+  }
   scene.add(
     bx(30, 80, 300, '#555', 135, 40, 830, { metalness: 0.7 }),
     bx(40, 60, 120, '#555', 470, 30, 960, { metalness: 0.7 })
@@ -7963,9 +8201,16 @@ function buildClassic3D(scene) {
     const e = cyl(42, 42, 90, '#4a4a52', 2235, 60, ez, { metalness: 0.7, roughness: 0.35 });
     e.rotation.z = Math.PI / 2;
     scene.add(e);
-    const f = cyl(30, 30, 6, '#111', 2192, 60, ez);
-    f.rotation.z = Math.PI / 2;
-    scene.add(f);
+    const fan = new THREE.Group();
+    fan.position.set(2190, 60, ez);
+    for (let k = 0; k < 4; k++) {
+      const bl = bx(2.4, 5, 56, '#9aa4ae', 0, 0, 0, { metalness: 0.8, roughness: 0.3 });
+      bl.rotation.x = (k * Math.PI) / 4;
+      fan.add(bl);
+    }
+    fan.add(cyl(5, 5, 4, '#222', 0, 0, 0));
+    scene.add(fan);
+    R3.spin.push({ o: fan, ax: 'x', sp: 9 });
   }
   scene.add(bx(300, 40, 10, '#33382f', 580, 70, 1165));
   for (let i = 0; i < 10; i++)
@@ -8132,7 +8377,7 @@ function buildSandbox3D(scene) {
     return m;
   });
   sb.o = [];
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14]) {
     const tx = glTex(TEX.o[k], true),
       m = new THREE.InstancedMesh(
         bGeo,
@@ -8209,6 +8454,7 @@ function buildSandbox3D(scene) {
   buildRain3D(scene, sb);
   buildSky3D(scene, sb);
   buildMountains3D(scene, sb);
+  buildCritters3D(scene, sb);
   buildGrass3D(scene, sb);
   sb.pOB = new Uint8Array(WW * WH);
   sb.pGR = new Uint8Array(WW * WH);
@@ -8219,7 +8465,7 @@ function sbRebuild3D() {
   const sb = R3.sb,
     d = new THREE.Object3D(),
     gc = new Array(7).fill(0),
-    oc = new Array(14).fill(0);
+    oc = new Array(16).fill(0);
   let lc = 0,
     tc = 0,
     na = 0,
@@ -8273,13 +8519,20 @@ function sbRebuild3D() {
       if (!o) continue;
       if (o == O_LOG) {
         const tr = TREES.get(i),
-          h = tr && tr.logs >= 3 ? 2 : 1;
-        for (let k = 0; k < h; k++) put(sb.o[1], oc[1]++, cx, TS / 2 + k * TS, cz);
+          h = tr && tr.logs >= 3 ? 2 : 1,
+          lm = tr && treeKind(tr) === 1 ? 14 : 1,
+          tint = tr ? leafTint(tr) : null;
+        for (let k = 0; k < h; k++) put(sb.o[lm], oc[lm]++, cx, TS / 2 + k * TS, cz);
         if (tr) {
+          const putLeaf = (x, y, z) => {
+            if (lc >= 3490) return;
+            put(sb.leaf, lc, x, y, z);
+            sb.leaf.setColorAt(lc, tint);
+            lc++;
+          };
           for (let dz = -1; dz <= 1; dz++)
-            for (let dx = -1; dx <= 1; dx++)
-              if (lc < 3490) put(sb.leaf, lc++, cx + dx * TS, 2.5 * TS, cz + dz * TS);
-          if (lc < 3490) put(sb.leaf, lc++, cx, 3.5 * TS, cz);
+            for (let dx = -1; dx <= 1; dx++) putLeaf(cx + dx * TS, 2.5 * TS, cz + dz * TS);
+          putLeaf(cx, 3.5 * TS, cz);
         }
       } else if (o == O_TORCH) {
         put(sb.stick, tc, cx, 13, cz);
@@ -8294,7 +8547,7 @@ function sbRebuild3D() {
     m.count = gc[i];
     m.instanceMatrix.needsUpdate = true;
   });
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14]) {
     sb.o[k].count = oc[k];
     sb.o[k].instanceMatrix.needsUpdate = true;
   }
@@ -8310,6 +8563,7 @@ function sbRebuild3D() {
   sb.sap.count = sapN;
   sb.sap.instanceMatrix.needsUpdate = true;
   sb.leaf.count = lc;
+  if (sb.leaf.instanceColor) sb.leaf.instanceColor.needsUpdate = true;
   sb.leaf.instanceMatrix.needsUpdate = true;
   sb.stick.count = sb.flame.count = tc;
   sb.stick.instanceMatrix.needsUpdate = true;
@@ -8341,11 +8595,17 @@ function buildSky3D(scene, sb) {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() } },
+      uniforms: {
+        top: { value: new THREE.Color() },
+        hor: { value: new THREE.Color() },
+        sunDir: { value: new THREE.Vector3(0, 1, 0) },
+        sunCol: { value: new THREE.Color(1, 0.9, 0.6) },
+        warm: { value: 0 },
+      },
       vertexShader:
-        'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        'varying float h; varying vec3 vD; void main(){ vD = normalize(position); h = vD.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader:
-        'uniform vec3 top; uniform vec3 hor; varying float h; void main(){ gl_FragColor = vec4(mix(hor, top, pow(clamp(h, 0.0, 1.0), 0.55)), 1.0); }',
+        'uniform vec3 top; uniform vec3 hor; uniform vec3 sunDir; uniform vec3 sunCol; uniform float warm; varying float h; varying vec3 vD; void main(){ vec3 c = mix(hor, top, pow(clamp(h, 0.0, 1.0), 0.55)); float sd = max(dot(vD, normalize(sunDir)), 0.0); c += sunCol * (pow(sd, 14.0) * 0.55 + pow(sd, 260.0) * 3.0); c += vec3(1.0, 0.45, 0.2) * warm * exp(-abs(h) * 6.0) * (0.25 + 0.75 * pow(sd, 3.0)); gl_FragColor = vec4(c, 1.0); }',
     })
   );
   sb.sky.renderOrder = -10;
@@ -8488,6 +8748,107 @@ function buildMountains3D(scene, sb) {
   scene.add(sb.mount);
 }
 
+/** Tipo de árbol: 0 roble, 1 abedul (corteza clara, hojas más amarillas). */
+function treeKind(tr) {
+  return hash(tr.x, tr.y, 31) < 0.3 ? 1 : 0;
+}
+const _leafTints = {};
+/** Tinte de las hojas: abedul amarillento, algunos robles en otoño y variación suave. */
+function leafTint(tr) {
+  const kind = treeKind(tr),
+    autumn = kind === 0 && hash(tr.x, tr.y, 32) < 0.12,
+    v = 0.9 + hash(tr.x, tr.y, 33) * 0.25,
+    key = kind + '' + autumn + Math.round(v * 10);
+  if (!_leafTints[key])
+    _leafTints[key] = autumn
+      ? new THREE.Color(1.9 * v, 0.95 * v, 0.35)
+      : kind
+        ? new THREE.Color(1.35 * v, 1.4 * v, 0.75)
+        : new THREE.Color(v, v, v);
+  return _leafTints[key];
+}
+/** Mariposas de día y luciérnagas de noche alrededor del jugador. */
+function buildCritters3D(scene, sb) {
+  const geo = new THREE.PlaneGeometry(7, 5);
+  geo.rotateX(-Math.PI / 2);
+  sb.fly = new THREE.InstancedMesh(
+    geo,
+    new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false }),
+    18
+  );
+  sb.fly.frustumCulled = false;
+  sb.flySeed = Array.from({ length: 18 }, (_, i) => {
+    sb.fly.setColorAt(
+      i,
+      new THREE.Color([0xffd54f, 0xff8a65, 0x81d4fa, 0xffffff, 0xce93d8][i % 5])
+    );
+    return [rnd(-500, 500), rnd(-500, 500), rnd(22, 62), Math.random() * 6.3, rnd(0.6, 1.4)];
+  });
+  scene.add(sb.fly);
+  const fg = new THREE.BufferGeometry(),
+    N = 46;
+  fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  fg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  sb.glowSeed = Array.from({ length: N }, () => [
+    rnd(-480, 480),
+    rnd(-480, 480),
+    rnd(10, 70),
+    Math.random() * 6.3,
+  ]);
+  sb.glow = new THREE.Points(
+    fg,
+    new THREE.PointsMaterial({
+      size: 6,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+    })
+  );
+  sb.glow.frustumCulled = false;
+  scene.add(sb.glow);
+}
+function updCritters3D(p, t, dark, rain) {
+  const sb = R3.sb,
+    day = dark < 0.3 && rain < 0.25,
+    night = dark > 0.45 && rain < 0.6;
+  sb.fly.visible = day;
+  sb.glow.visible = night;
+  const d = new THREE.Object3D();
+  if (day) {
+    sb.flySeed.forEach((s, i) => {
+      const a = t * 0.45 * s[4] + s[3];
+      d.position.set(
+        p.x + s[0] + Math.sin(a) * 60,
+        s[2] + Math.sin(t * 2 + s[3]) * 6,
+        p.y + s[1] + Math.cos(a * 0.8) * 60
+      );
+      d.rotation.set(0, a, 0);
+      d.scale.set(1, 1, 0.25 + Math.abs(Math.cos(t * 16 + s[3])) * 0.9);
+      d.updateMatrix();
+      sb.fly.setMatrixAt(i, d.matrix);
+    });
+    sb.fly.instanceMatrix.needsUpdate = true;
+    if (sb.fly.instanceColor) sb.fly.instanceColor.needsUpdate = true;
+  }
+  if (night) {
+    const pa = sb.glow.geometry.attributes.position,
+      ca = sb.glow.geometry.attributes.color;
+    sb.glowSeed.forEach((s, i) => {
+      const b = Math.max(0, Math.sin(t * 1.7 + s[3] * 3)) ** 2;
+      pa.array[i * 3] = p.x + s[0] + Math.sin(t * 0.3 + s[3]) * 30;
+      pa.array[i * 3 + 1] = s[2] + Math.sin(t * 0.8 + s[3]) * 8;
+      pa.array[i * 3 + 2] = p.y + s[1] + Math.cos(t * 0.27 + s[3]) * 30;
+      ca.array[i * 3] = 1.1 * b;
+      ca.array[i * 3 + 1] = 2.6 * b;
+      ca.array[i * 3 + 2] = 0.4 * b;
+    });
+    pa.needsUpdate = true;
+    ca.needsUpdate = true;
+  }
+}
+
 /* ---- src/js/render3d/camera.js ---- */
 /**
  * Cámara en tercera persona y punto de apuntado.
@@ -8560,6 +8921,9 @@ function getEnt(q, zombie) {
       hpLast: q.hp,
       flash: 0,
       dustT: 0,
+      turn: 0,
+      spr: 0,
+      lunge: 0,
       label: null,
       lc: '',
       ghost: false,
@@ -8596,10 +8960,11 @@ function syncEnts() {
       sp = Math.hypot(dx, dy);
     r.lx = q.x;
     r.ly = q.y;
+    const aimNow =
+      q.isP && G.mode !== 'classic' && (G.firing || G.mining || keys[' '] || now < R3.aimUntil);
     let tgt = r.heading;
     if (sp > 0.12) tgt = Math.atan2(dy, dx);
-    if (q.isP && G.mode !== 'classic' && (G.firing || G.mining || keys[' '] || now < R3.aimUntil))
-      tgt = CAM.yaw;
+    else if (aimNow) tgt = CAM.yaw; // parado: el cuerpo se orienta hacia donde apunta
     if (zomb && G.player.alive) {
       const ddx = p.x - q.x,
         ddy = p.y - q.y;
@@ -8608,18 +8973,10 @@ function syncEnts() {
     const da = Math.atan2(Math.sin(tgt - r.heading), Math.cos(tgt - r.heading));
     r.heading += da * Math.min(1, dt * 14);
     g.rotation.y = Math.PI / 2 - r.heading;
-    const walking = sp > 0.12;
-    if (walking) r.ph += sp * 0.085;
-    const sw = walking ? Math.sin(r.ph) * 0.75 : 0,
+    r.turn += (da * 3 - r.turn) * Math.min(1, dt * 8);
+    const walking = sp > 0.12,
       u = g.userData;
-    u.legs[0].rotation.x = sw;
-    u.legs[1].rotation.x = -sw;
-    u.body.position.y =
-      36 + (walking ? Math.abs(Math.sin(r.ph)) * 2.5 : Math.sin(now / 600 + r.ph) * 0.6);
-    u.arms.forEach((a, i) => {
-      a.rotation.x = (zomb ? -0.1 : 0) + Math.sin(now / 260 + i) * 0.12;
-    });
-    if (zomb) g.rotation.z = Math.sin(r.ph) * 0.06;
+    if (walking) r.ph += sp * 0.085;
     if (zomb && q.hp < r.hpLast) r.flash = 0.14;
     r.hpLast = q.hp;
     if (r.flash > 0) r.flash -= dt;
@@ -8632,15 +8989,48 @@ function syncEnts() {
         burst(q.x, q.y + 14, 1, '#a09a8c', 24, 0.5);
       }
     }
-    if (q.isP && G.mode === 'zombie') {
-      const w = G.wep;
-      u.wep.bat.visible = w == 'bate';
-      u.wep.pis.visible = w == 'pistola';
-      u.wep.sho.visible = w == 'escopeta';
-      u.wep.smg.visible = w == 'subfusil';
-      if (G.swing > 0) u.hold.rotation.x = -1.2 + G.swing * 6;
-      else u.hold.rotation.x = 0;
+    r.spr += ((q.sprinting ? 1 : 0) - r.spr) * Math.min(1, dt * 6);
+    r.lunge +=
+      ((zomb && G.player.alive && Math.hypot(p.x - q.x, p.y - q.y) < 72 ? 1 : 0) - r.lunge) *
+      Math.min(1, dt * 8);
+    if (q.isP && G.emote && G.emote.t > 0) {
+      G.emote.t -= dt;
+      if (sp > 2) G.emote.t = 0;
     }
+    const wep = q.isP && G.mode === 'zombie' ? G.wep : null,
+      minning = q.isP && G.mode === 'sandbox' && (G.mining || G.autoMine);
+    u.wep.bat.visible = wep == 'bate';
+    u.wep.pis.visible = wep == 'pistola';
+    u.wep.sho.visible = wep == 'escopeta';
+    u.wep.smg.visible = wep == 'subfusil';
+    u.wep.pick.visible = !!minning;
+    let twist = 0;
+    if (aimNow) {
+      const dd = Math.atan2(Math.sin(r.heading - CAM.yaw), Math.cos(r.heading - CAM.yaw));
+      twist = clamp(dd, -1.1, 1.1);
+    }
+    animateCrew(
+      u,
+      {
+        t: now / 1000,
+        speed: Math.min(1.3, sp / Math.max(dt, 0.001) / 250),
+        phase: r.ph,
+        sprint: r.spr,
+        zomb,
+        aim: aimNow,
+        wep,
+        swing: q.isP ? G.swing : 0,
+        recoil: q.isP && G.muzzle > 0 ? G.muzzle / 0.09 : 0,
+        mining: !!minning,
+        emote: q.isP && G.emote && G.emote.t > 0 ? G.emote.i : 0,
+        lunge: r.lunge,
+        flinch: fl,
+        twist,
+        turn: r.turn,
+        work: !zomb && !q.isP && !q.imp && q.wait > 0,
+      },
+      dt
+    );
     if (ghost !== r.ghost) {
       r.ghost = ghost;
       u.mats.forEach(m => {
@@ -8851,6 +9241,7 @@ function updClassic3D() {
       }
     });
   if (R3.core) R3.core.material.emissiveIntensity = 1.1 + 0.3 * Math.sin(t * 3);
+  for (const s of R3.spin) s.o.rotation[s.ax] += s.sp * R3.dt;
 }
 function updSandbox3D() {
   const g = G,
@@ -8905,6 +9296,20 @@ function updSandbox3D() {
   });
   sb2.clouds.instanceMatrix.needsUpdate = true;
   updRain3D(p, rain, t);
+  updCritters3D(p, t, dark, rain);
+  {
+    const sd = sb2.sun.position.clone().sub(new THREE.Vector3(p.x, 0, p.y)),
+      up = sb2.sun.visible;
+    sb2.sky.material.uniforms.sunDir.value.copy(
+      up ? sd : sb2.moon.position.clone().sub(new THREE.Vector3(p.x, 0, p.y))
+    );
+    sb2.sky.material.uniforms.sunCol.value.setRGB(
+      up ? 1 : 0.35,
+      up ? 0.85 - k * 0.2 : 0.45,
+      up ? 0.55 : 0.8
+    );
+    sb2.sky.material.uniforms.warm.value = k > 0.04 && k < 0.96 ? Math.sin(k * Math.PI) : 0;
+  }
   for (const m of [sb2.leaf, sb2.tuftA, sb2.tuftB, sb2.flowers])
     if (m.material.userData.uTime) m.material.userData.uTime.value = t;
   sb2.mount.material.color
@@ -10315,12 +10720,19 @@ function renderStage(dt) {
       );
       continue;
     }
-    if (u.legs) {
-      u.legs[0].rotation.x = 0;
-      u.legs[1].rotation.x = 0;
-      u.body.position.y =
-        36 + Math.sin(S.t * 2 + i) * 0.8 + (speaking ? Math.abs(Math.sin(S.t * 9)) * 2.4 : 0);
-      u.arms.forEach((a, j) => (a.rotation.x = -0.1 + Math.sin(S.t * 1.5 + j + i) * 0.15));
+    if (u.rig) {
+      const zb = k.startsWith('Zombi') || k === 'Alfa',
+        emote =
+          scene === 'wardrobe' && k === 'Rojo'
+            ? [0, 1, 0, 2][Math.floor(S.t / 4) % 4]
+            : scene === 'menu' && !zb && (Math.floor(S.t / 2.5) + i) % 7 === 0
+              ? 1
+              : 0;
+      animateCrew(
+        u,
+        { t: S.t + i, phase: S.t * 1.8 + i, speed: 0, zomb: zb, speaking, emote, lunge: 0 },
+        dt
+      );
     }
     if (k.startsWith('Zombi') || k === 'Alfa') m.rotation.z = Math.sin(S.t * 1.3 + i) * 0.07;
     if (scene !== 'cut' && !k.startsWith('Zombi')) {
@@ -12337,6 +12749,8 @@ addEventListener('keydown', e => {
   else if (scene == 'play' && k == 'p' && G.intro <= 0) scene = 'pause';
   else if (scene == 'cut' && (k == ' ' || k == 'enter')) cutAdvance();
   else if (scene == 'cut' && k == 'escape') cutSkip();
+  else if (scene == 'play' && (k == 't' || k == 'y' || k == 'u'))
+    doEmote(k == 't' ? 1 : k == 'y' ? 2 : 3);
   else if (scene == 'meeting' && k == 'm') {
     voiceOn = !voiceOn;
     if (!voiceOn) stopSpeech();

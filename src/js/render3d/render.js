@@ -62,6 +62,7 @@ function updClassic3D() {
       }
     });
   if (R3.core) R3.core.material.emissiveIntensity = 1.1 + 0.3 * Math.sin(t * 3);
+  for (const s of R3.spin) s.o.rotation[s.ax] += s.sp * R3.dt;
 }
 function updSandbox3D() {
   const g = G,
@@ -116,6 +117,20 @@ function updSandbox3D() {
   });
   sb2.clouds.instanceMatrix.needsUpdate = true;
   updRain3D(p, rain, t);
+  updCritters3D(p, t, dark, rain);
+  {
+    const sd = sb2.sun.position.clone().sub(new THREE.Vector3(p.x, 0, p.y)),
+      up = sb2.sun.visible;
+    sb2.sky.material.uniforms.sunDir.value.copy(
+      up ? sd : sb2.moon.position.clone().sub(new THREE.Vector3(p.x, 0, p.y))
+    );
+    sb2.sky.material.uniforms.sunCol.value.setRGB(
+      up ? 1 : 0.35,
+      up ? 0.85 - k * 0.2 : 0.45,
+      up ? 0.55 : 0.8
+    );
+    sb2.sky.material.uniforms.warm.value = k > 0.04 && k < 0.96 ? Math.sin(k * Math.PI) : 0;
+  }
   for (const m of [sb2.leaf, sb2.tuftA, sb2.tuftB, sb2.flowers])
     if (m.material.userData.uTime) m.material.userData.uTime.value = t;
   sb2.mount.material.color

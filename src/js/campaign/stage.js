@@ -390,12 +390,19 @@ function renderStage(dt) {
       );
       continue;
     }
-    if (u.legs) {
-      u.legs[0].rotation.x = 0;
-      u.legs[1].rotation.x = 0;
-      u.body.position.y =
-        36 + Math.sin(S.t * 2 + i) * 0.8 + (speaking ? Math.abs(Math.sin(S.t * 9)) * 2.4 : 0);
-      u.arms.forEach((a, j) => (a.rotation.x = -0.1 + Math.sin(S.t * 1.5 + j + i) * 0.15));
+    if (u.rig) {
+      const zb = k.startsWith('Zombi') || k === 'Alfa',
+        emote =
+          scene === 'wardrobe' && k === 'Rojo'
+            ? [0, 1, 0, 2][Math.floor(S.t / 4) % 4]
+            : scene === 'menu' && !zb && (Math.floor(S.t / 2.5) + i) % 7 === 0
+              ? 1
+              : 0;
+      animateCrew(
+        u,
+        { t: S.t + i, phase: S.t * 1.8 + i, speed: 0, zomb: zb, speaking, emote, lunge: 0 },
+        dt
+      );
     }
     if (k.startsWith('Zombi') || k === 'Alfa') m.rotation.z = Math.sin(S.t * 1.3 + i) * 0.07;
     if (scene !== 'cut' && !k.startsWith('Zombi')) {

@@ -54,7 +54,7 @@ function buildSandbox3D(scene) {
     return m;
   });
   sb.o = [];
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14]) {
     const tx = glTex(TEX.o[k], true),
       m = new THREE.InstancedMesh(
         bGeo,
@@ -131,6 +131,7 @@ function buildSandbox3D(scene) {
   buildRain3D(scene, sb);
   buildSky3D(scene, sb);
   buildMountains3D(scene, sb);
+  buildCritters3D(scene, sb);
   buildGrass3D(scene, sb);
   sb.pOB = new Uint8Array(WW * WH);
   sb.pGR = new Uint8Array(WW * WH);
@@ -141,7 +142,7 @@ function sbRebuild3D() {
   const sb = R3.sb,
     d = new THREE.Object3D(),
     gc = new Array(7).fill(0),
-    oc = new Array(14).fill(0);
+    oc = new Array(16).fill(0);
   let lc = 0,
     tc = 0,
     na = 0,
@@ -195,13 +196,20 @@ function sbRebuild3D() {
       if (!o) continue;
       if (o == O_LOG) {
         const tr = TREES.get(i),
-          h = tr && tr.logs >= 3 ? 2 : 1;
-        for (let k = 0; k < h; k++) put(sb.o[1], oc[1]++, cx, TS / 2 + k * TS, cz);
+          h = tr && tr.logs >= 3 ? 2 : 1,
+          lm = tr && treeKind(tr) === 1 ? 14 : 1,
+          tint = tr ? leafTint(tr) : null;
+        for (let k = 0; k < h; k++) put(sb.o[lm], oc[lm]++, cx, TS / 2 + k * TS, cz);
         if (tr) {
+          const putLeaf = (x, y, z) => {
+            if (lc >= 3490) return;
+            put(sb.leaf, lc, x, y, z);
+            sb.leaf.setColorAt(lc, tint);
+            lc++;
+          };
           for (let dz = -1; dz <= 1; dz++)
-            for (let dx = -1; dx <= 1; dx++)
-              if (lc < 3490) put(sb.leaf, lc++, cx + dx * TS, 2.5 * TS, cz + dz * TS);
-          if (lc < 3490) put(sb.leaf, lc++, cx, 3.5 * TS, cz);
+            for (let dx = -1; dx <= 1; dx++) putLeaf(cx + dx * TS, 2.5 * TS, cz + dz * TS);
+          putLeaf(cx, 3.5 * TS, cz);
         }
       } else if (o == O_TORCH) {
         put(sb.stick, tc, cx, 13, cz);
@@ -216,7 +224,7 @@ function sbRebuild3D() {
     m.count = gc[i];
     m.instanceMatrix.needsUpdate = true;
   });
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14]) {
     sb.o[k].count = oc[k];
     sb.o[k].instanceMatrix.needsUpdate = true;
   }
@@ -232,6 +240,7 @@ function sbRebuild3D() {
   sb.sap.count = sapN;
   sb.sap.instanceMatrix.needsUpdate = true;
   sb.leaf.count = lc;
+  if (sb.leaf.instanceColor) sb.leaf.instanceColor.needsUpdate = true;
   sb.leaf.instanceMatrix.needsUpdate = true;
   sb.stick.count = sb.flame.count = tc;
   sb.stick.instanceMatrix.needsUpdate = true;
@@ -263,11 +272,17 @@ function buildSky3D(scene, sb) {
       side: THREE.BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { top: { value: new THREE.Color() }, hor: { value: new THREE.Color() } },
+      uniforms: {
+        top: { value: new THREE.Color() },
+        hor: { value: new THREE.Color() },
+        sunDir: { value: new THREE.Vector3(0, 1, 0) },
+        sunCol: { value: new THREE.Color(1, 0.9, 0.6) },
+        warm: { value: 0 },
+      },
       vertexShader:
-        'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        'varying float h; varying vec3 vD; void main(){ vD = normalize(position); h = vD.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader:
-        'uniform vec3 top; uniform vec3 hor; varying float h; void main(){ gl_FragColor = vec4(mix(hor, top, pow(clamp(h, 0.0, 1.0), 0.55)), 1.0); }',
+        'uniform vec3 top; uniform vec3 hor; uniform vec3 sunDir; uniform vec3 sunCol; uniform float warm; varying float h; varying vec3 vD; void main(){ vec3 c = mix(hor, top, pow(clamp(h, 0.0, 1.0), 0.55)); float sd = max(dot(vD, normalize(sunDir)), 0.0); c += sunCol * (pow(sd, 14.0) * 0.55 + pow(sd, 260.0) * 3.0); c += vec3(1.0, 0.45, 0.2) * warm * exp(-abs(h) * 6.0) * (0.25 + 0.75 * pow(sd, 3.0)); gl_FragColor = vec4(c, 1.0); }',
     })
   );
   sb.sky.renderOrder = -10;
@@ -408,4 +423,105 @@ function buildMountains3D(scene, sb) {
   sb.mount.frustumCulled = false;
   sb.mount.renderOrder = -5;
   scene.add(sb.mount);
+}
+
+/** Tipo de árbol: 0 roble, 1 abedul (corteza clara, hojas más amarillas). */
+function treeKind(tr) {
+  return hash(tr.x, tr.y, 31) < 0.3 ? 1 : 0;
+}
+const _leafTints = {};
+/** Tinte de las hojas: abedul amarillento, algunos robles en otoño y variación suave. */
+function leafTint(tr) {
+  const kind = treeKind(tr),
+    autumn = kind === 0 && hash(tr.x, tr.y, 32) < 0.12,
+    v = 0.9 + hash(tr.x, tr.y, 33) * 0.25,
+    key = kind + '' + autumn + Math.round(v * 10);
+  if (!_leafTints[key])
+    _leafTints[key] = autumn
+      ? new THREE.Color(1.9 * v, 0.95 * v, 0.35)
+      : kind
+        ? new THREE.Color(1.35 * v, 1.4 * v, 0.75)
+        : new THREE.Color(v, v, v);
+  return _leafTints[key];
+}
+/** Mariposas de día y luciérnagas de noche alrededor del jugador. */
+function buildCritters3D(scene, sb) {
+  const geo = new THREE.PlaneGeometry(7, 5);
+  geo.rotateX(-Math.PI / 2);
+  sb.fly = new THREE.InstancedMesh(
+    geo,
+    new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false }),
+    18
+  );
+  sb.fly.frustumCulled = false;
+  sb.flySeed = Array.from({ length: 18 }, (_, i) => {
+    sb.fly.setColorAt(
+      i,
+      new THREE.Color([0xffd54f, 0xff8a65, 0x81d4fa, 0xffffff, 0xce93d8][i % 5])
+    );
+    return [rnd(-500, 500), rnd(-500, 500), rnd(22, 62), Math.random() * 6.3, rnd(0.6, 1.4)];
+  });
+  scene.add(sb.fly);
+  const fg = new THREE.BufferGeometry(),
+    N = 46;
+  fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  fg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  sb.glowSeed = Array.from({ length: N }, () => [
+    rnd(-480, 480),
+    rnd(-480, 480),
+    rnd(10, 70),
+    Math.random() * 6.3,
+  ]);
+  sb.glow = new THREE.Points(
+    fg,
+    new THREE.PointsMaterial({
+      size: 6,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+    })
+  );
+  sb.glow.frustumCulled = false;
+  scene.add(sb.glow);
+}
+function updCritters3D(p, t, dark, rain) {
+  const sb = R3.sb,
+    day = dark < 0.3 && rain < 0.25,
+    night = dark > 0.45 && rain < 0.6;
+  sb.fly.visible = day;
+  sb.glow.visible = night;
+  const d = new THREE.Object3D();
+  if (day) {
+    sb.flySeed.forEach((s, i) => {
+      const a = t * 0.45 * s[4] + s[3];
+      d.position.set(
+        p.x + s[0] + Math.sin(a) * 60,
+        s[2] + Math.sin(t * 2 + s[3]) * 6,
+        p.y + s[1] + Math.cos(a * 0.8) * 60
+      );
+      d.rotation.set(0, a, 0);
+      d.scale.set(1, 1, 0.25 + Math.abs(Math.cos(t * 16 + s[3])) * 0.9);
+      d.updateMatrix();
+      sb.fly.setMatrixAt(i, d.matrix);
+    });
+    sb.fly.instanceMatrix.needsUpdate = true;
+    if (sb.fly.instanceColor) sb.fly.instanceColor.needsUpdate = true;
+  }
+  if (night) {
+    const pa = sb.glow.geometry.attributes.position,
+      ca = sb.glow.geometry.attributes.color;
+    sb.glowSeed.forEach((s, i) => {
+      const b = Math.max(0, Math.sin(t * 1.7 + s[3] * 3)) ** 2;
+      pa.array[i * 3] = p.x + s[0] + Math.sin(t * 0.3 + s[3]) * 30;
+      pa.array[i * 3 + 1] = s[2] + Math.sin(t * 0.8 + s[3]) * 8;
+      pa.array[i * 3 + 2] = p.y + s[1] + Math.cos(t * 0.27 + s[3]) * 30;
+      ca.array[i * 3] = 1.1 * b;
+      ca.array[i * 3 + 1] = 2.6 * b;
+      ca.array[i * 3 + 2] = 0.4 * b;
+    });
+    pa.needsUpdate = true;
+    ca.needsUpdate = true;
+  }
 }

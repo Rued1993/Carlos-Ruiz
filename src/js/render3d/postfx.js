@@ -35,7 +35,7 @@ const PFX_COMP = `
   void main(){
     vec2 c = vUv - 0.5;
     float d = dot(c, c);
-    float ab = (0.0012 + 0.006 * uSprint + 0.012 * uHurt) * d * 4.0;
+    float ab = (0.0006 + 0.003 * uSprint + 0.007 * uHurt) * d * 4.0;
     vec3 col;
     col.r = texture2D(tScene, vUv + c * ab).r;
     col.g = texture2D(tScene, vUv).g;

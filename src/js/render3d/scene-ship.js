@@ -284,6 +284,37 @@ function buildClassic3D(scene) {
   });
   scene.add(core);
   R3.core = core;
+  R3.spin = [];
+  // anillos del reactor y holograma de la cafetería: piezas en rotación continua
+  for (const [rad, ax, sp] of [
+    [66, 'x', 0.9],
+    [74, 'z', -0.6],
+    [58, 'y', 1.4],
+  ]) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(rad, 2.6, 10, 56),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.8, 3.2) })
+    );
+    ring.position.set(360, 80, 850);
+    scene.add(ring);
+    R3.spin.push({ o: ring, ax, sp });
+  }
+  {
+    const holo = new THREE.Group();
+    holo.position.set(1200, 70, 300);
+    const hm = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.5, 2.2, 3),
+      wireframe: true,
+      transparent: true,
+      opacity: 0.8,
+    });
+    holo.add(new THREE.Mesh(new THREE.IcosahedronGeometry(18, 1), hm));
+    holo.add(new THREE.Mesh(new THREE.TorusGeometry(30, 0.9, 6, 40), hm));
+    const hl = new THREE.PointLight(0x40d8ff, 0.9, 260, 1.6);
+    holo.add(hl);
+    scene.add(holo);
+    R3.spin.push({ o: holo, ax: 'y', sp: 0.7 });
+  }
   scene.add(
     bx(30, 80, 300, '#555', 135, 40, 830, { metalness: 0.7 }),
     bx(40, 60, 120, '#555', 470, 30, 960, { metalness: 0.7 })
@@ -292,9 +323,16 @@ function buildClassic3D(scene) {
     const e = cyl(42, 42, 90, '#4a4a52', 2235, 60, ez, { metalness: 0.7, roughness: 0.35 });
     e.rotation.z = Math.PI / 2;
     scene.add(e);
-    const f = cyl(30, 30, 6, '#111', 2192, 60, ez);
-    f.rotation.z = Math.PI / 2;
-    scene.add(f);
+    const fan = new THREE.Group();
+    fan.position.set(2190, 60, ez);
+    for (let k = 0; k < 4; k++) {
+      const bl = bx(2.4, 5, 56, '#9aa4ae', 0, 0, 0, { metalness: 0.8, roughness: 0.3 });
+      bl.rotation.x = (k * Math.PI) / 4;
+      fan.add(bl);
+    }
+    fan.add(cyl(5, 5, 4, '#222', 0, 0, 0));
+    scene.add(fan);
+    R3.spin.push({ o: fan, ax: 'x', sp: 9 });
   }
   scene.add(bx(300, 40, 10, '#33382f', 580, 70, 1165));
   for (let i = 0; i < 10; i++)

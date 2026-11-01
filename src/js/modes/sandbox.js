@@ -146,6 +146,27 @@ function buildTex() {
     x.fillRect(0, 7, 16, 1);
     x.fillRect(7, 0, 1, 16);
   });
+  T.o[14] = mkTex(['#e9e5da', '#ddd8cb', '#f1ede3'], x => {
+    x.fillStyle = '#2a2a28';
+    x.fillRect(0, 0, 16, 1);
+    x.fillRect(0, 15, 16, 1);
+    x.fillRect(0, 0, 1, 16);
+    x.fillRect(15, 0, 1, 16);
+    x.fillStyle = '#cbbf9c';
+    x.fillRect(3, 3, 10, 10);
+    x.fillStyle = '#b3a57e';
+    x.fillRect(5, 5, 6, 6);
+    x.fillStyle = '#cbbf9c';
+    x.fillRect(7, 7, 2, 2);
+    x.fillStyle = '#3a3a36';
+    for (const [bx0, by0] of [
+      [2, 1],
+      [11, 2],
+      [1, 12],
+      [12, 13],
+    ])
+      x.fillRect(bx0, by0, 3, 1);
+  });
   T.o[1] = mkTex(['#6b4a28', '#5b3f22', '#76532d'], x => {
     x.fillStyle = '#2a1a0a';
     x.fillRect(0, 0, 16, 1);
