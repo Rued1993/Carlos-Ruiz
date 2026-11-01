@@ -14,6 +14,8 @@ function makeCrew(color, zombie, hat, visorIdx) {
   };
   const suit = M({ color: c, roughness: 0.42, metalness: 0.18 }),
     dark = M({ color: c.clone().multiplyScalar(0.5), roughness: 0.6, metalness: 0.1 });
+  addRim(suit, zombie ? 0xff3a2a : 0x7fd0ff, zombie ? 0.85 : 0.5);
+  addRim(dark, zombie ? 0xff3a2a : 0x7fd0ff, zombie ? 0.6 : 0.3);
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(16, 18, 8, 18), suit);
   body.position.y = 36;
   body.castShadow = true;
@@ -24,6 +26,16 @@ function makeCrew(color, zombie, hat, visorIdx) {
   );
   belt.position.y = 26;
   g.add(belt);
+  for (const sx of [-6, 6]) {
+    const led = new THREE.Mesh(
+      new THREE.BoxGeometry(5, 2, 1),
+      new THREE.MeshBasicMaterial({
+        color: zombie ? new THREE.Color(3.2, 0.4, 0.3) : new THREE.Color(0.6, 2.4, 3.2),
+      })
+    );
+    led.position.set(sx, 31, 15.6);
+    g.add(led);
+  }
   const visor = new THREE.Mesh(
     new THREE.SphereGeometry(1, 28, 18),
     M(

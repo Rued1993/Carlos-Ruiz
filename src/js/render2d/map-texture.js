@@ -6,9 +6,11 @@
 let MAP = null;
 function buildMap() {
   const c = document.createElement('canvas');
-  c.width = 2400;
-  c.height = 1600;
+  const S = SAVE.quality >= 2 ? 2 : 1; // textura al doble de resolución en calidad Alta
+  c.width = 2400 * S;
+  c.height = 1600 * S;
   const x = c.getContext('2d');
+  x.scale(S, S);
   const n = document.createElement('canvas');
   n.width = n.height = 128;
   const nx = n.getContext('2d'),

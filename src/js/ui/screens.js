@@ -14,15 +14,28 @@ function titleGlow(s, x, y, size, col) {
   ctx.restore();
 }
 function panel(x, y, w, h, col) {
+  const edge = col || 'rgba(120,170,230,.55)';
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.55)';
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetY = 8;
   const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, 'rgba(14,24,44,.9)');
-  g.addColorStop(1, 'rgba(6,10,20,.92)');
+  g.addColorStop(0, 'rgba(20,32,58,.93)');
+  g.addColorStop(1, 'rgba(6,10,22,.95)');
   ctx.fillStyle = g;
   rr(x, y, w, h, 16);
   ctx.fill();
-  ctx.strokeStyle = col || 'rgba(120,170,230,.55)';
+  ctx.restore();
+  ctx.strokeStyle = edge;
   ctx.lineWidth = 2;
+  rr(x, y, w, h, 16);
   ctx.stroke();
+  const hl = ctx.createLinearGradient(0, y, 0, y + Math.min(h, 60));
+  hl.addColorStop(0, 'rgba(255,255,255,.1)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl;
+  rr(x + 2, y + 2, w - 4, Math.min(h, 60), [14, 14, 0, 0]);
+  ctx.fill();
 }
 function stars3(n, x, y, size) {
   let s = '';

@@ -24,7 +24,7 @@ function drawMeeting() {
   ctx.fillRect(0, 0, W, H);
   ctx.save();
   ctx.globalAlpha = 0.35;
-  ctx.drawImage(MAP, 0, 0, 2400, 1600, 0, 0, W, H);
+  ctx.drawImage(MAP, 0, 0, MAP.width, MAP.height, 0, 0, W, H);
   ctx.restore();
   ctx.fillStyle = 'rgba(2,5,12,.82)';
   ctx.fillRect(0, 0, W, H);

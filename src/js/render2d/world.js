@@ -6,7 +6,7 @@
 function drawContent() {
   const p = G.player,
     pulse = 0.5 + 0.5 * Math.sin(G.t * 5);
-  ctx.drawImage(MAP, 0, 0);
+  ctx.drawImage(MAP, 0, 0, 2400, 1600);
   // sangre
   for (const b of G.blood) {
     let g = ctx.createRadialGradient(b.x, b.y, 2, b.x, b.y, b.r * 1.6);

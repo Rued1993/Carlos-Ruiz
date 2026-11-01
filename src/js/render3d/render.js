@@ -18,6 +18,11 @@ function updClassic3D() {
   L.amb.intensity = !p.alive ? 1.2 : lights ? 0.1 + 0.05 * Math.sin(t * 30) : 0.6;
   L.hemi.color.set(g.sab && g.sab.type == 'reactor' ? 0xff3030 : 0x8fb0ff);
   L.hemi.intensity = g.sab && g.sab.type == 'reactor' ? 0.5 + 0.35 * Math.sin(t * 6) : 0.35;
+  R3.beam.position.set(p.x + fx * 10, 58, p.y + fz * 10);
+  R3.beam.lookAt(p.x + fx * 320, 14, p.y + fz * 320);
+  R3.beam.visible = p.alive && !g.sab;
+  R3.beam.material.uniforms.k.value = lights && !p.imp ? 0.5 : 1;
+  fxDustUpdate(t);
   L.muz.position.set(p.x + fx * 34, 52, p.y + fz * 34);
   L.muz.intensity = g.muzzle > 0 ? 3.2 : 0;
   R3.scene.fog.density = !p.alive ? 0.0006 : 0.0017;
@@ -111,12 +116,18 @@ function updSandbox3D() {
   });
   sb2.clouds.instanceMatrix.needsUpdate = true;
   updRain3D(p, rain, t);
+  for (const m of [sb2.leaf, sb2.tuftA, sb2.tuftB, sb2.flowers])
+    if (m.material.userData.uTime) m.material.userData.uTime.value = t;
+  sb2.mount.material.color
+    .copy(sky)
+    .lerp(new THREE.Color(0x35566e), 0.55 * (1 - k * 0.8))
+    .multiplyScalar(1 - k * 0.7);
   sb2.g[0].material.map.offset.set(t * 0.02, t * 0.013);
   L.sun.color.set(k > 0.1 ? 0x8aa0e0 : 0xfff2d0);
   L.sun.intensity = (dark > 0.5 ? 0.28 : 1.0 * (1 - k) + 0.15) * (1 - rain * 0.55);
   L.amb.intensity += g.weather.lightning * 3;
-  L.hemi.intensity = 0.5 * (1 - k) + 0.12;
-  L.amb.intensity = 0.12 * (1 - k) + 0.1;
+  L.hemi.intensity = 0.32 * (1 - k) + 0.12;
+  L.amb.intensity = 0.06 * (1 - k) + 0.1;
   const tl = g.torches
     .map(q => ({ q, d: Math.hypot(q[0] * TS + 20 - p.x, q[1] * TS + 20 - p.y) }))
     .sort((a, b) => a.d - b.d);
@@ -187,6 +198,8 @@ function render3D() {
   fxUpdate(R3.dt);
   syncDrops();
   if (G.grs) syncExtras3D();
+  PFX.hurt += (Math.min(1, G.flash || 0) - PFX.hurt) * Math.min(1, R3.dt * 10);
+  PFX.sprint += ((G.player.sprinting ? 1 : 0) - PFX.sprint) * Math.min(1, R3.dt * 5);
   PFX.threshold = G.mode === 'sandbox' ? 1.5 + (1 - G.dark / 0.86) * 0.7 : 0.95;
   postRender(R3.scene, R3.camera);
 }
@@ -203,6 +216,7 @@ function try3D() {
       ctx.fillStyle = `rgba(255,255,255,${Math.min(0.55, g.weather.lightning * 1.2)})`;
       ctx.fillRect(0, 0, W, H);
     }
+    if (PFX.active) return true; // viñeta, daño y grano ya los aplica el shader de postproceso
     if (g.flash > 0) {
       ctx.fillStyle = `rgba(200,0,0,${Math.min(0.5, g.flash * 0.5)})`;
       ctx.fillRect(0, 0, W, H);

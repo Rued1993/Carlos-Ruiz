@@ -8,7 +8,7 @@
  */
 'use strict';
 
-const PFX = { ok: true, key: '', threshold: 0.95, strength: 1 };
+const PFX = { ok: true, active: false, key: '', threshold: 0.95, strength: 1, hurt: 0, sprint: 0 };
 
 const PFX_VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 const PFX_BRIGHT = `
@@ -29,11 +29,26 @@ const PFX_BLUR = `
   }`;
 const PFX_COMP = `
   uniform sampler2D tScene; uniform sampler2D tBloomH; uniform sampler2D tBloomQ;
-  uniform float uStrength; varying vec2 vUv;
+  uniform float uStrength; uniform float uTime; uniform float uHurt; uniform float uSprint;
+  uniform float uSat; uniform float uContrast; varying vec2 vUv;
+  float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   void main(){
-    vec3 c = texture2D(tScene, vUv).rgb;
-    c += (texture2D(tBloomH, vUv).rgb * 0.55 + texture2D(tBloomQ, vUv).rgb * 0.85) * uStrength;
-    gl_FragColor = vec4(c, 1.0);
+    vec2 c = vUv - 0.5;
+    float d = dot(c, c);
+    float ab = (0.0012 + 0.006 * uSprint + 0.012 * uHurt) * d * 4.0;
+    vec3 col;
+    col.r = texture2D(tScene, vUv + c * ab).r;
+    col.g = texture2D(tScene, vUv).g;
+    col.b = texture2D(tScene, vUv - c * ab).b;
+    col += (texture2D(tBloomH, vUv).rgb * 0.55 + texture2D(tBloomQ, vUv).rgb * 0.85) * uStrength;
+    float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    col = mix(vec3(l), col, uSat);
+    col = max((col - 0.18) * uContrast + 0.18, 0.0);
+    float vig = smoothstep(0.9, 0.22, length(c) * 1.25);
+    col *= mix(1.0, vig, 0.55 + 0.3 * uHurt);
+    col = mix(col, col * vec3(1.5, 0.5, 0.45), uHurt * smoothstep(0.15, 0.85, length(c) * 1.4));
+    col += (rnd(vUv * vec2(1920.0, 1080.0) + uTime) - 0.5) * 0.022;
+    gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <encodings_fragment>
   }`;
@@ -90,6 +105,11 @@ function pfxEnsure() {
       tBloomH: { value: null },
       tBloomQ: { value: null },
       uStrength: { value: 1 },
+      uTime: { value: 0 },
+      uHurt: { value: 0 },
+      uSprint: { value: 0 },
+      uSat: { value: 1.08 },
+      uContrast: { value: 1.06 },
     });
   }
   PFX.key = key;
@@ -111,6 +131,7 @@ function pfxBlur(src, tmp, w, h) {
 function postRender(scene, camera) {
   const r = R3.renderer;
   if (!PFX.ok || SAVE.quality === 0) {
+    PFX.active = false;
     r.setRenderTarget(null);
     r.render(scene, camera);
     return;
@@ -135,6 +156,10 @@ function postRender(scene, camera) {
     PFX.comp.uniforms.tBloomH.value = rt.h1.texture;
     PFX.comp.uniforms.tBloomQ.value = rt.q1.texture;
     PFX.comp.uniforms.uStrength.value = PFX.strength;
+    PFX.comp.uniforms.uTime.value = (performance.now() % 10000) / 1000;
+    PFX.comp.uniforms.uHurt.value = PFX.hurt;
+    PFX.comp.uniforms.uSprint.value = PFX.sprint;
+    PFX.active = true;
     pfxPass(PFX.comp, null);
   } catch (e) {
     console.error('Postprocesado desactivado:', e);

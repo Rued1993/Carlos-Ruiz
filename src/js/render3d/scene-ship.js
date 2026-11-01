@@ -42,12 +42,69 @@ function buildClassic3D(scene) {
   // suelo (reutiliza el mapa 2D pre-renderizado como textura)
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(2400, 1600),
-    new THREE.MeshStandardMaterial({ map: glTex(MAP), roughness: 0.75, metalness: 0.15 })
+    new THREE.MeshStandardMaterial({ map: glTex(MAP), roughness: 0.58, metalness: 0.3 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(1200, 0, 800);
   floor.receiveShadow = true;
   scene.add(floor);
+  scene.environment = makeEnv('ship');
+  // detalle de alta frecuencia: juntas, remaches y rozaduras repetidas por cada sala/pasillo
+  {
+    const dc = document.createElement('canvas');
+    dc.width = dc.height = 256;
+    const dx = dc.getContext('2d');
+    dx.strokeStyle = 'rgba(0,0,0,.55)';
+    dx.lineWidth = 3;
+    dx.strokeRect(1.5, 1.5, 253, 253);
+    dx.strokeStyle = 'rgba(255,255,255,.14)';
+    dx.lineWidth = 1.5;
+    dx.beginPath();
+    dx.moveTo(5, 251);
+    dx.lineTo(5, 5);
+    dx.lineTo(251, 5);
+    dx.stroke();
+    dx.fillStyle = 'rgba(0,0,0,.55)';
+    for (const [rx0, ry0] of [
+      [14, 14],
+      [242, 14],
+      [14, 242],
+      [242, 242],
+    ]) {
+      dx.beginPath();
+      dx.arc(rx0, ry0, 3.2, 0, 6.3);
+      dx.fill();
+    }
+    for (let k = 0; k < 260; k++) {
+      dx.fillStyle = `rgba(${k % 2 ? '0,0,0' : '255,255,255'},${Math.random() * 0.07})`;
+      dx.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 14, 1);
+    }
+    const dt = glTex(dc);
+    dt.wrapS = dt.wrapT = THREE.RepeatWrapping;
+    const dm = new THREE.MeshStandardMaterial({
+      map: dt,
+      transparent: true,
+      roughness: 0.9,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+    });
+    for (const r of ALL) {
+      const geo = new THREE.PlaneGeometry(r[2], r[3]),
+        uv = geo.attributes.uv;
+      for (let q = 0; q < uv.count; q++)
+        uv.setXY(q, (uv.getX(q) * r[2]) / 100, (uv.getY(q) * r[3]) / 100);
+      const m = new THREE.Mesh(geo, dm);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(r[0] + r[2] / 2, 0.4, r[1] + r[3] / 2);
+      m.receiveShadow = true;
+      scene.add(m);
+    }
+  }
+  // haz de linterna volumétrico y polvo en suspensión
+  R3.beam = makeBeam([0.95, 0.88, 0.7], 520, 150);
+  scene.add(R3.beam);
+  fxDustInit(scene);
   // paredes: celdas de 10u alrededor de lo caminable
   const C = 10,
     nx = 240,

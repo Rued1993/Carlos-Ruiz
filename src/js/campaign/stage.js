@@ -156,6 +156,59 @@ function buildStage() {
     );
   S.ship.add(bx(1500, 10, 12, '#f33', 0, 40, -318, { emissive: 0xff2020, emissiveIntensity: 1.2 }));
   sc.add(S.ship);
+  sc.environment = makeEnv('stage');
+  // bokeh flotante y haces de luz volumétricos
+  {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const x = c.getContext('2d'),
+      g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,.9)');
+    g.addColorStop(0.5, 'rgba(255,255,255,.25)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 64, 64);
+    const N = 110,
+      geo = new THREE.BufferGeometry(),
+      cols = new Float32Array(N * 3);
+    S.bokehSeed = Array.from({ length: N }, (_, i) => {
+      const k = [
+        [0.3, 1.2, 1.7],
+        [1.7, 0.4, 1.3],
+        [1.8, 1.2, 0.4],
+      ][i % 3];
+      cols.set(k, i * 3);
+      return [rnd(-520, 520), rnd(10, 320), rnd(-340, 220), rnd(0.6, 1.6)];
+    });
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    S.bokeh = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        size: 24,
+        map: new THREE.CanvasTexture(c),
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      })
+    );
+    S.bokeh.frustumCulled = false;
+    sc.add(S.bokeh);
+    S.beams = [
+      [-260, [0.2, 0.9, 1.2]],
+      [0, [0.9, 0.9, 1.0]],
+      [260, [1.1, 0.4, 0.9]],
+    ].map(([bxp, col]) => {
+      const b = makeBeam(col, 760, 150);
+      b.position.set(bxp * 1.2, 430, -80);
+      b.lookAt(bxp * 0.4, 0, 0);
+      sc.add(b);
+      return b;
+    });
+  }
   // modelos
   COLORS.forEach((c, idx) => {
     const cs = cosmeticsFor({ isP: idx === 0, id: idx }),
@@ -224,6 +277,8 @@ function stageSet(bg, cast, focus) {
   S.ship.visible = bg === 'ship' || bg === 'alarm';
   S.stars.visible = bg !== 'planet';
   S.floor.visible = bg !== 'planet';
+  S.bokeh.visible = bg !== 'planet' && bg !== 'ship';
+  S.beams.forEach(b => (b.visible = bg === 'home' || bg === 'space'));
   S.grid.visible = bg !== 'planet';
   S.sc.background.setHex(pal[0]);
   S.sc.fog.color.setHex(pal[0]);
@@ -347,6 +402,18 @@ function renderStage(dt) {
     }
   }
   if (scene === 'wardrobe') S.models.Rojo.rotation.y = S.t * 0.7;
+  {
+    const pa = S.bokeh.geometry.attributes.position;
+    S.bokehSeed.forEach((b, i) => {
+      pa.array[i * 3] = b[0] + Math.sin(S.t * 0.2 * b[3] + i) * 30;
+      pa.array[i * 3 + 1] = 10 + ((b[1] + S.t * 8 * b[3]) % 320);
+      pa.array[i * 3 + 2] = b[2];
+    });
+    pa.needsUpdate = true;
+    S.beams.forEach(
+      (b, i) => (b.material.uniforms.k.value = 0.8 + 0.25 * Math.sin(S.t * 0.7 + i * 2))
+    );
+  }
   PFX.threshold = 0.9;
   postRender(S.sc, S.cam);
 }

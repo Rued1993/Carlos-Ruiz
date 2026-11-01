@@ -7,6 +7,7 @@ function buildSandbox3D(scene) {
   const L = R3.L;
   scene.background = new THREE.Color(0x8fc8ff);
   scene.fog = new THREE.Fog(0x8fc8ff, 300, 1250);
+  scene.environment = makeEnv('day');
   L.hemi = new THREE.HemisphereLight(0xbfd9ff, 0x4a5a3a, 0.7);
   scene.add(L.hemi);
   L.amb = new THREE.AmbientLight(0xffffff, 0.25);
@@ -73,6 +74,7 @@ function buildSandbox3D(scene) {
     }),
     3500
   );
+  addSway(sb.leaf.material, 2.2, 1.6, '(position.y + 20.0) / 40.0');
   sb.leaf.castShadow = true;
   sb.leaf.receiveShadow = true;
   sb.leaf.count = 0;
@@ -124,6 +126,7 @@ function buildSandbox3D(scene) {
   scene.add(sb.sap);
   buildRain3D(scene, sb);
   buildSky3D(scene, sb);
+  buildMountains3D(scene, sb);
   buildGrass3D(scene, sb);
   sb.pOB = new Uint8Array(WW * WH);
   sb.pGR = new Uint8Array(WW * WH);
@@ -330,6 +333,7 @@ function buildGrass3D(scene, sb) {
       }),
       n
     );
+    addSway(m.material, 3.4, 2.3, 'position.y / 22.0');
     m.count = 0;
     m.frustumCulled = false;
     m.receiveShadow = true;
@@ -371,4 +375,33 @@ function buildRain3D(scene, sb) {
   );
   sb.rain.frustumCulled = false;
   scene.add(sb.rain);
+}
+
+/** Cadena de montañas lejanas que da profundidad al horizonte (sin niebla, tintadas por el cielo). */
+function buildMountains3D(scene, sb) {
+  const geo = new THREE.ConeGeometry(1, 1, 5),
+    n = 34;
+  sb.mount = new THREE.InstancedMesh(
+    geo,
+    new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }),
+    n
+  );
+  const d = new THREE.Object3D(),
+    cx = (WW * TS) / 2,
+    cz = (WH * TS) / 2;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * 6.283 + hash(i, 1, 9) * 0.15,
+      rx = 3900 + hash(i, 2, 9) * 500,
+      rz = 3000 + hash(i, 3, 9) * 400,
+      h = 600 + hash(i, 4, 9) * 900,
+      w = 700 + hash(i, 5, 9) * 600;
+    d.position.set(cx + Math.cos(a) * rx, h / 2 - 80, cz + Math.sin(a) * rz);
+    d.rotation.set(0, hash(i, 6, 9) * 3, 0);
+    d.scale.set(w, h, w);
+    d.updateMatrix();
+    sb.mount.setMatrixAt(i, d.matrix);
+  }
+  sb.mount.frustumCulled = false;
+  sb.mount.renderOrder = -5;
+  scene.add(sb.mount);
 }

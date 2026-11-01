@@ -30,16 +30,32 @@ function um() {
 }
 function uiBtn(x, y, w, h, label, color, fn, size = 20) {
   const m = um(),
-    hov = m.x >= x && m.x <= x + w && m.y >= y && m.y <= y + h;
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, shade(color, hov ? 0.35 : 0.2));
-  g.addColorStop(1, shade(color, hov ? -0.1 : -0.3));
+    hov = m.x >= x && m.x <= x + w && m.y >= y && m.y <= y + h,
+    ly = hov ? y - 1 : y;
+  ctx.save();
+  ctx.shadowColor = hov ? shade(color, 0.3) : 'rgba(0,0,0,.45)';
+  ctx.shadowBlur = hov ? 18 : 8;
+  ctx.shadowOffsetY = hov ? 0 : 3;
+  const g = ctx.createLinearGradient(0, ly, 0, ly + h);
+  g.addColorStop(0, shade(color, hov ? 0.4 : 0.24));
+  g.addColorStop(0.5, shade(color, hov ? 0.05 : -0.08));
+  g.addColorStop(1, shade(color, hov ? -0.12 : -0.34));
   ctx.fillStyle = g;
-  rr(x, y, w, h, 10);
+  rr(x, ly, w, h, 11);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.25)';
-  ctx.lineWidth = 2;
+  ctx.restore();
+  ctx.strokeStyle = hov ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.22)';
+  ctx.lineWidth = 1.6;
+  rr(x, ly, w, h, 11);
   ctx.stroke();
-  txt(label, x + w / 2, y + h / 2, size, '#fff', 'center');
+  ctx.fillStyle = 'rgba(255,255,255,.14)';
+  rr(x + 3, ly + 2, w - 6, Math.max(3, h * 0.38), [9, 9, 4, 4]);
+  ctx.fill();
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.6)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
+  txt(label, x + w / 2, ly + h / 2, size, '#fff', 'center');
+  ctx.restore();
   addHit(x, y, w, h, fn, true);
 }

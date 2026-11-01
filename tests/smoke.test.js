@@ -525,6 +525,50 @@ const check = (name, cond, extra = '') => {
     })
   );
 
+  console.log('Gráficos: entorno, viento, haz y postproceso');
+  await ev(() => {
+    SAVE.quality = 2;
+    gmode = 'sandbox';
+    newGame();
+    G.intro = 0;
+  });
+  await wait(2500);
+  const gx = await ev(() => ({
+    env: !!R3.scene.environment,
+    sway: !!(R3.sb.leaf.material.userData.uTime && R3.sb.leaf.material.userData.uTime.value > 0),
+    montanas: R3.sb.mount.count > 10,
+    post: PFX.active === true,
+  }));
+  check(
+    'el mundo cubo tiene entorno HDR, viento y montañas',
+    gx.env && gx.sway && gx.montanas,
+    JSON.stringify(gx)
+  );
+  check(
+    'el postprocesado final (grado, aberración, viñeta) está activo',
+    gx.post,
+    JSON.stringify(gx)
+  );
+  await ev(() => {
+    gmode = 'classic';
+    newGame();
+    G.intro = 0;
+  });
+  await wait(2500);
+  const sx2 = await ev(() => ({
+    beam: !!R3.beam && R3.beam.visible,
+    dust: R3.dust.geometry.attributes.position.count,
+    env: !!R3.scene.environment,
+  }));
+  check(
+    'la nave tiene haz de linterna, polvo y reflejos',
+    sx2.beam && sx2.dust > 100 && sx2.env,
+    JSON.stringify(sx2)
+  );
+  await ev(() => {
+    SAVE.quality = 1;
+  });
+
   console.log('Fallback 2D');
   await ev(() => {
     view3d = false;

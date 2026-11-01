@@ -22,6 +22,7 @@
   "src/js/modes/sandbox.js",
   "src/js/modes/sandbox-survival.js",
   "src/js/render3d/core.js",
+  "src/js/render3d/lookdev.js",
   "src/js/render3d/cosmetics.js",
   "src/js/render3d/models.js",
   "src/js/render3d/postfx.js",

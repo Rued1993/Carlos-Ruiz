@@ -46,8 +46,10 @@ música y vista 3D/2D.
   contador de FPS.
 - **Audio:** motor Web Audio con reverb, efectos con estéreo según la posición y música adaptativa
   distinta por ambiente (menú, cinemática, nave, sabotaje, zombis, día y noche). Volúmenes ajustables.
-- **Gráficos:** postprocesado con MSAA y bloom, tiras de luz en la nave, fogonazo, trazadoras,
-  escombros 3D, zombis que caen, marcadores de objetivo y patada de FOV al correr.
+- **Gráficos:** postprocesado HDR (MSAA, bloom, gradación de color, aberración cromática, viñeta de
+  daño y grano), reflejos con mapas de entorno, luz de contorno en los personajes, haz de linterna
+  volumétrico y polvo, suelo con detalle de juntas y remaches, hierba y hojas que se mecen con el
+  viento, montañas en el horizonte, fogonazo, trazadoras, escombros 3D y zombis que caen.
 
 ## Estructura
 
