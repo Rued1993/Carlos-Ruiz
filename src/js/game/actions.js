@@ -75,6 +75,17 @@ function openTask(type, title, icon, done) {
     t.speed = 260;
     t.zone = rnd(60, 400);
   }
+  if (type == 'keypad') {
+    t.code = Array.from({ length: 4 }, () => 1 + Math.floor(Math.random() * 9)).join('');
+    t.entry = '';
+  }
+  if (type == 'simon') {
+    t.seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * 4));
+    t.len = 1;
+    t.pos = 0;
+    t.show = 1.1;
+    t.lit = -1;
+  }
   if (type == 'switches') {
     do {
       t.sw = [0, 1, 2, 3, 4].map(() => Math.random() < 0.5);

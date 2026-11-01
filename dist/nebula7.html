@@ -5,24 +5,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Nébula-7: El Cubo</title>
 <style>
-html,body{
-  margin:0;
-  height:100%;
-  background:#000;
-  overflow:hidden;
-  font-family:system-ui,sans-serif}
-canvas{
-  position:fixed;
-  left:0;
-  top:0;
-  width:100%;
-  height:100%;
-  touch-action:none}
-#gl{
-  z-index:0;
-  visibility:hidden}
-#c{
-  z-index:1}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+canvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+#gl {
+  z-index: 0;
+  visibility: hidden;
+}
+#c {
+  z-index: 1;
+}
 </style>
 </head>
 <body>
@@ -576,9 +581,9 @@ function nearestNode(p) {
 const STATIONS = [
   { name: 'Descargar datos', x: 1000, y: 190, node: 2, type: 'hold', icon: '⬇' },
   { name: 'Escanear muestra', x: 550, y: 200, node: 0, type: 'numbers', icon: '#' },
-  { name: 'Trazar rumbo', x: 1900, y: 200, node: 4, type: 'slider', icon: '⇄' },
+  { name: 'Trazar rumbo', x: 1900, y: 200, node: 4, type: 'keypad', icon: '#' },
   { name: 'Iniciar reactor', x: 250, y: 780, node: 8, type: 'numbers', icon: '☢' },
-  { name: 'Alinear motor', x: 2150, y: 780, node: 10, type: 'slider', icon: '⇄' },
+  { name: 'Alinear motor', x: 2150, y: 780, node: 10, type: 'simon', icon: '◈' },
   { name: 'Arreglar cables', x: 700, y: 1250, node: 16, type: 'wires', icon: 'ϟ' },
   { name: 'Vaciar basura', x: 1050, y: 1250, node: 12, type: 'hold', icon: '⬇' },
   { name: 'Revisar cableado', x: 1800, y: 1250, node: 19, type: 'wires', icon: 'ϟ' },
@@ -1199,6 +1204,17 @@ function openTask(type, title, icon, done) {
     t.dir = 1;
     t.speed = 260;
     t.zone = rnd(60, 400);
+  }
+  if (type == 'keypad') {
+    t.code = Array.from({ length: 4 }, () => 1 + Math.floor(Math.random() * 9)).join('');
+    t.entry = '';
+  }
+  if (type == 'simon') {
+    t.seq = Array.from({ length: 5 }, () => Math.floor(Math.random() * 4));
+    t.len = 1;
+    t.pos = 0;
+    t.show = 1.1;
+    t.lit = -1;
   }
   if (type == 'switches') {
     do {
@@ -2037,6 +2053,17 @@ function updateTask(dt) {
       t.dir = 1;
     }
     if (t.hits >= 3) t.doneT = 0.6;
+  }
+  if (t.type == 'keypad' && t.entry === t.code) t.doneT = 0.6;
+  if (t.type == 'simon') {
+    if (t.show > 0 && t.doneT <= 0) {
+      t.show -= dt;
+      const e = t.len * 0.7 + 0.4 - t.show - 0.4,
+        k = Math.floor(e / 0.7);
+      t.lit = e >= 0 && k < t.len && e % 0.7 < 0.45 ? t.seq[k] : -1;
+    } else t.lit = t.pressed > 0 ? t.lit : -1;
+    if (t.pressed > 0) t.pressed -= dt;
+    if (t.len > 5) t.doneT = 0.6;
   }
   if (t.type == 'numbers' && t.next > 9) t.doneT = 0.6;
   if (t.type == 'wires' && t.conn.length == 4) t.doneT = 0.6;
@@ -2917,6 +2944,83 @@ function drawTask() {
       },
       true
     );
+  }
+  if (t.type == 'keypad') {
+    txt('Introduce el código de rumbo', 300, 64, 15, '#9fb3c8', 'center', false);
+    txt(t.code.split('').join('  '), 300, 100, 34, '#7bff9a', 'center');
+    txt(t.entry.padEnd(4, '_').split('').join('  '), 300, 148, 34, '#fff', 'center');
+    for (let i = 0; i < 9; i++) {
+      const x = 190 + (i % 3) * 72,
+        y = 180 + Math.floor(i / 3) * 62;
+      ctx.fillStyle = '#34476a';
+      rr(x, y, 64, 54, 8);
+      ctx.fill();
+      txt(i + 1, x + 32, y + 27, 26, '#fff', 'center');
+      addHit(
+        x,
+        y,
+        64,
+        54,
+        () => {
+          if (t.doneT > 0) return;
+          t.entry += i + 1;
+          beep(420 + i * 40, 0.06, 'sine', 0.05);
+          if (t.entry.length >= 4 && t.entry !== t.code) {
+            t.entry = '';
+            t.flash = 0.4;
+            beep(150, 0.2);
+          }
+        },
+        true
+      );
+    }
+  }
+  if (t.type == 'simon') {
+    txt(
+      t.show > 0 ? 'Memoriza la secuencia…' : 'Repite la secuencia (' + t.len + '/5)',
+      300,
+      64,
+      15,
+      '#9fb3c8',
+      'center',
+      false
+    );
+    const cols = ['#e53935', '#1e88e5', '#fdd835', '#43a047'];
+    for (let i = 0; i < 4; i++) {
+      const x = 170 + (i % 2) * 140,
+        y = 100 + Math.floor(i / 2) * 140,
+        on = t.lit === i;
+      ctx.fillStyle = cols[i];
+      ctx.globalAlpha = on ? 1 : 0.45;
+      rr(x, y, 130, 130, 14);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      addHit(
+        x,
+        y,
+        130,
+        130,
+        () => {
+          if (t.doneT > 0 || t.show > 0) return;
+          t.lit = i;
+          t.pressed = 0.25;
+          beep(300 + i * 90, 0.12, 'sine', 0.06);
+          if (t.seq[t.pos] === i) {
+            if (++t.pos >= t.len) {
+              t.len++;
+              t.pos = 0;
+              t.show = t.len * 0.7 + 0.4;
+            }
+          } else {
+            t.pos = 0;
+            t.show = t.len * 0.7 + 0.4;
+            t.flash = 0.4;
+            beep(150, 0.2);
+          }
+        },
+        true
+      );
+    }
   }
   if (t.type == 'switches') {
     txt('Activa todos los interruptores', 300, 64, 15, '#9fb3c8', 'center', false);

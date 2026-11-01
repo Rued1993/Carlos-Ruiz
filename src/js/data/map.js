@@ -159,9 +159,9 @@ function nearestNode(p) {
 const STATIONS = [
   { name: 'Descargar datos', x: 1000, y: 190, node: 2, type: 'hold', icon: '⬇' },
   { name: 'Escanear muestra', x: 550, y: 200, node: 0, type: 'numbers', icon: '#' },
-  { name: 'Trazar rumbo', x: 1900, y: 200, node: 4, type: 'slider', icon: '⇄' },
+  { name: 'Trazar rumbo', x: 1900, y: 200, node: 4, type: 'keypad', icon: '#' },
   { name: 'Iniciar reactor', x: 250, y: 780, node: 8, type: 'numbers', icon: '☢' },
-  { name: 'Alinear motor', x: 2150, y: 780, node: 10, type: 'slider', icon: '⇄' },
+  { name: 'Alinear motor', x: 2150, y: 780, node: 10, type: 'simon', icon: '◈' },
   { name: 'Arreglar cables', x: 700, y: 1250, node: 16, type: 'wires', icon: 'ϟ' },
   { name: 'Vaciar basura', x: 1050, y: 1250, node: 12, type: 'hold', icon: '⬇' },
   { name: 'Revisar cableado', x: 1800, y: 1250, node: 19, type: 'wires', icon: 'ϟ' },

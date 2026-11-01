@@ -760,6 +760,32 @@ const check = (name, cond, extra = '') => {
   );
   check('la cámara lenta termina', await until(() => TIME.scale === 1));
 
+  console.log('Minijuegos nuevos');
+  const mg = await ev(() => {
+    gmode = 'classic';
+    newGame();
+    G.intro = 0;
+    let ok = 0;
+    openTask('keypad', 'k', '#', () => {});
+    G.task.entry = G.task.code;
+    updateTask(0.05);
+    if (G.task.doneT > 0) ok++;
+    openTask('simon', 's', '#', () => {});
+    G.task.show = 0;
+    G.task.len = 6;
+    updateTask(0.05);
+    if (G.task.doneT > 0) ok++;
+    drawTask();
+    G.task = null;
+    scene = 'play';
+    return { ok, types: STATIONS.map(s => s.type).join() };
+  });
+  check(
+    'los minijuegos keypad y simon se completan',
+    mg.ok === 2 && /keypad/.test(mg.types) && /simon/.test(mg.types),
+    JSON.stringify(mg)
+  );
+
   console.log('Fallback 2D');
   await ev(() => {
     view3d = false;

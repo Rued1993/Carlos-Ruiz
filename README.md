@@ -17,6 +17,7 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | **Historia** | 5 capítulos con cinemáticas, voz y jefe final (`src/js/campaign/`). |
 | **Niveles** | 12 retos con objetivos y 3 estrellas por tiempo. |
 | **Partida libre** | Impostor clásico, Supervivencia Zombi o Mundo cubo (tipo Minecraft). |
+| **Tareas (clásico)** | Números, cables, deslizador, interruptores, mantener, más *código de rumbo* (teclado) y *alinear motor* (secuencia de colores tipo Simón). |
 
 ### Controles
 

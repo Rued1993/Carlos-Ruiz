@@ -185,6 +185,83 @@ function drawTask() {
       true
     );
   }
+  if (t.type == 'keypad') {
+    txt('Introduce el código de rumbo', 300, 64, 15, '#9fb3c8', 'center', false);
+    txt(t.code.split('').join('  '), 300, 100, 34, '#7bff9a', 'center');
+    txt(t.entry.padEnd(4, '_').split('').join('  '), 300, 148, 34, '#fff', 'center');
+    for (let i = 0; i < 9; i++) {
+      const x = 190 + (i % 3) * 72,
+        y = 180 + Math.floor(i / 3) * 62;
+      ctx.fillStyle = '#34476a';
+      rr(x, y, 64, 54, 8);
+      ctx.fill();
+      txt(i + 1, x + 32, y + 27, 26, '#fff', 'center');
+      addHit(
+        x,
+        y,
+        64,
+        54,
+        () => {
+          if (t.doneT > 0) return;
+          t.entry += i + 1;
+          beep(420 + i * 40, 0.06, 'sine', 0.05);
+          if (t.entry.length >= 4 && t.entry !== t.code) {
+            t.entry = '';
+            t.flash = 0.4;
+            beep(150, 0.2);
+          }
+        },
+        true
+      );
+    }
+  }
+  if (t.type == 'simon') {
+    txt(
+      t.show > 0 ? 'Memoriza la secuencia…' : 'Repite la secuencia (' + t.len + '/5)',
+      300,
+      64,
+      15,
+      '#9fb3c8',
+      'center',
+      false
+    );
+    const cols = ['#e53935', '#1e88e5', '#fdd835', '#43a047'];
+    for (let i = 0; i < 4; i++) {
+      const x = 170 + (i % 2) * 140,
+        y = 100 + Math.floor(i / 2) * 140,
+        on = t.lit === i;
+      ctx.fillStyle = cols[i];
+      ctx.globalAlpha = on ? 1 : 0.45;
+      rr(x, y, 130, 130, 14);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      addHit(
+        x,
+        y,
+        130,
+        130,
+        () => {
+          if (t.doneT > 0 || t.show > 0) return;
+          t.lit = i;
+          t.pressed = 0.25;
+          beep(300 + i * 90, 0.12, 'sine', 0.06);
+          if (t.seq[t.pos] === i) {
+            if (++t.pos >= t.len) {
+              t.len++;
+              t.pos = 0;
+              t.show = t.len * 0.7 + 0.4;
+            }
+          } else {
+            t.pos = 0;
+            t.show = t.len * 0.7 + 0.4;
+            t.flash = 0.4;
+            beep(150, 0.2);
+          }
+        },
+        true
+      );
+    }
+  }
   if (t.type == 'switches') {
     txt('Activa todos los interruptores', 300, 64, 15, '#9fb3c8', 'center', false);
     t.sw.forEach((on, i) => {

@@ -263,6 +263,17 @@ function updateTask(dt) {
     }
     if (t.hits >= 3) t.doneT = 0.6;
   }
+  if (t.type == 'keypad' && t.entry === t.code) t.doneT = 0.6;
+  if (t.type == 'simon') {
+    if (t.show > 0 && t.doneT <= 0) {
+      t.show -= dt;
+      const e = t.len * 0.7 + 0.4 - t.show - 0.4,
+        k = Math.floor(e / 0.7);
+      t.lit = e >= 0 && k < t.len && e % 0.7 < 0.45 ? t.seq[k] : -1;
+    } else t.lit = t.pressed > 0 ? t.lit : -1;
+    if (t.pressed > 0) t.pressed -= dt;
+    if (t.len > 5) t.doneT = 0.6;
+  }
   if (t.type == 'numbers' && t.next > 9) t.doneT = 0.6;
   if (t.type == 'wires' && t.conn.length == 4) t.doneT = 0.6;
   if (t.type == 'switches' && t.sw.every(v => v)) t.doneT = 0.6;
