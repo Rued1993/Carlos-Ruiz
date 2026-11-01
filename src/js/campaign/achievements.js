@@ -28,6 +28,7 @@ const ACHIEVEMENTS = [
   { id: 'oleadas', name: 'Superviviente', desc: 'Supera 25 oleadas', stat: 'wave', need: 25 },
   { id: 'lenador', name: 'Leñador', desc: 'Recoge 100 de madera', stat: 'item:madera', need: 100 },
   { id: 'constructor', name: 'Constructor', desc: 'Coloca 200 bloques', stat: 'place', need: 200 },
+  { id: 'herrero', name: 'Herrero', desc: 'Funde 6 lingotes de hierro', stat: 'smelt', need: 6 },
   { id: 'chef', name: 'Chef', desc: 'Cocina 10 piezas de carne', stat: 'cook', need: 10 },
   { id: 'cazador', name: 'Cazador', desc: 'Caza 15 animales', stat: 'animal', need: 15 },
   { id: 'noches', name: 'Noctámbulo', desc: 'Sobrevive 3 noches', stat: 'night', need: 3 },

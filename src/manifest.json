@@ -46,6 +46,7 @@
   "src/js/ui/extra-screens.js",
   "src/js/ui/hud-kit.js",
   "src/js/ui/hud-extras.js",
+  "src/js/ui/tips.js",
   "src/js/core/music.js",
   "src/js/core/main-loop.js",
   "src/js/core/input.js",

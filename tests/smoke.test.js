@@ -786,6 +786,51 @@ const check = (name, cond, extra = '') => {
     JSON.stringify(mg)
   );
 
+  console.log('Hierro y consejos');
+  const fe = await ev(() => {
+    gmode = 'sandbox';
+    newGame();
+    G.intro = 0;
+    scene = 'play';
+    const o = { ore: 0 };
+    for (let i = 0; i < OB.length; i++) if (OB[i] === O_IRON) o.ore++;
+    G.inv.hierro = 3;
+    G.inv.carbon = 3;
+    sbCook(5, 5);
+    o.lingote = G.inv.lingote;
+    G.inv.lingote = 6;
+    G.inv.tablon = 10;
+    G.nearTable = true;
+    craft(RECIPES.find(r => r.tool === 'picoH'));
+    craft(RECIPES.find(r => r.tool === 'espadaH'));
+    o.pico = !!G.tools.picoH;
+    o.dmg = swordDmg();
+    o.tex = !!TEX.o[15];
+    SAVE.tips = {};
+    tip('prueba', 'hola');
+    tip('prueba', 'hola');
+    o.tipq = TIPQ.filter(q => q.id === 'prueba').length + (TIPCUR && TIPCUR.id === 'prueba' ? 1 : 0);
+    o.saved = SAVE.tips.prueba === 1;
+    scene = 'craft';
+    drawCraft();
+    scene = 'play';
+    return o;
+  });
+  await wait(800);
+  const fe3 = await ev(() => ({ inst: R3.sb.o[15] ? R3.sb.o[15].count : -1 }));
+  check(
+    'mineral de hierro, fundición, herramientas de hierro y consejos únicos',
+    fe.ore > 0 &&
+      fe.lingote === 3 &&
+      fe.pico &&
+      fe.dmg === 15 &&
+      fe.tex &&
+      fe.tipq === 1 &&
+      fe.saved &&
+      fe3.inst > 0,
+    JSON.stringify(fe) + JSON.stringify(fe3)
+  );
+
   console.log('Fallback 2D');
   await ev(() => {
     view3d = false;

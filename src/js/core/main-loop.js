@@ -66,6 +66,8 @@ function frame(now) {
       drawHUD();
       drawMissionHUD();
       drawPopups();
+      tipTick();
+      drawTips();
       drawCrosshair();
       drawDamageIndicator();
       drawObjectiveMarkers();

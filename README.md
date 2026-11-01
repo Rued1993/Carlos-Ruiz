@@ -47,6 +47,9 @@ música y vista 3D/2D.
   flotantes, ondas de choque en explosiones y cámara lenta al matar al jefe.
 - **Mundo cubo:** hambre, animales, horno y carne asada, cama (duerme de noche), brotes que crecen
   hasta ser árboles, lluvia con tormentas, cielo con sol, luna, estrellas y nubes.
+  Hierro: mineral en zonas de piedra (requiere pico), se funde en el horno con carbón y da
+  hacha, pico (picado ×4,5) y espada (15 de daño) de hierro; logro *Herrero*.
+- **Consejos:** pistas contextuales que salen una sola vez (esquiva, granadas, potenciadores, antorchas…).
 - **HUD:** kit propio (paneles de cristal, iconos vectoriales, barras con estela de daño, botones circulares con tecla y recarga, mira dinámica con marca de impacto e indicador de dirección del daño, minimapa con cono de visión).
 - **Animación:** rig articulado (torso con inclinación y giro, hombros, codos, caderas y rodillas) con ciclo de marcha y carrera, poses al apuntar con pistola, escopeta y subfusil, bate, picar, trabajar, zombis con brazos extendidos y zarpazo, reacción al daño y emotes (`T` saludar, `Y` bailar, `U` señalar).
 - **Personajes:** cuerpo en forma de judía con oclusión horneada, visor de cristal con marco y reflejos, mochila redondeada con tira de luz, botas, zombis con garras, ojos brillantes y heridas, Alfa con púas, y 3 mascotas que te siguen.

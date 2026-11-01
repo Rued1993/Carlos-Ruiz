@@ -54,7 +54,7 @@ function buildSandbox3D(scene) {
     return m;
   });
   sb.o = [];
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15]) {
     const tx = glTex(TEX.o[k], true),
       m = new THREE.InstancedMesh(
         bGeo,
@@ -217,14 +217,14 @@ function sbRebuild3D() {
         tc++;
       } else if (o === 13) {
         put(sb.sap, sapN++, cx, 9, cz);
-      } else if (((o >= 1 && o <= 8) || o === 11 || o === 12) && oc[o] < 3990)
+      } else if (((o >= 1 && o <= 8) || o === 11 || o === 12 || o === 15) && oc[o] < 3990)
         put(sb.o[o], oc[o]++, cx, TS / 2, cz);
     }
   sb.g.forEach((m, i) => {
     m.count = gc[i];
     m.instanceMatrix.needsUpdate = true;
   });
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15]) {
     sb.o[k].count = oc[k];
     sb.o[k].instanceMatrix.needsUpdate = true;
   }

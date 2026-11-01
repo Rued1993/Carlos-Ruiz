@@ -167,10 +167,21 @@ function sbEat() {
 }
 /** Usa un horno: convierte carne cruda + carbón en carne asada. */
 function sbCook(tx, ty) {
-  const g = G,
-    n = Math.min(g.inv.carne, g.inv.carbon, 4);
+  const g = G;
+  const m = Math.min(g.inv.hierro || 0, g.inv.carbon, 4);
+  if (m > 0) {
+    g.inv.hierro -= m;
+    g.inv.carbon -= m;
+    g.inv.lingote = (g.inv.lingote || 0) + m;
+    toast(`Horno: ${m} lingote(s) de hierro`, 2);
+    burst(tx * TS + TS / 2, ty * TS + TS / 2, 14, '#ffd0a0', 110, 0.7);
+    beep(300, 0.25, 'triangle', 0.08, 500);
+    mevent('smelt', m);
+    return;
+  }
+  const n = Math.min(g.inv.carne, g.inv.carbon, 4);
   if (n <= 0) {
-    toast('Horno: necesitas carne cruda y carbón', 2);
+    toast('Horno: necesitas carbón + carne cruda o mineral de hierro', 2);
     return;
   }
   g.inv.carne -= n;

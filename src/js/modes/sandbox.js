@@ -25,7 +25,8 @@ const O_LOG = 1,
   O_TORCH = 9,
   O_BTN = 10;
 const OSOLID = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
-const OHARD = { 1: 0.9, 2: 1.2, 3: 1.5, 4: 0.6, 5: 1, 6: 0.35, 7: 0.6, 8: 0.5, 9: 0.1 };
+const O_IRON = 15;
+const OHARD = { 15: 2, 1: 0.9, 2: 1.2, 3: 1.5, 4: 0.6, 5: 1, 6: 0.35, 7: 0.6, 8: 0.5, 9: 0.1 };
 const OCOL = {
   1: '#7a5530',
   2: '#8a8a8a',
@@ -36,6 +37,7 @@ const OCOL = {
   7: '#a07a40',
   8: '#8a5a2a',
   9: '#ffb020',
+  15: '#d8a070',
 };
 const HOTBAR = [
   'tablon',
@@ -54,6 +56,8 @@ const INAME = {
   tablon: 'Tablones',
   piedra: 'Piedra',
   carbon: 'Carbón',
+  hierro: 'Mineral de hierro',
+  lingote: 'Lingote de hierro',
   tierra: 'Tierra',
   antorcha: 'Antorchas',
   mesa: 'Mesa',
@@ -85,6 +89,24 @@ const RECIPES = [
   { n: 'Hacha (talar más rápido)', in: { tablon: 3 }, tool: 'hacha', table: true },
   { n: 'Pico (picar piedra más rápido)', in: { tablon: 3 }, tool: 'pico', table: true },
   { n: 'Espada (más daño a zombis)', in: { tablon: 2 }, tool: 'espada', table: true },
+  {
+    n: 'Hacha de hierro (tala muy rápida)',
+    in: { lingote: 2, tablon: 1 },
+    tool: 'hachaH',
+    table: true,
+  },
+  {
+    n: 'Pico de hierro (pica muy rápido)',
+    in: { lingote: 2, tablon: 1 },
+    tool: 'picoH',
+    table: true,
+  },
+  {
+    n: 'Espada de hierro (daño x1,7)',
+    in: { lingote: 2, tablon: 1 },
+    tool: 'espadaH',
+    table: true,
+  },
 ];
 let GR = null,
   OB = null,
@@ -190,6 +212,12 @@ function buildTex() {
     x.fillStyle = '#14141a';
     for (let i = 0; i < 7; i++)
       x.fillRect(2 + Math.floor(Math.random() * 11), 2 + Math.floor(Math.random() * 11), 2, 2);
+  });
+  T.o[15] = rock(['#8a8a8a', '#7a7a7a', '#999', '#707070'], x => {
+    for (let i = 0; i < 6; i++) {
+      x.fillStyle = i % 2 ? '#e0b48a' : '#c58a5a';
+      x.fillRect(2 + Math.floor(Math.random() * 11), 2 + Math.floor(Math.random() * 11), 2, 2);
+    }
   });
   T.o[4] = mkTex(['#b8935a', '#c29c62', '#ad8a52'], x => {
     x.fillStyle = 'rgba(60,35,10,.5)';
@@ -338,6 +366,7 @@ function buildWorld() {
       } else if (g == G_STONE) {
         if (r < 0.09) OB[i] = O_BOULDER;
         else if (r < 0.12) OB[i] = O_COAL;
+        else if (r < 0.14) OB[i] = O_IRON;
       } else if (g == G_SAND && r < 0.004) OB[i] = O_BOULDER;
     }
   for (let n = 0, tries = 0; n < 10 && tries < 500; tries++) {
@@ -456,6 +485,8 @@ function newSandbox(cfg) {
       tablon: 0,
       piedra: 0,
       carbon: 0,
+      hierro: 0,
+      lingote: 0,
       tierra: 0,
       antorcha: 0,
       mesa: 0,
@@ -565,6 +596,10 @@ function breakObj(tx, ty) {
   if (o == O_BOULDER || o == O_COBBLE) {
     addItem('piedra', 1);
     toast('+1 Piedra', 0.8);
+  } else if (o == O_IRON) {
+    addItem('hierro', 1);
+    toast('+1 Mineral de hierro (fúndelo en un horno)', 1.4);
+    tip('hierro', 'El mineral de hierro se funde en el horno con carbón → lingotes');
   } else if (o == O_COAL) {
     addItem('carbon', 1);
     toast('+1 Carbón', 0.8);
@@ -612,7 +647,7 @@ function sbAct(dt) {
     if (Math.hypot(z.x - T.wx, z.y - T.wy) < 36 && dist(z, p) < 100) {
       if (g.hitCD <= 0) {
         g.hitCD = 0.45;
-        z.hp -= g.tools.espada ? 9 : 4;
+        z.hp -= swordDmg();
         z.hurt = 0.2;
         const a = Math.atan2(z.y - p.y, z.x - p.x);
         move(z, Math.cos(a) * 22, Math.sin(a) * 22);
@@ -625,7 +660,7 @@ function sbAct(dt) {
     if (Math.hypot(a.x - T.wx, a.y - T.wy) < 34 && dist(a, p) < 100) {
       if (g.hitCD <= 0) {
         g.hitCD = 0.45;
-        hitAnimal(a, g.tools.espada ? 9 : 4);
+        hitAnimal(a, swordDmg());
       }
       return;
     }
@@ -640,8 +675,15 @@ function sbAct(dt) {
     return;
   }
   let need = OHARD[o];
-  if (g.tools.hacha && (o == O_LOG || o == O_PLANK || o == O_TABLE || o == O_CHEST)) need *= 0.4;
-  if (g.tools.pico && (o == O_BOULDER || o == O_COAL || o == O_COBBLE)) need *= 0.4;
+  const wood = o == O_LOG || o == O_PLANK || o == O_TABLE || o == O_CHEST,
+    rock = o == O_BOULDER || o == O_COAL || o == O_COBBLE || o == O_IRON;
+  if (o == O_IRON && !g.tools.pico && !g.tools.picoH) {
+    if (!g.mine || g.mine.i !== i) toast('Necesitas un pico para extraer hierro', 1.4);
+    g.mine = { i, t: 0, need: 99, tx: T.tx, ty: T.ty, tick: 1 };
+    return;
+  }
+  if (wood) need *= g.tools.hachaH ? 0.22 : g.tools.hacha ? 0.4 : 1;
+  if (rock) need *= g.tools.picoH ? 0.22 : g.tools.pico ? 0.4 : 1;
   if (!g.mine || g.mine.i !== i) g.mine = { i, t: 0, need, tx: T.tx, ty: T.ty, tick: 0 };
   g.mine.need = need;
   g.mine.t += dt;
@@ -1137,6 +1179,7 @@ function itemIcon(k, x, y, s) {
     horno: TEX.o[11],
     madera: TEX.o[1],
     carbon: TEX.o[3],
+    hierro: TEX.o[15],
   };
   if (m[k]) {
     ctx.imageSmoothingEnabled = false;
@@ -1161,16 +1204,19 @@ function drawSbHUD() {
   chip(24, 80, 'Madera ' + g.inv.madera, 'block', '#d7a86e', 11);
   chip(112, 80, 'Carbón ' + g.inv.carbon, 'coin', '#9aa5b1', 11);
   chip(200, 80, g.inv.carne + '/' + g.inv.asada, 'drumstick', '#ff8a65', 11);
+  if (g.inv.hierro || g.inv.lingote)
+    chip(288, 80, 'Fe ' + g.inv.hierro + '/' + g.inv.lingote, 'block', '#d8a070', 11);
   const tools = ['hacha', 'pico', 'espada'];
   tools.forEach((tn, i) => {
-    const has = !!g.tools[tn];
+    const iron = !!g.tools[tn + 'H'],
+      has = !!g.tools[tn] || iron;
     ctx.globalAlpha = has ? 1 : 0.35;
     icon(
       tn === 'pico' ? 'pick' : tn === 'espada' ? 'dagger' : 'hammer',
       36 + i * 28,
       132,
       18,
-      has ? '#ffd54f' : '#90a4ae'
+      iron ? '#e0e6ee' : has ? '#ffd54f' : '#90a4ae'
     );
     ctx.globalAlpha = 1;
   });
@@ -1336,17 +1382,17 @@ function drawCraft() {
   ctx.fillStyle = 'rgba(0,0,0,.6)';
   ctx.fillRect(0, 0, W, H);
   addHit(0, 0, W, H, () => {}, false);
-  beginUI(640, 540);
-  let gr = ctx.createLinearGradient(0, 0, 0, 540);
+  beginUI(640, 730);
+  let gr = ctx.createLinearGradient(0, 0, 0, 730);
   gr.addColorStop(0, '#3a4a30');
   gr.addColorStop(1, '#1a2216');
   ctx.fillStyle = gr;
-  rr(0, 0, 640, 540, 14);
+  rr(0, 0, 640, 730, 14);
   ctx.fill();
   ctx.strokeStyle = '#8fb070';
   ctx.lineWidth = 4;
   ctx.stroke();
-  addHit(0, 0, 640, 540, () => {}, true);
+  addHit(0, 0, 640, 730, () => {}, true);
   txt('CRAFTEO', 320, 30, 26, '#fff', 'center');
   txt(
     g.nearTable ? '✔ Mesa de trabajo cerca' : 'Sin mesa cerca (las herramientas la necesitan)',
@@ -1358,7 +1404,7 @@ function drawCraft() {
     false
   );
   RECIPES.forEach((r, i) => {
-    const y = 76 + i * 52,
+    const y = 76 + i * 50,
       has = Object.keys(r.in).every(k => g.inv[k] >= r.in[k]),
       have = r.tool && g.tools[r.tool],
       can = has && !have && (!r.table || g.nearTable);
@@ -1395,7 +1441,7 @@ function drawCraft() {
   });
   uiBtn(
     250,
-    496,
+    684,
     140,
     34,
     'Cerrar [C]',
@@ -1406,4 +1452,10 @@ function drawCraft() {
     15
   );
   endUI();
+}
+
+/** Daño cuerpo a cuerpo según la mejor espada. */
+function swordDmg() {
+  const t = G.tools;
+  return t.espadaH ? 15 : t.espada ? 9 : 4;
 }
