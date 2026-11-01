@@ -15,7 +15,7 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | Modo | Descripción |
 |---|---|
 | **Historia** | 5 capítulos con cinemáticas, voz y jefe final (`src/js/campaign/`). |
-| **Niveles** | 12 retos con objetivos y 3 estrellas por tiempo. |
+| **Niveles** | 15 retos con objetivos y 3 estrellas por tiempo (nuevos: *Herrero*, *Código Rojo*, *La Horda*). |
 | **Partida libre** | Impostor clásico, Supervivencia Zombi o Mundo cubo (tipo Minecraft). |
 | **Tareas (clásico)** | Números, cables, deslizador, interruptores, mantener, más *código de rumbo* (teclado) y *alinear motor* (secuencia de colores tipo Simón). |
 
@@ -49,6 +49,8 @@ música y vista 3D/2D.
   hasta ser árboles, lluvia con tormentas, cielo con sol, luna, estrellas y nubes.
   Hierro: mineral en zonas de piedra (requiere pico), se funde en el horno con carbón y da
   hacha, pico (picado ×4,5) y espada (15 de daño) de hierro; logro *Herrero*.
+- **El Alfa:** pisotones que sacuden la cámara y un rugido que convoca a la horda cada 9 s.
+- **Rendimiento:** resolución dinámica (activable en pausa) que baja la resolución interna si los FPS caen de 42 y la recupera por encima de 57.
 - **Consejos:** pistas contextuales que salen una sola vez (esquiva, granadas, potenciadores, antorchas…).
 - **HUD:** kit propio (paneles de cristal, iconos vectoriales, barras con estela de daño, botones circulares con tecla y recarga, mira dinámica con marca de impacto e indicador de dirección del daño, minimapa con cono de visión).
 - **Animación:** rig articulado (torso con inclinación y giro, hombros, codos, caderas y rodillas) con ciclo de marcha y carrera, poses al apuntar con pistola, escopeta y subfusil, bate, picar, trabajar, zombis con brazos extendidos y zarpazo, reacción al daño y emotes (`T` saludar, `Y` bailar, `U` señalar).

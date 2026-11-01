@@ -18,6 +18,7 @@ const SAVE = (() => {
     visor: 0,
     pet: 0,
     fps: false,
+    dynRes: true,
     stats: {},
     ach: {},
   };
@@ -177,6 +178,44 @@ const LEVELS = [
     goals: [
       { k: 'chest', need: 4, text: 'Abre 4 cofres' },
       { k: 'item:carbon', need: 5, text: 'Consigue 5 de carbón' },
+    ],
+  },
+  {
+    id: 'L13',
+    name: 'Herrero',
+    mode: 'sandbox',
+    cfg: {},
+    par: 420,
+    desc: 'Bajo la piedra hay vetas de hierro. Fabrica un pico, extrae el mineral y fúndelo en un horno.',
+    goals: [
+      { k: 'craft:pico', need: 1, text: 'Fabrica un pico' },
+      { k: 'item:hierro', need: 3, text: 'Extrae 3 de hierro' },
+      { k: 'smelt', need: 2, text: 'Funde 2 lingotes' },
+    ],
+  },
+  {
+    id: 'L14',
+    name: 'Código Rojo',
+    mode: 'classic',
+    cfg: { nImp: 1, role: 'crew', sabFast: true },
+    par: 300,
+    limit: 720,
+    desc: 'Los sistemas de navegación fallan. Introduce los códigos, alinea el motor y no pierdas de vista al impostor.',
+    goals: [
+      { k: 'task', need: 5, text: 'Completa 5 tareas' },
+      { k: 'fix', need: 1, text: 'Repara un sabotaje' },
+    ],
+  },
+  {
+    id: 'L15',
+    name: 'La Horda',
+    mode: 'zombie',
+    cfg: { waves: 4, boss: true, escape: false, weapons: ['pistola', 'subfusil'], ammo: 120 },
+    par: 320,
+    desc: 'El Alfa ha vuelto y ahora llama a la horda con sus rugidos. Esquiva (Q), busca potenciadores y acaba con él.',
+    goals: [
+      { k: 'wave', need: 3, text: 'Sobrevive 3 oleadas' },
+      { k: 'boss', need: 1, text: 'Derrota al Alfa' },
     ],
   },
 ];

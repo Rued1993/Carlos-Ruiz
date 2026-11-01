@@ -586,11 +586,13 @@ function updZombie(dt) {
   }
   g.bullets = g.bullets.filter(b => b.life > 0);
   // zombis
+  const born = [];
   for (const z of g.zs) {
     z.step += dt * (z.run ? 12 : 8);
     z.cd -= dt;
     z.pt -= dt;
     const d = dist(z, p);
+    if (z.boss) bossTick(z, d, dt, born);
     if (z.pt <= 0) {
       z.pt = 0.45;
       if (d < 600 && clearLine(z, p, true)) z.path = [{ x: p.x, y: p.y, chase: 1 }];
@@ -647,6 +649,7 @@ function updZombie(dt) {
       burst(p.x, p.y, 8, '#7a0b0b', 160);
     }
   }
+  for (const z of born) g.zs.push(z);
   for (let i = 0; i < g.zs.length; i++)
     for (let j = i + 1; j < g.zs.length; j++) {
       const a = g.zs[i],
@@ -872,12 +875,12 @@ function drawZHUD() {
   txt(`bajas ${g.kills}`, 92, 35, 14, '#fff', 'left');
   icon('star', 34, 60, 18, '#ffd54f');
   txt(`${g.score}`, 52, 61, 16, '#ffd54f', 'left');
+  if (g.dashCd > 0) chip(16, 112, 'esquiva ' + g.dashCd.toFixed(1), 'bolt', '#888', 12);
+  else chip(16, 112, 'Q esquiva', 'bolt', '#9fd8ff', 12);
   if (g.buffs && g.buffs.rapid > 0)
-    chip(130, 71, 'RÁFAGA ' + Math.ceil(g.buffs.rapid) + 's', 'bolt', '#ffea00', 12);
-  if (g.shield > 0) chip(224, 71, 'ESCUDO ' + Math.ceil(g.shield), 'shield', '#80d8ff', 12);
-  if (g.dashCd > 0) chip(224, 49, 'esquiva ' + g.dashCd.toFixed(1), 'bolt', '#888', 12);
-  else chip(224, 49, 'Q esquiva', 'bolt', '#9fd8ff', 12);
-  if (g.combo > 1) chip(130, 49, 'x' + (1 + g.combo * 0.25).toFixed(2), 'bolt', '#ffb74d', 12);
+    chip(110, 112, 'RÁFAGA ' + Math.ceil(g.buffs.rapid) + 's', 'bolt', '#ffea00', 12);
+  if (g.shield > 0) chip(214, 112, 'ESCUDO ' + Math.ceil(g.shield), 'shield', '#80d8ff', 12);
+  if (g.combo > 1) chip(120, 74, 'x' + (1 + g.combo * 0.25).toFixed(2), 'bolt', '#ffb74d', 12);
   icon('coin', 34, 84, 18, '#ffe082');
   txt(`${g.cash}`, 52, 85, 16, '#ffe082', 'left');
   txt(`Récord ${fmtT(g.best)}`, 292, 85, 11, '#9fb3c8', 'right', false);
@@ -888,7 +891,7 @@ function drawZHUD() {
         ? 'Busca bolsas escondidas [E]'
         : 'Sobrevive a las ' + g.zc.waves + ' oleadas',
     292,
-    35,
+    61,
     11,
     '#ffd180',
     'right',
@@ -1082,3 +1085,46 @@ function dropType(z) {
 }
 const DROPC = { municion: '#ffd740', rafaga: '#ffea00', escudo: '#80d8ff', botiquin: '#ffffff' };
 const DROPG = { municion: '•', rafaga: '»', escudo: '◆', botiquin: '+' };
+
+/** Comportamiento extra del Alfa: pisotones que sacuden la cámara y grito que convoca zombis. */
+function bossTick(z, d, dt, born) {
+  const g = G;
+  z.stepT = (z.stepT || 0) - dt;
+  if (z.stepT <= 0) {
+    z.stepT = 0.55;
+    if (d < 700) g.shake = Math.max(g.shake, 0.12 * (1 - d / 700));
+    burst(z.x, z.y + 18, 5, '#6b5a48', 80, 0.6);
+  }
+  z.sumT = (z.sumT === undefined ? 7 : z.sumT) - dt;
+  if (z.sumT <= 0 && d < 650 && g.zs.length + born.length < 30) {
+    z.sumT = 9;
+    shockwave3D(z.x, z.y, 180, '#ff5040');
+    sfx.growl(z.x, z.y, true);
+    g.shake = Math.max(g.shake, 0.35);
+    banner('¡EL ALFA RUGE!', 'Ha llamado a la horda');
+    for (let k = 0; k < 2; k++) {
+      const a = Math.random() * 6.28,
+        hp = 50 + 8 * g.wave.n,
+        m = {
+          x: z.x + Math.cos(a) * 50,
+          y: z.y + Math.sin(a) * 50,
+          hp,
+          max: hp,
+          sp: 150,
+          run: true,
+          face: 1,
+          step: Math.random() * 6,
+          cd: 0.8,
+          path: [],
+          pt: 0,
+          stuck: 0,
+        };
+      if (!canStand(m.x, m.y)) {
+        m.x = z.x;
+        m.y = z.y;
+      }
+      burst(m.x, m.y, 10, '#555a50', 90, 0.8);
+      born.push(m);
+    }
+  }
+}

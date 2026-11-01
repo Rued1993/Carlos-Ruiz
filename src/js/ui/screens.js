@@ -196,16 +196,16 @@ function drawLevels() {
   titleGlow('MODO NIVELES', 380, 44, 36, '#6fb8ff');
   txt(`★ ${totalStars()} / ${LEVELS.length * 3}`, 380, 78, 16, '#ffd740', 'center');
   LEVELS.forEach((L, i) => {
-    const x = 38 + (i % 4) * 180,
-      y = 104 + Math.floor(i / 4) * 134,
-      w = 164,
-      h = 120,
+    const x = 26 + (i % 5) * 144,
+      y = 104 + Math.floor(i / 5) * 128,
+      w = 132,
+      h = 116,
       un = levelUnlocked(i),
       st = SAVE.stars[L.id] || 0;
     panel(x, y, w, h, st ? '#ffd740' : un ? 'rgba(120,170,230,.7)' : 'rgba(80,90,110,.5)');
     txt(String(i + 1), x + 14, y + 18, 18, '#9fb3c8', 'left');
     txt(MODE_ICON[L.mode], x + w - 18, y + 20, 22, '#fff', 'center');
-    txt(L.name, x + w / 2, y + 54, 16, un ? '#fff' : '#667', 'center');
+    txt(L.name, x + w / 2, y + 54, 15, un ? '#fff' : '#667', 'center');
     if (un) {
       stars3(st, x + w / 2, y + 88, 26);
       addHit(x, y, w, h, () => openBrief(L, 'level', i), true);
@@ -510,6 +510,7 @@ function drawPause() {
     ['Música: ' + (SAVE.music ? 'SÍ' : 'NO'), () => (SAVE.music = !SAVE.music)],
     ['Vista: ' + (view3d ? '3D' : '2D'), () => (view3d = !view3d)],
     ['Contador FPS: ' + (SAVE.fps ? 'SÍ' : 'NO'), () => (SAVE.fps = !SAVE.fps)],
+    ['Resolución dinámica: ' + (SAVE.dynRes ? 'SÍ' : 'NO'), () => (SAVE.dynRes = !SAVE.dynRes)],
   ];
   rows.forEach((r, i) =>
     uiBtn(
@@ -530,7 +531,7 @@ function drawPause() {
   txt(
     'La dificultad afecta a zombis y sabotajes nuevos.',
     280,
-    484,
+    514,
     12,
     '#9fb3c8',
     'center',
@@ -539,7 +540,7 @@ function drawPause() {
   txt(
     'Mando: Start pausa · Shift / L3: correr · R: recargar · G: comer',
     280,
-    506,
+    534,
     12,
     '#9fb3c8',
     'center',
@@ -547,7 +548,7 @@ function drawPause() {
   );
   uiBtn(
     130,
-    544,
+    560,
     300,
     44,
     'Salir al menú',

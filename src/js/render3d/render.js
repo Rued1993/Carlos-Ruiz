@@ -186,9 +186,13 @@ function render3D() {
     R3.w = W;
     R3.h = H;
   }
-  if (R3.q !== SAVE.quality) {
+  dynRes();
+  if (R3.q !== SAVE.quality || R3.dynA !== R3.dyn) {
     R3.q = SAVE.quality;
-    R3.renderer.setPixelRatio([0.7, 1, Math.min(devicePixelRatio || 1, 1.6)][R3.q]);
+    R3.dynA = R3.dyn;
+    R3.renderer.setPixelRatio(
+      [0.7, 1, Math.min(devicePixelRatio || 1, 1.6)][R3.q] * (SAVE.dynRes ? R3.dyn : 1)
+    );
     R3.renderer.setSize(W, H, false);
     const sh = R3.q > 0;
     if (R3.L) {
@@ -284,4 +288,17 @@ function updRain3D(p, rain, t) {
     pa.array[k + 5] = z + 2;
   });
   pa.needsUpdate = true;
+}
+
+/** Resolución dinámica: baja la resolución interna si los FPS caen y la recupera cuando sobran. */
+function dynRes() {
+  if (R3.dyn === undefined) R3.dyn = 1;
+  if (!SAVE.dynRes) return;
+  R3.ft = (R3.ft || 1 / 60) * 0.93 + Math.max(R3.dt, 0.001) * 0.07;
+  R3.dynT = (R3.dynT || 0) + R3.dt;
+  if (R3.dynT < 1.5) return;
+  R3.dynT = 0;
+  const fps = 1 / R3.ft;
+  if (fps < 42 && R3.dyn > 0.55) R3.dyn = Math.max(0.55, +(R3.dyn - 0.1).toFixed(2));
+  else if (fps > 57 && R3.dyn < 1) R3.dyn = Math.min(1, +(R3.dyn + 0.05).toFixed(2));
 }

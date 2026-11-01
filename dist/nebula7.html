@@ -4078,11 +4078,13 @@ function updZombie(dt) {
   }
   g.bullets = g.bullets.filter(b => b.life > 0);
   // zombis
+  const born = [];
   for (const z of g.zs) {
     z.step += dt * (z.run ? 12 : 8);
     z.cd -= dt;
     z.pt -= dt;
     const d = dist(z, p);
+    if (z.boss) bossTick(z, d, dt, born);
     if (z.pt <= 0) {
       z.pt = 0.45;
       if (d < 600 && clearLine(z, p, true)) z.path = [{ x: p.x, y: p.y, chase: 1 }];
@@ -4139,6 +4141,7 @@ function updZombie(dt) {
       burst(p.x, p.y, 8, '#7a0b0b', 160);
     }
   }
+  for (const z of born) g.zs.push(z);
   for (let i = 0; i < g.zs.length; i++)
     for (let j = i + 1; j < g.zs.length; j++) {
       const a = g.zs[i],
@@ -4364,12 +4367,12 @@ function drawZHUD() {
   txt(`bajas ${g.kills}`, 92, 35, 14, '#fff', 'left');
   icon('star', 34, 60, 18, '#ffd54f');
   txt(`${g.score}`, 52, 61, 16, '#ffd54f', 'left');
+  if (g.dashCd > 0) chip(16, 112, 'esquiva ' + g.dashCd.toFixed(1), 'bolt', '#888', 12);
+  else chip(16, 112, 'Q esquiva', 'bolt', '#9fd8ff', 12);
   if (g.buffs && g.buffs.rapid > 0)
-    chip(130, 71, 'RÁFAGA ' + Math.ceil(g.buffs.rapid) + 's', 'bolt', '#ffea00', 12);
-  if (g.shield > 0) chip(224, 71, 'ESCUDO ' + Math.ceil(g.shield), 'shield', '#80d8ff', 12);
-  if (g.dashCd > 0) chip(224, 49, 'esquiva ' + g.dashCd.toFixed(1), 'bolt', '#888', 12);
-  else chip(224, 49, 'Q esquiva', 'bolt', '#9fd8ff', 12);
-  if (g.combo > 1) chip(130, 49, 'x' + (1 + g.combo * 0.25).toFixed(2), 'bolt', '#ffb74d', 12);
+    chip(110, 112, 'RÁFAGA ' + Math.ceil(g.buffs.rapid) + 's', 'bolt', '#ffea00', 12);
+  if (g.shield > 0) chip(214, 112, 'ESCUDO ' + Math.ceil(g.shield), 'shield', '#80d8ff', 12);
+  if (g.combo > 1) chip(120, 74, 'x' + (1 + g.combo * 0.25).toFixed(2), 'bolt', '#ffb74d', 12);
   icon('coin', 34, 84, 18, '#ffe082');
   txt(`${g.cash}`, 52, 85, 16, '#ffe082', 'left');
   txt(`Récord ${fmtT(g.best)}`, 292, 85, 11, '#9fb3c8', 'right', false);
@@ -4380,7 +4383,7 @@ function drawZHUD() {
         ? 'Busca bolsas escondidas [E]'
         : 'Sobrevive a las ' + g.zc.waves + ' oleadas',
     292,
-    35,
+    61,
     11,
     '#ffd180',
     'right',
@@ -4574,6 +4577,49 @@ function dropType(z) {
 }
 const DROPC = { municion: '#ffd740', rafaga: '#ffea00', escudo: '#80d8ff', botiquin: '#ffffff' };
 const DROPG = { municion: '•', rafaga: '»', escudo: '◆', botiquin: '+' };
+
+/** Comportamiento extra del Alfa: pisotones que sacuden la cámara y grito que convoca zombis. */
+function bossTick(z, d, dt, born) {
+  const g = G;
+  z.stepT = (z.stepT || 0) - dt;
+  if (z.stepT <= 0) {
+    z.stepT = 0.55;
+    if (d < 700) g.shake = Math.max(g.shake, 0.12 * (1 - d / 700));
+    burst(z.x, z.y + 18, 5, '#6b5a48', 80, 0.6);
+  }
+  z.sumT = (z.sumT === undefined ? 7 : z.sumT) - dt;
+  if (z.sumT <= 0 && d < 650 && g.zs.length + born.length < 30) {
+    z.sumT = 9;
+    shockwave3D(z.x, z.y, 180, '#ff5040');
+    sfx.growl(z.x, z.y, true);
+    g.shake = Math.max(g.shake, 0.35);
+    banner('¡EL ALFA RUGE!', 'Ha llamado a la horda');
+    for (let k = 0; k < 2; k++) {
+      const a = Math.random() * 6.28,
+        hp = 50 + 8 * g.wave.n,
+        m = {
+          x: z.x + Math.cos(a) * 50,
+          y: z.y + Math.sin(a) * 50,
+          hp,
+          max: hp,
+          sp: 150,
+          run: true,
+          face: 1,
+          step: Math.random() * 6,
+          cd: 0.8,
+          path: [],
+          pt: 0,
+          stuck: 0,
+        };
+      if (!canStand(m.x, m.y)) {
+        m.x = z.x;
+        m.y = z.y;
+      }
+      burst(m.x, m.y, 10, '#555a50', 90, 0.8);
+      born.push(m);
+    }
+  }
+}
 
 /* ---- src/js/modes/zombie-extras.js ---- */
 /**
@@ -9726,9 +9772,13 @@ function render3D() {
     R3.w = W;
     R3.h = H;
   }
-  if (R3.q !== SAVE.quality) {
+  dynRes();
+  if (R3.q !== SAVE.quality || R3.dynA !== R3.dyn) {
     R3.q = SAVE.quality;
-    R3.renderer.setPixelRatio([0.7, 1, Math.min(devicePixelRatio || 1, 1.6)][R3.q]);
+    R3.dynA = R3.dyn;
+    R3.renderer.setPixelRatio(
+      [0.7, 1, Math.min(devicePixelRatio || 1, 1.6)][R3.q] * (SAVE.dynRes ? R3.dyn : 1)
+    );
     R3.renderer.setSize(W, H, false);
     const sh = R3.q > 0;
     if (R3.L) {
@@ -9826,6 +9876,19 @@ function updRain3D(p, rain, t) {
   pa.needsUpdate = true;
 }
 
+/** Resolución dinámica: baja la resolución interna si los FPS caen y la recupera cuando sobran. */
+function dynRes() {
+  if (R3.dyn === undefined) R3.dyn = 1;
+  if (!SAVE.dynRes) return;
+  R3.ft = (R3.ft || 1 / 60) * 0.93 + Math.max(R3.dt, 0.001) * 0.07;
+  R3.dynT = (R3.dynT || 0) + R3.dt;
+  if (R3.dynT < 1.5) return;
+  R3.dynT = 0;
+  const fps = 1 / R3.ft;
+  if (fps < 42 && R3.dyn > 0.55) R3.dyn = Math.max(0.55, +(R3.dyn - 0.1).toFixed(2));
+  else if (fps > 57 && R3.dyn < 1) R3.dyn = Math.min(1, +(R3.dyn + 0.05).toFixed(2));
+}
+
 /* ---- src/js/campaign/data.js ---- */
 /**
  * Guardado, niveles, capítulos de la historia y guiones de las cinemáticas.
@@ -9847,6 +9910,7 @@ const SAVE = (() => {
     visor: 0,
     pet: 0,
     fps: false,
+    dynRes: true,
     stats: {},
     ach: {},
   };
@@ -10006,6 +10070,44 @@ const LEVELS = [
     goals: [
       { k: 'chest', need: 4, text: 'Abre 4 cofres' },
       { k: 'item:carbon', need: 5, text: 'Consigue 5 de carbón' },
+    ],
+  },
+  {
+    id: 'L13',
+    name: 'Herrero',
+    mode: 'sandbox',
+    cfg: {},
+    par: 420,
+    desc: 'Bajo la piedra hay vetas de hierro. Fabrica un pico, extrae el mineral y fúndelo en un horno.',
+    goals: [
+      { k: 'craft:pico', need: 1, text: 'Fabrica un pico' },
+      { k: 'item:hierro', need: 3, text: 'Extrae 3 de hierro' },
+      { k: 'smelt', need: 2, text: 'Funde 2 lingotes' },
+    ],
+  },
+  {
+    id: 'L14',
+    name: 'Código Rojo',
+    mode: 'classic',
+    cfg: { nImp: 1, role: 'crew', sabFast: true },
+    par: 300,
+    limit: 720,
+    desc: 'Los sistemas de navegación fallan. Introduce los códigos, alinea el motor y no pierdas de vista al impostor.',
+    goals: [
+      { k: 'task', need: 5, text: 'Completa 5 tareas' },
+      { k: 'fix', need: 1, text: 'Repara un sabotaje' },
+    ],
+  },
+  {
+    id: 'L15',
+    name: 'La Horda',
+    mode: 'zombie',
+    cfg: { waves: 4, boss: true, escape: false, weapons: ['pistola', 'subfusil'], ammo: 120 },
+    par: 320,
+    desc: 'El Alfa ha vuelto y ahora llama a la horda con sus rugidos. Esquiva (Q), busca potenciadores y acaba con él.',
+    goals: [
+      { k: 'wave', need: 3, text: 'Sobrevive 3 oleadas' },
+      { k: 'boss', need: 1, text: 'Derrota al Alfa' },
     ],
   },
 ];
@@ -11385,16 +11487,16 @@ function drawLevels() {
   titleGlow('MODO NIVELES', 380, 44, 36, '#6fb8ff');
   txt(`★ ${totalStars()} / ${LEVELS.length * 3}`, 380, 78, 16, '#ffd740', 'center');
   LEVELS.forEach((L, i) => {
-    const x = 38 + (i % 4) * 180,
-      y = 104 + Math.floor(i / 4) * 134,
-      w = 164,
-      h = 120,
+    const x = 26 + (i % 5) * 144,
+      y = 104 + Math.floor(i / 5) * 128,
+      w = 132,
+      h = 116,
       un = levelUnlocked(i),
       st = SAVE.stars[L.id] || 0;
     panel(x, y, w, h, st ? '#ffd740' : un ? 'rgba(120,170,230,.7)' : 'rgba(80,90,110,.5)');
     txt(String(i + 1), x + 14, y + 18, 18, '#9fb3c8', 'left');
     txt(MODE_ICON[L.mode], x + w - 18, y + 20, 22, '#fff', 'center');
-    txt(L.name, x + w / 2, y + 54, 16, un ? '#fff' : '#667', 'center');
+    txt(L.name, x + w / 2, y + 54, 15, un ? '#fff' : '#667', 'center');
     if (un) {
       stars3(st, x + w / 2, y + 88, 26);
       addHit(x, y, w, h, () => openBrief(L, 'level', i), true);
@@ -11699,6 +11801,7 @@ function drawPause() {
     ['Música: ' + (SAVE.music ? 'SÍ' : 'NO'), () => (SAVE.music = !SAVE.music)],
     ['Vista: ' + (view3d ? '3D' : '2D'), () => (view3d = !view3d)],
     ['Contador FPS: ' + (SAVE.fps ? 'SÍ' : 'NO'), () => (SAVE.fps = !SAVE.fps)],
+    ['Resolución dinámica: ' + (SAVE.dynRes ? 'SÍ' : 'NO'), () => (SAVE.dynRes = !SAVE.dynRes)],
   ];
   rows.forEach((r, i) =>
     uiBtn(
@@ -11719,7 +11822,7 @@ function drawPause() {
   txt(
     'La dificultad afecta a zombis y sabotajes nuevos.',
     280,
-    484,
+    514,
     12,
     '#9fb3c8',
     'center',
@@ -11728,7 +11831,7 @@ function drawPause() {
   txt(
     'Mando: Start pausa · Shift / L3: correr · R: recargar · G: comer',
     280,
-    506,
+    534,
     12,
     '#9fb3c8',
     'center',
@@ -11736,7 +11839,7 @@ function drawPause() {
   );
   uiBtn(
     130,
-    544,
+    560,
     300,
     44,
     'Salir al menú',

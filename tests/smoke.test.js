@@ -809,7 +809,8 @@ const check = (name, cond, extra = '') => {
     SAVE.tips = {};
     tip('prueba', 'hola');
     tip('prueba', 'hola');
-    o.tipq = TIPQ.filter(q => q.id === 'prueba').length + (TIPCUR && TIPCUR.id === 'prueba' ? 1 : 0);
+    o.tipq =
+      TIPQ.filter(q => q.id === 'prueba').length + (TIPCUR && TIPCUR.id === 'prueba' ? 1 : 0);
     o.saved = SAVE.tips.prueba === 1;
     scene = 'craft';
     drawCraft();
@@ -829,6 +830,37 @@ const check = (name, cond, extra = '') => {
       fe.saved &&
       fe3.inst > 0,
     JSON.stringify(fe) + JSON.stringify(fe3)
+  );
+
+  console.log('Niveles nuevos, jefe y resolución dinámica');
+  const nb = await ev(() => {
+    const o = {
+      n: LEVELS.length,
+      ids: LEVELS.slice(12)
+        .map(l => l.id)
+        .join(),
+    };
+    scene = 'levels';
+    return o;
+  });
+  await wait(400);
+  await ev(() => {
+    CAMP = { kind: 'level', idx: 14, def: LEVELS[14] };
+    launchMission(LEVELS[14]);
+    G.intro = 0;
+    scene = 'play';
+    spawnBoss();
+    const b = G.zs.find(z => z.boss);
+    b.sumT = 0;
+    b.x = G.player.x + 200;
+    b.y = G.player.y;
+  });
+  const sum = await until(() => G.zs.length >= 3, 20000);
+  const dr = await ev(() => ({ dyn: R3.dyn, on: SAVE.dynRes }));
+  check(
+    '15 niveles, el Alfa convoca zombis y la resolución dinámica está activa',
+    nb.n === 15 && nb.ids === 'L13,L14,L15' && sum && dr.on && dr.dyn >= 0.55 && dr.dyn <= 1,
+    JSON.stringify(nb) + JSON.stringify(dr) + sum
   );
 
   console.log('Fallback 2D');
