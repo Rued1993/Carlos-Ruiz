@@ -6,8 +6,9 @@
 let last = performance.now();
 let fpsAvg = 60;
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  HUDS.dt = dt;
+  const rdt = Math.min(0.05, (now - last) / 1000);
+  const dt = timeTick(rdt);
+  HUDS.dt = rdt;
   if (HUDS.hitMark > 0) HUDS.hitMark -= dt;
   last = now;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -42,7 +43,10 @@ function frame(now) {
     if (scene == 'play') {
       if (G.intro > 0) G.intro -= dt;
       updatePlayer(dt);
-      if (G.intro <= 0) updateWorld(dt);
+      if (G.intro <= 0) {
+        updateWorld(dt);
+        updJuice(dt);
+      }
     } else if (scene == 'task') {
       updatePlayer(dt);
       updateWorld(dt);
@@ -61,6 +65,7 @@ function frame(now) {
       drawWorld();
       drawHUD();
       drawMissionHUD();
+      drawPopups();
       drawCrosshair();
       drawDamageIndicator();
       drawObjectiveMarkers();

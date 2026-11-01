@@ -165,6 +165,10 @@ function newZombie(cfg) {
     wave: { n: 1, state: 'wait', t: 0, left: 0, spawnT: 0, len: 50 },
   };
   G.drops = [];
+  G.buffs = { rapid: 0 };
+  G.shield = 0;
+  G.dashCd = 0;
+  G.inv = 0;
   G.up = { dmg: 0, mag: 0, armor: 0 };
   G.cash = 0;
   G.gren = 0;
@@ -274,6 +278,7 @@ function spawnZ(runner) {
   z.max = z.hp;
   z.sp *= diff().zsp;
   g.zs.push(z);
+  burst(z.x, z.y, 8, '#555a50', 70, 0.8);
 }
 function clearZ() {
   for (const z of G.zs) burst(z.x, z.y, 10, '#8f9', 90);
@@ -398,7 +403,7 @@ function shoot(tx, ty) {
       dmg,
     });
   }
-  g.cd = ws.cd;
+  g.cd = ws.cd * (g.buffs && g.buffs.rapid > 0 ? 0.5 : 1);
   g.muzzle = 0.09;
   g.shake = Math.max(g.shake, w == 'escopeta' ? 0.25 : 0.08);
   sfx.shot(w, p.x, p.y);
@@ -484,10 +489,20 @@ function updZombie(dt) {
     const d = g.drops[i];
     d.t -= dt;
     if (dist(d, p) < 44 && p.alive) {
-      if (d.type === 'municion') {
+      if (d.type === 'rafaga') {
+        g.buffs.rapid = 10;
+        toast('¡RÁFAGA! cadencia x2 durante 10 s', 1.6);
+        popup(p.x, p.y - 20, 'RÁFAGA', '#ffea00', 18);
+      } else if (d.type === 'escudo') {
+        g.shield = 40;
+        toast('¡ESCUDO! absorbe 40 de daño', 1.6);
+        popup(p.x, p.y - 20, 'ESCUDO', '#80d8ff', 18);
+      } else if (d.type === 'municion') {
         g.ammo += 10;
+        popup(p.x, p.y - 20, '+10', '#ffd740', 16);
         toast('+10 munición', 1.2);
       } else {
+        popup(p.x, p.y - 20, '+25', '#7bff9a', 16);
         g.hp = Math.min(100, g.hp + 25);
         toast('+25 salud', 1.2);
       }
@@ -558,6 +573,7 @@ function updZombie(dt) {
       for (const z of g.zs)
         if (Math.hypot(z.x - b.x, z.y - b.y) < (z.boss ? 38 : 20)) {
           z.hp -= b.dmg;
+          popup(z.x, z.y - 34, b.dmg, '#fff', 13);
           z.hurt = 0.15;
           HUDS.hitMark = 0.16;
           b.life = 0;
@@ -652,11 +668,14 @@ function updZombie(dt) {
         g.drops.push({
           x: z.x,
           y: z.y,
-          type: Math.random() < 0.62 ? 'municion' : 'botiquin',
+          type: dropType(z),
           t: 14,
         });
       mevent('zkill');
+      popup(z.x, z.y - 30, '+' + Math.round(10 * (1 + g.combo * 0.25)), '#ffd740', 15);
       if (z.boss) {
+        slowmo(0.25, 1.4);
+        shockwave3D(z.x, z.y, 220, '#7bff9a');
         mevent('boss');
         g.bossDead = true;
       }
@@ -747,17 +766,10 @@ function drawZombies() {
   }
   drawExtras2D();
   for (const d of g.drops) {
-    ctx.fillStyle = d.type === 'municion' ? '#ffd740' : '#ffffff';
+    ctx.fillStyle = DROPC[d.type] || '#ffffff';
     rr(d.x - 10, d.y - 10, 20, 20, 4);
     ctx.fill();
-    txt(
-      d.type === 'municion' ? '•' : '+',
-      d.x,
-      d.y,
-      16,
-      d.type === 'municion' ? '#7a5a00' : '#d32f2f',
-      'center'
-    );
+    txt(DROPG[d.type] || '+', d.x, d.y, 16, d.type === 'botiquin' ? '#d32f2f' : '#332', 'center');
   }
   for (const z of g.zs.slice().sort((a, b) => a.y - b.y)) {
     drawCrew(z.x, z.y, zColor(z), z.face, z.step, 1, z.scale || 1, true, g.t, false, true);
@@ -860,6 +872,11 @@ function drawZHUD() {
   txt(`bajas ${g.kills}`, 92, 35, 14, '#fff', 'left');
   icon('star', 34, 60, 18, '#ffd54f');
   txt(`${g.score}`, 52, 61, 16, '#ffd54f', 'left');
+  if (g.buffs && g.buffs.rapid > 0)
+    chip(130, 71, 'RÁFAGA ' + Math.ceil(g.buffs.rapid) + 's', 'bolt', '#ffea00', 12);
+  if (g.shield > 0) chip(224, 71, 'ESCUDO ' + Math.ceil(g.shield), 'shield', '#80d8ff', 12);
+  if (g.dashCd > 0) chip(224, 49, 'esquiva ' + g.dashCd.toFixed(1), 'bolt', '#888', 12);
+  else chip(224, 49, 'Q esquiva', 'bolt', '#9fd8ff', 12);
   if (g.combo > 1) chip(130, 49, 'x' + (1 + g.combo * 0.25).toFixed(2), 'bolt', '#ffb74d', 12);
   icon('coin', 34, 84, 18, '#ffe082');
   txt(`${g.cash}`, 52, 85, 16, '#ffe082', 'left');
@@ -1054,3 +1071,14 @@ function drawZEnd() {
   cinematicBars();
   finishFX();
 }
+
+/** Elige el tipo de botín: munición, salud o un potenciador raro. */
+function dropType(z) {
+  const r = Math.random();
+  if (z.boss) return r < 0.5 ? 'rafaga' : 'escudo';
+  if (r < 0.08) return 'rafaga';
+  if (r < 0.16) return 'escudo';
+  return r < 0.62 ? 'municion' : 'botiquin';
+}
+const DROPC = { municion: '#ffd740', rafaga: '#ffea00', escudo: '#80d8ff', botiquin: '#ffffff' };
+const DROPG = { municion: '•', rafaga: '»', escudo: '◆', botiquin: '+' };

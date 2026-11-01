@@ -77,6 +77,7 @@ function debris3D(x, y, z, color, n) {
   }
 }
 function fxUpdate(dt) {
+  shockUpdate(dt);
   const d = new THREE.Object3D(),
     list = R3.debList;
   for (let i = list.length - 1; i >= 0; i--) {
@@ -135,16 +136,27 @@ function syncDrops() {
   for (const d of G.drops || []) {
     let m = R3.dropM.get(d);
     if (!m) {
-      const ammo = d.type === 'municion';
+      const col =
+        { municion: 0xffb000, rafaga: 0xffea00, escudo: 0x40c4ff, botiquin: 0xff3030 }[d.type] ||
+        0xffb000;
       m = new THREE.Group();
       m.add(
-        bx(16, 12, 16, ammo ? '#ffd740' : '#f4f4f4', 0, 0, 0, {
-          emissive: ammo ? 0xffb000 : 0xff3030,
-          emissiveIntensity: 1.4,
-          roughness: 0.4,
-        })
+        bx(
+          16,
+          12,
+          16,
+          d.type === 'botiquin' ? '#f4f4f4' : '#' + new THREE.Color(col).getHexString(),
+          0,
+          0,
+          0,
+          {
+            emissive: col,
+            emissiveIntensity: 1.4,
+            roughness: 0.4,
+          }
+        )
       );
-      const l = new THREE.PointLight(ammo ? 0xffc040 : 0xff5050, 0.9, 120, 1.6);
+      const l = new THREE.PointLight(col, 0.9, 120, 1.6);
       l.position.y = 14;
       m.add(l);
       R3.scene.add(m);

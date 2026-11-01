@@ -48,6 +48,7 @@ addEventListener('keydown', e => {
     else if (k == 'b') openShop();
     else if (k == 'tab') cycleWep();
     else if (k == 'r') startReload();
+    else if (k == 'q' || k == 'control') tryDash();
   } else if (scene == 'play') {
     if (G.player.inVent !== null && (k == 'arrowleft' || k == 'a')) cycleVent(-1);
     else if (G.player.inVent !== null && (k == 'arrowright' || k == 'd')) cycleVent(1);

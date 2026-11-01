@@ -47,6 +47,7 @@ function pollGamepad(dt) {
   press(3, () =>
     mode === 'sandbox' ? (scene = 'craft') : mode === 'zombie' ? openShop() : toggleVent()
   );
+  press(11, () => mode === 'zombie' && tryDash());
   press(13, () => mode === 'zombie' && throwGrenade());
   press(6, () => mode === 'sandbox' && sbPlace());
   press(4, () =>

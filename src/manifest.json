@@ -19,6 +19,7 @@
   "src/js/ui/end-and-fx.js",
   "src/js/modes/zombie.js",
   "src/js/modes/zombie-extras.js",
+  "src/js/modes/juice.js",
   "src/js/modes/sandbox.js",
   "src/js/modes/sandbox-survival.js",
   "src/js/render3d/core.js",

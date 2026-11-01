@@ -21,6 +21,16 @@ function dmgMul() {
 /** Daño al jugador reducido por la armadura. */
 function hurtPlayer(raw, src) {
   const g = G;
+  if (g.inv > 0) return;
+  if (g.shield > 0) {
+    const a = Math.min(g.shield, raw);
+    g.shield -= a;
+    raw -= a;
+    popup(g.player.x, g.player.y - 20, 'BLOQUEADO', '#80d8ff', 14);
+    sfx.pickup();
+    if (raw <= 0) return;
+  }
+  popup(g.player.x, g.player.y - 20, '-' + Math.round(raw), '#ff6e6e', 18);
   if (src) HUDS.hurt = { a: Math.atan2(src.y - g.player.y, src.x - g.player.x), t: 0.9 };
   g.hp -= Math.max(1, Math.round(raw * (1 - 0.2 * ((g.up && g.up.armor) || 0))));
   g.flash = 0.5;
@@ -49,6 +59,8 @@ function throwGrenade() {
 function explodeGrenade(gr) {
   const g = G,
     p = g.player;
+  shockwave3D(gr.x, gr.y, 150, '#ffb060');
+  slowmo(0.5, 0.18);
   burst(gr.x, gr.y, 40, '#ff9a20', 280, 0.9);
   burst(gr.x, gr.y, 16, '#444', 120, 1.1);
   debris3D(gr.x, 16, gr.y, '#ff8a20', 14);

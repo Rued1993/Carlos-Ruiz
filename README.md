@@ -29,6 +29,7 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | Recargar (zombi) · reportar (clásico) · colocar (cubo) | `R` · `R` · clic der. o `F` | X |
 | Cambiar arma · matar (impostor) · comer (cubo) | `Tab` / `1-4` · `Q` · `G` | B |
 | Granada · tienda (zombi) | `G` · `B` | cruceta ↓ · Y |
+| Esquiva (zombi, invulnerable 0,4 s) | `Q` / `Ctrl` | clic stick izq. |
 | Crafteo (cubo) · ventilación (impostor) | `C` · `V` | Y |
 | Sabotaje (impostor) | `F` | cruceta ↑ |
 | Emotes | `T` `Y` `U` | — |
@@ -41,6 +42,8 @@ música y vista 3D/2D.
 
 - **Zombis:** cargadores con recarga, subfusil, granadas, tienda entre oleadas (daño, cargadores,
   armadura, munición…), zombis *tanque*, *bomba* y *escupidor*, botín, puntos con combo y récord.
+  Potenciadores raros (*ráfaga* ×2 cadencia, *escudo* que absorbe 40), esquiva, textos de daño
+  flotantes, ondas de choque en explosiones y cámara lenta al matar al jefe.
 - **Mundo cubo:** hambre, animales, horno y carne asada, cama (duerme de noche), brotes que crecen
   hasta ser árboles, lluvia con tormentas, cielo con sol, luna, estrellas y nubes.
 - **HUD:** kit propio (paneles de cristal, iconos vectoriales, barras con estela de daño, botones circulares con tecla y recarga, mira dinámica con marca de impacto e indicador de dirección del daño, minimapa con cono de visión).

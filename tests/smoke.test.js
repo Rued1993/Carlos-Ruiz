@@ -711,6 +711,55 @@ const check = (name, cond, extra = '') => {
     SAVE.quality = 1;
   });
 
+  console.log('Efectos y potenciadores');
+  await ev(() => {
+    gmode = 'zombie';
+    newGame();
+    G.intro = 0;
+    scene = 'play';
+  });
+  await wait(600);
+  const fxr = await ev(() => {
+    const out = {};
+    G.drops.push({ x: G.player.x, y: G.player.y, type: 'rafaga', t: 14 });
+    G.drops.push({ x: G.player.x, y: G.player.y, type: 'escudo', t: 14 });
+    G.stam = 100;
+    return out;
+  });
+  await until(() => G.buffs.rapid > 0 && G.shield > 0);
+  const fx2 = await ev(() => {
+    const o = { rapid: G.buffs.rapid, shield: G.shield };
+    const x0 = G.player.x,
+      y0 = G.player.y;
+    tryDash();
+    o.inv = G.inv > 0;
+    o.cd = G.dashCd > 1;
+    shockwave3D(G.player.x, G.player.y, 100, '#fff');
+    o.shocks = R3.shocks.length;
+    const hp = G.hp;
+    hurtPlayer(10, null);
+    o.immune = G.hp === hp;
+    slowmo(0.25, 1);
+    o.slow = TIME.scale;
+    popup(G.player.x, G.player.y, 'x', '#fff');
+    o.pops = POPS.length;
+    o.x0 = x0 + y0;
+    return o;
+  });
+  check(
+    'potenciadores, esquiva con invulnerabilidad, onda de choque, cámara lenta y textos',
+    fx2.rapid > 5 &&
+      fx2.shield > 0 &&
+      fx2.inv &&
+      fx2.cd &&
+      fx2.shocks >= 1 &&
+      fx2.immune &&
+      fx2.slow === 0.25 &&
+      fx2.pops >= 1,
+    JSON.stringify(fx2) + JSON.stringify(fxr)
+  );
+  check('la cámara lenta termina', await until(() => TIME.scale === 1));
+
   console.log('Fallback 2D');
   await ev(() => {
     view3d = false;
