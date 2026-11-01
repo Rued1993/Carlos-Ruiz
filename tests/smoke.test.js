@@ -156,6 +156,187 @@ const check = (name, cond, extra = '') => {
     SAVE.quality = 1;
   });
 
+  console.log('Jugabilidad: sprint, recarga, enemigos y botín');
+  check(
+    'correr gasta resistencia y se recupera',
+    await ev(() => {
+      gmode = 'classic';
+      newGame();
+      G.intro = 0;
+      keys.w = keys.shift = true;
+      for (let i = 0; i < 30; i++) updatePlayer(0.05);
+      const gastada = G.stam < 100 && G.player.sprinting;
+      keys.w = keys.shift = false;
+      for (let i = 0; i < 80; i++) updatePlayer(0.05);
+      return gastada && G.stam > 90;
+    })
+  );
+  const rec = await ev(() => {
+    gmode = 'zombie';
+    newGame();
+    G.intro = 0;
+    G.weps.pistola = true;
+    G.wep = 'pistola';
+    G.ammo = 30;
+    G.wave.state = 'wait';
+    G.wave.t = -999;
+    shoot(G.player.x + 100, G.player.y);
+    const tras1 = G.mags.pistola; // 11 si cargó 12 y disparó una vez
+    for (let i = 0; i < 11; i++) {
+      G.cd = 0;
+      shoot(G.player.x + 100, G.player.y);
+    }
+    G.cd = 0;
+    shoot(G.player.x + 100, G.player.y); // cargador vacío -> recarga
+    const recargando = G.reloadT > 0;
+    for (let i = 0; i < 40; i++) updZombie(0.05);
+    return { tras1, recargando, mag: G.mags.pistola, reserva: G.ammo };
+  });
+  check('el cargador de la pistola es de 12', rec.tras1 === 11);
+  check(
+    'al vaciarse el cargador se recarga solo',
+    rec.recargando && rec.mag === 12 && rec.reserva === 6,
+    JSON.stringify(rec)
+  );
+  const bomba = await ev(() => {
+    G.wave.state = 'wait';
+    G.wave.t = -999;
+    const p = G.player,
+      hp0 = G.hp;
+    G.zs = [
+      {
+        x: p.x + 20,
+        y: p.y,
+        hp: 50,
+        max: 50,
+        sp: 0,
+        bomb: true,
+        step: 0,
+        cd: 0,
+        path: [],
+        pt: 99,
+        stuck: 0,
+        face: 1,
+      },
+    ];
+    for (let i = 0; i < 5; i++) updZombie(0.05);
+    return { dano: hp0 - G.hp, quedan: G.zs.length, puntos: G.score };
+  });
+  check(
+    'el zombi bomba explota y hace daño sin dar puntos',
+    bomba.dano > 0 && bomba.quedan === 0 && bomba.puntos === 0,
+    JSON.stringify(bomba)
+  );
+  const botin = await ev(() => {
+    const oldRandom = Math.random;
+    Math.random = () => 0;
+    G.zs = [
+      {
+        x: G.player.x + 300,
+        y: G.player.y,
+        hp: 0,
+        max: 10,
+        sp: 0,
+        step: 0,
+        cd: 9,
+        path: [],
+        pt: 99,
+        stuck: 0,
+        face: 1,
+        tank: true,
+      },
+    ];
+    updZombie(0.05);
+    Math.random = oldRandom;
+    return {
+      drops: G.drops.length,
+      kills: G.kills,
+      puntos: G.score,
+      color: zColor({ tank: true }),
+    };
+  });
+  check(
+    'un zombi abatido suma puntos y puede soltar botín',
+    botin.drops === 1 && botin.kills === 1 && botin.puntos >= 10,
+    JSON.stringify(botin)
+  );
+  check(
+    'la dificultad difícil endurece a los zombis',
+    await ev(() => {
+      SAVE.difficulty = 1;
+      G.wave.n = 1;
+      G.zs = [];
+      spawnZ();
+      const normal = G.zs[0].hp;
+      SAVE.difficulty = 2;
+      spawnZ();
+      const dificil = G.zs[1].hp;
+      SAVE.difficulty = 1;
+      return dificil > normal;
+    })
+  );
+
+  console.log('Mundo cubo: hambre, animales y horno');
+  const sb = await ev(() => {
+    gmode = 'sandbox';
+    newGame();
+    G.intro = 0;
+    const animales = G.animals.length;
+    const a = G.animals[0];
+    hitAnimal(a, 999);
+    const carne = G.inv.carne;
+    G.inv.carbon = 2;
+    sbCook(5, 5);
+    const asada = G.inv.asada;
+    G.food = 5;
+    sbEat();
+    const comida = G.food;
+    G.food = 20;
+    for (let i = 0; i < 100; i++) updSurvival(1); // 100 s
+    const hambre = G.food < 20;
+    return {
+      animales,
+      carne,
+      asada,
+      comida,
+      hambre,
+      horno: HOTBAR.includes('horno'),
+      furnace: OSOLID.has(O_FURNACE),
+    };
+  });
+  check('hay animales al empezar', sb.animales >= 10, JSON.stringify(sb));
+  check('cazar un animal da carne cruda', sb.carne >= 1);
+  check('el horno cocina carne con carbón', sb.asada >= 1);
+  check('comer restaura hambre', sb.comida >= 8);
+  check('el hambre baja con el tiempo', sb.hambre);
+  check('el horno es un bloque colocable y sólido', sb.horno && sb.furnace);
+
+  console.log('Mando y postprocesado');
+  const gp = await ev(() => {
+    const botones = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
+    botones[7] = { pressed: true, value: 1 };
+    navigator.getGamepads = () => [{ connected: true, axes: [0.9, 0, 0, 0], buttons: botones }];
+    gmode = 'zombie';
+    newGame();
+    G.intro = 0;
+    pollGamepad(0.016);
+    return { on: pad.on, lx: pad.lx, fire: pad.fire };
+  });
+  check(
+    'el mando se detecta y el gatillo dispara',
+    gp.on && gp.lx > 0.5 && gp.fire,
+    JSON.stringify(gp)
+  );
+  await ev(() => {
+    navigator.getGamepads = () => [];
+    SAVE.quality = 2;
+  });
+  await wait(1500);
+  check('el postprocesado (bloom + MSAA) sigue activo', (await ev(() => PFX.ok)) === true);
+  await ev(() => {
+    SAVE.quality = 1;
+  });
+
   console.log('Fallback 2D');
   await ev(() => {
     view3d = false;

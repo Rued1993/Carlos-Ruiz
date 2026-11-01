@@ -50,7 +50,7 @@ function updateWorld(dt) {
   } else if (g.doorsT <= 0 && g.t > 35 && g.ps.some(q => q.imp && q.alive && !q.isP)) {
     g.botSabT -= dt;
     if (g.botSabT <= 0) {
-      g.botSabT = rnd(50, 90);
+      g.botSabT = rnd(50, 90) * diff().sab;
       startSab(pick(['lights', 'lights', 'reactor', 'doors']));
     }
   }
@@ -109,6 +109,20 @@ function updateWorld(dt) {
       }
     }
 }
+/** Sprint con barra de resistencia (Shift o gatillo del mando). */
+function updStamina(p, dt) {
+  if (G.stam === undefined) G.stam = 100;
+  const want = (keys.shift || pad.sprint) && p.moving && p.alive;
+  if (want && G.stam > 0 && !G.stamLock) {
+    p.sprinting = true;
+    G.stam = Math.max(0, G.stam - 30 * dt);
+    if (G.stam <= 0) G.stamLock = true;
+  } else {
+    p.sprinting = false;
+    G.stam = Math.min(100, G.stam + (p.moving ? 14 : 26) * dt);
+    if (G.stam >= 30) G.stamLock = false;
+  }
+}
 function updatePlayer(dt) {
   const p = G.player;
   p.kcd = Math.max(0, p.kcd - dt);
@@ -142,18 +156,27 @@ function updatePlayer(dt) {
         ax = c * f - sn * r;
         ay = sn * f + c * r;
       }
+      if (pad.on) {
+        const f = -pad.ly,
+          r = pad.lx,
+          c = Math.cos(CAM.yaw),
+          sn = Math.sin(CAM.yaw);
+        ax += c * f - sn * r;
+        ay += sn * f + c * r;
+      }
       const n = Math.hypot(ax, ay);
       p.moving = n > 0.05;
+      updStamina(p, dt);
       if (p.moving) {
-        const sp = p.alive ? 235 : 300;
+        const sp = (p.alive ? 235 : 300) * (p.sprinting ? 1.5 : 1);
         move(p, (ax / Math.max(n, 1)) * sp * dt, (ay / Math.max(n, 1)) * sp * dt);
         if (Math.abs(ax) > 0.1) p.face = ax > 0 ? 1 : -1;
         p.aim = Math.atan2(ay, ax);
-        p.step += dt * 14;
+        p.step += dt * 14 * (p.sprinting ? 1.4 : 1);
         if (p.alive) {
           G.stepT -= dt;
           if (G.stepT <= 0) {
-            G.stepT = 0.33;
+            G.stepT = p.sprinting ? 0.22 : 0.33;
             beep(80 + Math.random() * 30, 0.05, 'triangle', 0.035);
           }
         }

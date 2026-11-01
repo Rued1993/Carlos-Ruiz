@@ -89,7 +89,7 @@ function newClassic(cfg) {
     camT: 0,
   };
   spawn();
-  if (cfg && cfg.sabFast) G.botSabT = 18;
+  G.botSabT = (cfg && cfg.sabFast ? 18 : 60) * diff().sab;
   scene = 'play';
   startDrone();
   beep(300, 0.5, 'sine', 0.08, 200);

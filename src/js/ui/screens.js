@@ -70,43 +70,29 @@ function drawHome() {
     },
     20
   );
-  uiBtn(
-    60,
-    412,
-    180,
-    34,
-    '♪ Música: ' + (SAVE.music ? 'SÍ' : 'NO'),
-    '#3a4a6a',
-    () => {
-      SAVE.music = !SAVE.music;
-      saveGame();
-    },
-    14
-  );
-  uiBtn(
-    260,
-    412,
-    180,
-    34,
-    'Calidad: ' + ['Baja', 'Media', 'Alta'][SAVE.quality],
-    '#3a4a6a',
-    () => {
-      SAVE.quality = (SAVE.quality + 1) % 3;
-      saveGame();
-    },
-    14
-  );
-  uiBtn(
-    460,
-    412,
-    180,
-    34,
-    'Vista: ' + (view3d ? '3D' : '2D'),
-    '#3a4a6a',
-    () => {
-      view3d = !view3d;
-    },
-    14
+  const opts = [
+    ['♪ Música: ' + (SAVE.music ? 'SÍ' : 'NO'), () => (SAVE.music = !SAVE.music)],
+    [
+      'Calidad: ' + ['Baja', 'Media', 'Alta'][SAVE.quality],
+      () => (SAVE.quality = (SAVE.quality + 1) % 3),
+    ],
+    ['Dificultad: ' + diff().name, () => (SAVE.difficulty = (SAVE.difficulty + 1) % 3)],
+    ['Vista: ' + (view3d ? '3D' : '2D'), () => (view3d = !view3d)],
+  ];
+  opts.forEach((o, i) =>
+    uiBtn(
+      20 + i * 170,
+      412,
+      150,
+      34,
+      o[0],
+      '#3a4a6a',
+      () => {
+        o[1]();
+        saveGame();
+      },
+      13
+    )
   );
   endUI();
 }
@@ -142,7 +128,7 @@ function drawFree() {
   (gmode == 'sandbox'
     ? [
         'WASD: mover · Clic izq: picar/talar/atacar · Clic der o F: construir',
-        'E: interactuar · C: crafteo · 1-7: elegir bloque · rueda: cambiar',
+        'E: interactuar · C: crafteo · G: comer · 1-8: elegir bloque · Shift: correr',
         'Mundo abierto con árboles, minas, cofres, día y noche con zombis.',
       ]
     : gmode == 'zombie'
@@ -393,7 +379,7 @@ function drawMissionHUD() {
   const M = G.M;
   if (!M || M.over) return;
   const x = 12,
-    y = G.mode === 'classic' ? 156 : G.mode === 'zombie' ? 108 : 126,
+    y = G.mode === 'classic' ? 156 : G.mode === 'zombie' ? 108 : 160,
     h = 44 + M.goals.length * 21;
   ctx.fillStyle = 'rgba(8,10,28,.7)';
   rr(x, y, 290, h, 10);
@@ -461,75 +447,67 @@ function drawPauseBtn() {
 function drawPause() {
   ctx.fillStyle = 'rgba(0,0,0,.62)';
   ctx.fillRect(0, 0, W, H);
-  beginUI(520, 440);
-  panel(0, 0, 520, 440);
-  titleGlow('PAUSA', 260, 50, 36, '#fff');
+  beginUI(560, 520);
+  panel(0, 0, 560, 520);
+  titleGlow('PAUSA', 280, 48, 36, '#fff');
+  uiBtn(130, 84, 300, 44, 'Continuar', '#2e7d32', () => (scene = 'play'), 18);
   uiBtn(
-    110,
-    90,
+    130,
+    138,
     300,
-    44,
-    'Continuar',
-    '#2e7d32',
-    () => {
-      scene = 'play';
-    },
-    18
-  );
-  uiBtn(
-    110,
-    146,
-    300,
-    44,
+    40,
     'Reiniciar',
     '#7a5a1a',
-    () => {
-      if (G.M) launchMission(CAMP.def);
-      else newGame();
-    },
-    18
+    () => (G.M ? launchMission(CAMP.def) : newGame()),
+    17
+  );
+  const rows = [
+    [
+      'Calidad: ' + ['Baja', 'Media', 'Alta'][SAVE.quality],
+      () => (SAVE.quality = (SAVE.quality + 1) % 3),
+    ],
+    ['Dificultad: ' + diff().name, () => (SAVE.difficulty = (SAVE.difficulty + 1) % 3)],
+    ['Sensibilidad: ' + SAVE.sens + 'x', () => cycleSetting('sens', SENS_STEPS)],
+    ['Campo de visión: ' + SAVE.fov + '°', () => cycleSetting('fov', FOV_STEPS)],
+    ['Música: ' + (SAVE.music ? 'SÍ' : 'NO'), () => (SAVE.music = !SAVE.music)],
+    ['Vista: ' + (view3d ? '3D' : '2D'), () => (view3d = !view3d)],
+  ];
+  rows.forEach((r, i) =>
+    uiBtn(
+      40 + (i % 2) * 250,
+      196 + Math.floor(i / 2) * 52,
+      230,
+      42,
+      r[0],
+      '#3a4a6a',
+      () => {
+        r[1]();
+        saveGame();
+      },
+      15
+    )
+  );
+  txt(
+    'La dificultad afecta a zombis y sabotajes nuevos.',
+    280,
+    362,
+    12,
+    '#9fb3c8',
+    'center',
+    false
+  );
+  txt(
+    'Mando: Start pausa · Shift / L3: correr · R: recargar · G: comer',
+    280,
+    384,
+    12,
+    '#9fb3c8',
+    'center',
+    false
   );
   uiBtn(
-    110,
-    202,
-    300,
-    40,
-    'Calidad gráfica: ' + ['Baja', 'Media', 'Alta'][SAVE.quality],
-    '#3a4a6a',
-    () => {
-      SAVE.quality = (SAVE.quality + 1) % 3;
-      saveGame();
-    },
-    16
-  );
-  uiBtn(
-    110,
-    252,
-    300,
-    40,
-    'Música: ' + (SAVE.music ? 'SÍ' : 'NO'),
-    '#3a4a6a',
-    () => {
-      SAVE.music = !SAVE.music;
-      saveGame();
-    },
-    16
-  );
-  uiBtn(
-    110,
-    302,
-    300,
-    40,
-    'Vista: ' + (view3d ? '3D' : '2D'),
-    '#3a4a6a',
-    () => {
-      view3d = !view3d;
-    },
-    16
-  );
-  uiBtn(
-    110,
-    360,
+    130,
+    420,
     300,
     44,
     'Salir al menú',

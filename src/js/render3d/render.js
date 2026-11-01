@@ -68,23 +68,51 @@ function updSandbox3D() {
     k = dark / 0.86,
     cyc = (g.sbT % CYCLE) / CYCLE;
   if (sbNeedsRebuild()) sbRebuildNow();
-  const day = new THREE.Color(0x8fc8ff),
+  const day = new THREE.Color(0x5fa4ea),
     night = new THREE.Color(0x050818),
     warm = new THREE.Color(0xff8a4a),
     sky = day.clone().lerp(night, k);
   if (k > 0.05 && k < 0.95) sky.lerp(warm, Math.sin(k * Math.PI) * 0.35);
   R3.scene.background.copy(sky);
   R3.scene.fog.color.copy(sky);
-  R3.scene.fog.near = 300 - 170 * k;
-  R3.scene.fog.far = 1250 - 650 * k;
+  const sb2 = R3.sb;
+  sb2.sky.position.set(p.x, 0, p.y);
+  sb2.sky.material.uniforms.hor.value.copy(sky);
+  sb2.sky.material.uniforms.top.value
+    .set(0x1860d0)
+    .lerp(new THREE.Color(0x01020a), Math.min(1, k * 1.15))
+    .lerp(new THREE.Color(0x6a3a60), k > 0.05 && k < 0.95 ? Math.sin(k * Math.PI) * 0.25 : 0);
+  sb2.stars.position.set(p.x, 0, p.y);
+  sb2.stars.material.opacity = clamp((k - 0.35) * 1.8, 0, 1);
+  R3.scene.fog.near = 380 - 220 * k;
+  R3.scene.fog.far = 1700 - 1050 * k;
   const a = Math.min(1, cyc / 0.5) * Math.PI,
     elev = Math.sin(a);
   L.sun.position.set(p.x + Math.cos(a) * 520, 260 + 520 * Math.max(0.15, elev), p.y + 220);
   L.sun.target.position.set(p.x, 0, p.y);
+  sb2.sun.position.set(p.x + Math.cos(a) * 2700, 300 + Math.sin(a) * 2300, p.y - 500);
+  sb2.sun.visible = Math.sin(a) > -0.05 && cyc < 0.52;
+  sb2.moon.position.set(
+    p.x - Math.cos(a) * 2600,
+    900 + Math.abs(Math.sin(a + 2)) * 1500,
+    p.y - 300
+  );
+  sb2.moon.visible = k > 0.25;
+  sb2.clouds.material.color.setRGB(1 - k * 0.8, 1 - k * 0.78, 1 - k * 0.6);
+  sb2.cloudPos.forEach((c, i) => {
+    c.x = (c.x + 9 * R3.dt + WW * TS) % (WW * TS);
+    const dm = new THREE.Object3D();
+    dm.position.set(c.x, c.y, c.z);
+    dm.scale.set(c.s, 1, c.s * 0.8);
+    dm.updateMatrix();
+    sb2.clouds.setMatrixAt(i, dm.matrix);
+  });
+  sb2.clouds.instanceMatrix.needsUpdate = true;
+  sb2.g[0].material.map.offset.set(t * 0.02, t * 0.013);
   L.sun.color.set(k > 0.1 ? 0x8aa0e0 : 0xfff2d0);
-  L.sun.intensity = dark > 0.5 ? 0.28 : 1.25 * (1 - k) + 0.15;
-  L.hemi.intensity = 0.7 * (1 - k) + 0.12;
-  L.amb.intensity = 0.25 * (1 - k) + 0.1;
+  L.sun.intensity = dark > 0.5 ? 0.28 : 1.0 * (1 - k) + 0.15;
+  L.hemi.intensity = 0.5 * (1 - k) + 0.12;
+  L.amb.intensity = 0.12 * (1 - k) + 0.1;
   const tl = g.torches
     .map(q => ({ q, d: Math.hypot(q[0] * TS + 20 - p.x, q[1] * TS + 20 - p.y) }))
     .sort((a, b) => a.d - b.d);
@@ -138,13 +166,24 @@ function render3D() {
       if (R3.L.sun) R3.L.sun.castShadow = sh;
     }
   }
+  R3.fov =
+    (R3.fov || SAVE.fov) +
+    (SAVE.fov + (G.player.sprinting ? 8 : 0) - (R3.fov || SAVE.fov)) * Math.min(1, R3.dt * 6);
+  if (Math.abs(R3.camera.fov - R3.fov) > 0.05) {
+    R3.camera.fov = R3.fov;
+    R3.camera.updateProjectionMatrix();
+  }
   updCamera3D();
   if (G.mode === 'sandbox') updSandbox3D();
   else updClassic3D();
   syncEnts();
+  if (G.animals) syncAnimals();
   syncBodies();
   syncParts();
-  R3.renderer.render(R3.scene, R3.camera);
+  fxUpdate(R3.dt);
+  syncDrops();
+  PFX.threshold = G.mode === 'sandbox' ? 1.5 + (1 - G.dark / 0.86) * 0.7 : 0.95;
+  postRender(R3.scene, R3.camera);
 }
 function try3D() {
   try {

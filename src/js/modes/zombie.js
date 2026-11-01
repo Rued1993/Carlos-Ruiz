@@ -28,6 +28,19 @@ const POD = { x: 1850, y: 250 };
 const WORDER = ['bate', 'pistola', 'escopeta'],
   WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta' },
   WICON = { bate: '🏏', pistola: '🔫', escopeta: '💥' };
+const MAG = { pistola: 12, escopeta: 6 };
+/** Color del zombi según su tipo. */
+function zColor(z) {
+  return z.boss
+    ? '#8a3030'
+    : z.tank
+      ? '#3d4a38'
+      : z.bomb
+        ? '#d07a1a'
+        : z.run
+          ? '#7a8a40'
+          : '#5f7f52';
+}
 const fmtT = s =>
   String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 function clearLine(a, b, strict) {
@@ -150,6 +163,12 @@ function newZombie(cfg) {
     best,
     wave: { n: 1, state: 'wait', t: 0, left: 0, spawnT: 0, len: 50 },
   };
+  G.drops = [];
+  G.score = 0;
+  G.combo = 0;
+  G.comboT = 0;
+  G.mags = {};
+  G.reloadT = 0;
   G.zc = Object.assign(
     { waves: 5, escape: true, boss: false, weapons: null, ammo: 0, lenMul: 1 },
     cfg || {}
@@ -175,7 +194,7 @@ function startWave(n) {
   w.state = 'run';
   w.t = 0;
   w.len = W_.len * G.zc.lenMul;
-  w.left = W_.count;
+  w.left = Math.ceil(W_.count * diff().zcount);
   w.spawnT = 0;
   w.boss = false;
   if (G.zc.boss && n == G.zc.waves) {
@@ -232,7 +251,18 @@ function spawnZ(runner) {
   if (runner || (n >= 3 && Math.random() < 0.25)) {
     z.sp *= 1.3;
     z.run = true;
+  } else if (n >= 3 && Math.random() < 0.16) {
+    z.tank = true;
+    z.hp *= 3;
+    z.sp *= 0.7;
+    z.scale = 1.3;
+  } else if (n >= 4 && Math.random() < 0.14) {
+    z.bomb = true;
+    z.sp *= 1.15;
   }
+  z.hp = Math.round(z.hp * diff().zhp);
+  z.max = z.hp;
+  z.sp *= diff().zsp;
   g.zs.push(z);
 }
 function clearZ() {
@@ -248,6 +278,15 @@ function endZombie(r) {
     localStorage.setItem('zbest', b);
   } catch (e) {}
   G.best = b;
+  let bs = 0;
+  try {
+    bs = +(localStorage.getItem('zscore') || 0);
+    if (G.score > bs) {
+      bs = G.score;
+      localStorage.setItem('zscore', bs);
+    }
+  } catch (e) {}
+  G.bestScore = bs;
   scene = 'end';
   beep(r == 'zwin' ? 700 : 100, 0.9, 'triangle', 0.12);
 }
@@ -278,6 +317,7 @@ function selectWep(i) {
   const w = WORDER[i];
   if (G.weps[w]) {
     G.wep = w;
+    G.reloadT = 0;
     beep(400, 0.05, 'square', 0.04);
   }
 }
@@ -285,6 +325,7 @@ function cycleWep() {
   const own = WORDER.filter(w => G.weps[w]);
   if (!own.length) return;
   G.wep = own[(own.indexOf(G.wep) + 1) % own.length];
+  G.reloadT = 0;
   beep(400, 0.05, 'square', 0.04);
 }
 function shoot(tx, ty) {
@@ -319,13 +360,19 @@ function shoot(tx, ty) {
     beep(180, 0.12, 'sawtooth', 0.08, -60);
     return;
   }
-  if (g.ammo <= 0) {
-    g.cd = 0.35;
-    beep(200, 0.05, 'square', 0.05);
-    toast('Sin munición', 1);
+  if (g.reloadT > 0) return;
+  ensureMag(w);
+  if (g.mags[w] <= 0) {
+    g.cd = 0.3;
+    if (g.ammo > 0) startReload();
+    else {
+      beep(200, 0.05, 'square', 0.05);
+      toast('Sin munición', 1);
+    }
     return;
   }
-  g.ammo--;
+  g.mags[w]--;
+  if (g.mags[w] === 0 && g.ammo > 0) setTimeout(() => G && G.zc && startReload(), 180);
   const sg = w == 'escopeta',
     n = sg ? 5 : 1,
     spread = sg ? 0.38 : 0.03,
@@ -345,6 +392,26 @@ function shoot(tx, ty) {
   g.muzzle = 0.09;
   g.shake = Math.max(g.shake, sg ? 0.25 : 0.1);
   beep(sg ? 90 : 240, 0.12, 'sawtooth', 0.14, -150);
+}
+/** Llena el cargador la primera vez que se usa un arma, tomando de la reserva. */
+function ensureMag(w) {
+  if (G.mags[w] === undefined) {
+    const t = Math.min(MAG[w], G.ammo);
+    G.ammo -= t;
+    G.mags[w] = t;
+  }
+}
+/** Recarga el arma actual (tecla R / botón X del mando). */
+function startReload() {
+  const g = G,
+    w = g.wep;
+  if (!w || !MAG[w] || g.reloadT > 0 || scene !== 'play') return;
+  ensureMag(w);
+  if (g.mags[w] >= MAG[w] || g.ammo <= 0) return;
+  g.reloadT = w === 'escopeta' ? 1.6 : 1.1;
+  g.reloadW = w;
+  beep(300, 0.08, 'square', 0.06);
+  setTimeout(() => beep(420, 0.06, 'square', 0.06), g.reloadT * 600);
 }
 function shootAuto() {
   const p = G.player;
@@ -378,12 +445,43 @@ function updZombie(dt) {
     p.face = Math.cos(p.aim) >= 0 ? 1 : -1;
   }
   if (scene === 'play') {
-    if (g.firing) {
+    if (g.firing || pad.fire) {
       const at = view3d
         ? { x: p.x + Math.cos(CAM.yaw) * 300, y: p.y + Math.sin(CAM.yaw) * 300 }
         : { x: p.x + mouse.x - W / 2, y: p.y + mouse.y - H / 2 };
       shoot(at.x, at.y);
     } else if (keys[' ']) shootAuto();
+  }
+  // recarga
+  if (g.reloadT > 0) {
+    g.reloadT -= dt;
+    if (g.reloadT <= 0 && g.wep === g.reloadW) {
+      const take = Math.min(MAG[g.wep] - g.mags[g.wep], g.ammo);
+      g.mags[g.wep] += take;
+      g.ammo -= take;
+      beep(520, 0.07, 'square', 0.06);
+    }
+  }
+  // combo
+  if (g.comboT > 0) {
+    g.comboT -= dt;
+    if (g.comboT <= 0) g.combo = 0;
+  }
+  // botín soltado por los zombis
+  for (let i = g.drops.length - 1; i >= 0; i--) {
+    const d = g.drops[i];
+    d.t -= dt;
+    if (dist(d, p) < 44 && p.alive) {
+      if (d.type === 'municion') {
+        g.ammo += 10;
+        toast('+10 munición', 1.2);
+      } else {
+        g.hp = Math.min(100, g.hp + 25);
+        toast('+25 salud', 1.2);
+      }
+      beep(760, 0.1, 'sine', 0.08, 300);
+      g.drops.splice(i, 1);
+    } else if (d.t <= 0) g.drops.splice(i, 1);
   }
   // oleadas
   if (w.state == 'wait') {
@@ -402,6 +500,7 @@ function updZombie(dt) {
     }
     if (w.t >= w.len || (w.boss && g.bossDead && w.t > 2)) {
       mevent('wave');
+      g.score += 100 * w.n;
       if (w.n < g.zc.waves) {
         clearZ();
         w.state = 'break';
@@ -506,9 +605,19 @@ function updZombie(dt) {
         } else z.stuck = 0;
       }
     }
-    if (d < (z.boss ? 58 : 32) && z.cd <= 0 && p.alive) {
+    if (z.bomb && d < 46 && p.alive) {
+      z.hp = 0;
+      z.selfDestruct = true;
+      if (d < 110) g.hp -= Math.round(24 * diff().zdmg);
+      for (const o of g.zs) if (o !== z && dist(o, z) < 110) o.hp -= 40;
+      g.flash = 0.7;
+      g.shake = 0.6;
+      burst(z.x, z.y, 36, '#ff9a20', 260, 0.9);
+      debris3D(z.x, 20, z.y, '#ff8a20', 10);
+      beep(70, 0.5, 'sawtooth', 0.2, -50);
+    } else if (d < (z.boss ? 58 : z.tank ? 40 : 32) && z.cd <= 0 && p.alive) {
       z.cd = 0.9;
-      g.hp -= z.boss ? 18 : 7 + g.wave.n * 2;
+      g.hp -= Math.round((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg);
       g.flash = 0.5;
       g.shake = 0.3;
       beep(90, 0.15, 'sawtooth', 0.12, -40);
@@ -527,8 +636,18 @@ function updZombie(dt) {
       }
     }
   for (const z of g.zs)
-    if (z.hp <= 0) {
+    if (z.hp <= 0 && !z.selfDestruct) {
       g.kills++;
+      g.combo = Math.min(8, g.combo + 1);
+      g.comboT = 4;
+      g.score += Math.round(10 * (z.boss ? 20 : z.tank ? 4 : 1) * (1 + g.combo * 0.25));
+      if (z.boss || Math.random() < 0.22 * diff().drop)
+        g.drops.push({
+          x: z.x,
+          y: z.y,
+          type: Math.random() < 0.62 ? 'municion' : 'botiquin',
+          t: 14,
+        });
       mevent('zkill');
       if (z.boss) {
         mevent('boss');
@@ -618,20 +737,21 @@ function drawZombies() {
     txt('CÁPSULA DE ESCAPE', POD.x, POD.y + 52, 14, '#9fb', 'center');
     if (g.nearPod) txt('[E] Escapar', POD.x, POD.y - 50, 16, '#ffd740', 'center');
   }
-  for (const z of g.zs.slice().sort((a, b) => a.y - b.y)) {
-    drawCrew(
-      z.x,
-      z.y,
-      z.boss ? '#8a3030' : z.run ? '#7a8a40' : '#5f7f52',
-      z.face,
-      z.step,
-      1,
-      z.scale || 1,
-      true,
-      g.t,
-      false,
-      true
+  for (const d of g.drops) {
+    ctx.fillStyle = d.type === 'municion' ? '#ffd740' : '#ffffff';
+    rr(d.x - 10, d.y - 10, 20, 20, 4);
+    ctx.fill();
+    txt(
+      d.type === 'municion' ? '•' : '+',
+      d.x,
+      d.y,
+      16,
+      d.type === 'municion' ? '#7a5a00' : '#d32f2f',
+      'center'
     );
+  }
+  for (const z of g.zs.slice().sort((a, b) => a.y - b.y)) {
+    drawCrew(z.x, z.y, zColor(z), z.face, z.step, 1, z.scale || 1, true, g.t, false, true);
     if (z.hp < z.max) {
       ctx.fillStyle = 'rgba(0,0,0,.6)';
       ctx.fillRect(z.x - 16, z.y - 40, 32, 4);
@@ -723,7 +843,17 @@ function drawZHUD() {
   rr(12, 12, 300, 86, 8);
   ctx.fill();
   txt('Zombis: ' + g.zs.length, 24, 28, 14, '#ff8a80');
-  txt('Bajas: ' + g.kills, 24, 46, 14, '#fff');
+  txt(
+    'Bajas: ' +
+      g.kills +
+      '  ·  Puntos: ' +
+      g.score +
+      (g.combo > 1 ? '  x' + (1 + g.combo * 0.25).toFixed(2) : ''),
+    24,
+    46,
+    14,
+    '#fff'
+  );
   txt('Mejor tiempo: ' + fmtT(g.best), 24, 64, 13, '#9fb3c8', 'left', false);
   txt(
     g.pod
@@ -766,7 +896,27 @@ function drawZHUD() {
     txt(`${i + 1} ${WICON[k]} ${WNAME[k]}`, x + 54, y + 21, 13, '#fff', 'center');
     ctx.globalAlpha = 1;
   });
-  if (g.wep && g.wep != 'bate') txt('Munición: ' + g.ammo, W / 2, H - 70, 14, '#ffd740', 'center');
+  if (g.wep && g.wep != 'bate') {
+    const mg = g.mags[g.wep] === undefined ? Math.min(MAG[g.wep], g.ammo) : g.mags[g.wep],
+      rs = g.mags[g.wep] === undefined ? g.ammo - mg : g.ammo;
+    txt(
+      `${g.reloadT > 0 ? 'Recargando…' : mg + ' / ' + rs}   [R] recargar`,
+      W / 2,
+      H - 70,
+      14,
+      '#ffd740',
+      'center'
+    );
+    if (g.reloadT > 0) {
+      const tot = g.reloadW === 'escopeta' ? 1.6 : 1.1;
+      ctx.fillStyle = 'rgba(0,0,0,.6)';
+      rr(W / 2 - 60, H - 86, 120, 6, 3);
+      ctx.fill();
+      ctx.fillStyle = '#ffd740';
+      rr(W / 2 - 60, H - 86, 120 * (1 - g.reloadT / tot), 6, 3);
+      ctx.fill();
+    }
+  }
   if (g.toastT > 0) {
     ctx.font = 'bold 18px system-ui';
     const tw = ctx.measureText(g.toast).width + 40;
@@ -848,9 +998,20 @@ function drawZEnd() {
   ctx.restore();
   txt('Tiempo sobrevivido: ' + fmtT(g.surv), 350, 170, 28, '#fff', 'center');
   txt('Oleada alcanzada: ' + g.wave.n + ' / ' + g.zc.waves, 350, 215, 22, '#ffb74d', 'center');
-  txt('Zombis eliminados: ' + g.kills, 350, 250, 22, '#fff', 'center');
   txt(
-    'Mejor tiempo: ' + fmtT(g.best) + (g.surv >= g.best && g.surv > 1 ? '  ¡NUEVO RÉCORD!' : ''),
+    'Zombis eliminados: ' + g.kills + '   ·   Puntos: ' + g.score,
+    350,
+    250,
+    22,
+    '#fff',
+    'center'
+  );
+  txt(
+    'Mejor tiempo: ' +
+      fmtT(g.best) +
+      '   ·   Récord de puntos: ' +
+      (g.bestScore || 0) +
+      (g.surv >= g.best && g.surv > 1 ? '  ¡NUEVO RÉCORD!' : ''),
     350,
     295,
     20,

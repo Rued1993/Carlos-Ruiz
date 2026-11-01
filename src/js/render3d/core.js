@@ -50,11 +50,12 @@ function mkLabel(text, color) {
   s.renderOrder = 10;
   return s;
 }
-function glTex(c, pixel) {
+function glTex(c, pixel, repeat) {
   const t = new THREE.CanvasTexture(c);
   t.encoding = THREE.sRGBEncoding;
   if (pixel) {
     t.magFilter = t.minFilter = THREE.NearestFilter;
   } else t.anisotropy = 8;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }

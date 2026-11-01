@@ -90,7 +90,29 @@ function buildClassic3D(scene) {
   walls.instanceMatrix.needsUpdate = true;
   walls.instanceColor.needsUpdate = true;
   scene.add(walls);
-  // franja luminosa superior de los muros (cinta de borde)
+  // tiras de luz HDR en la cara interior de los muros (brillan con el bloom)
+  {
+    const strips = cells.filter(
+      c =>
+        (c[0] * 3 + c[1] * 5) % 6 === 0 &&
+        (wk[c[1] * nx + c[0] + 1] ||
+          wk[c[1] * nx + c[0] - 1] ||
+          wk[(c[1] + 1) * nx + c[0]] ||
+          wk[(c[1] - 1) * nx + c[0]])
+    );
+    const sm = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(7, 3, 7),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 2.2, 3.2) }),
+      strips.length
+    );
+    strips.forEach((c, k) => {
+      d.position.set(c[0] * C + 5, 98, c[1] * C + 5);
+      d.updateMatrix();
+      sm.setMatrixAt(k, d.matrix);
+    });
+    sm.instanceMatrix.needsUpdate = true;
+    scene.add(sm);
+  }
   // props
   const table = cyl(95, 95, 26, '#8c8a82', 1200, 13, 300, { roughness: 0.45, metalness: 0.5 });
   table.scale.set(1, 1, 0.58);

@@ -37,6 +37,8 @@ function rebuild3D() {
   R3.ents.clear();
   R3.bodies.clear();
   R3.blood.clear();
+  R3.dropM = null;
+  R3.animalM = null;
   R3.q = null;
   const scene = new THREE.Scene();
   R3.scene = scene;
@@ -64,13 +66,5 @@ function rebuild3D() {
   );
   R3.pts.frustumCulled = false;
   scene.add(R3.pts);
-  const bg = new THREE.BufferGeometry();
-  bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(120 * 3), 3));
-  bg.setDrawRange(0, 0);
-  R3.bul = new THREE.Points(
-    bg,
-    new THREE.PointsMaterial({ size: 9, color: 0xffd870, sizeAttenuation: true, fog: false })
-  );
-  R3.bul.frustumCulled = false;
-  scene.add(R3.bul);
+  fxInit(scene);
 }

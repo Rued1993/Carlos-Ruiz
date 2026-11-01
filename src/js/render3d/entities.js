@@ -17,11 +17,9 @@ function entVisible(q) {
 function getEnt(q, zombie) {
   let r = R3.ents.get(q);
   if (!r) {
-    const g = makeCrew(
-      zombie ? (q.boss ? '#8a3030' : q.run ? '#7a8a40' : '#5f7f52') : q.color,
-      zombie
-    );
+    const g = makeCrew(zombie ? zColor(q) : q.color, zombie);
     if (q.scale) g.scale.setScalar(q.scale);
+    g.rotation.order = 'YXZ';
     R3.scene.add(g);
     r = {
       g,
@@ -30,6 +28,9 @@ function getEnt(q, zombie) {
       ly: q.y,
       heading: q.isP ? CAM.yaw : rnd(0, 6.28),
       ph: Math.random() * 6,
+      hpLast: q.hp,
+      flash: 0,
+      dustT: 0,
       label: null,
       lc: '',
       ghost: false,
@@ -90,6 +91,18 @@ function syncEnts() {
       a.rotation.x = (zomb ? -0.1 : 0) + Math.sin(now / 260 + i) * 0.12;
     });
     if (zomb) g.rotation.z = Math.sin(r.ph) * 0.06;
+    if (zomb && q.hp < r.hpLast) r.flash = 0.14;
+    r.hpLast = q.hp;
+    if (r.flash > 0) r.flash -= dt;
+    const fl = Math.max(0, r.flash / 0.14);
+    u.suit.forEach(m => m.emissive.setRGB(fl * 1.4, fl * 0.25, fl * 0.15));
+    if (walking && sp > 2.5 && (q.isP || zomb)) {
+      r.dustT -= dt;
+      if (r.dustT <= 0) {
+        r.dustT = q.sprinting ? 0.09 : 0.2;
+        burst(q.x, q.y + 14, 1, '#a09a8c', 24, 0.5);
+      }
+    }
     if (q.isP && G.mode === 'zombie') {
       const w = G.wep;
       u.wep.bat.visible = w == 'bate';
@@ -121,7 +134,8 @@ function syncEnts() {
   }
   for (const [q, r] of R3.ents)
     if (!seen.has(q)) {
-      R3.scene.remove(r.g);
+      if (r.zombie && q.hp <= 0) R3.dying.push({ g: r.g, t: 0 });
+      else R3.scene.remove(r.g);
       R3.ents.delete(q);
     }
 }
@@ -203,11 +217,15 @@ function syncParts() {
   if (G.bullets)
     for (const b of G.bullets) {
       if (m >= 120) break;
-      ba.array[m * 3] = b.x;
-      ba.array[m * 3 + 1] = 36;
-      ba.array[m * 3 + 2] = b.y;
+      const k = m * 6;
+      ba.array[k] = b.x;
+      ba.array[k + 1] = 36;
+      ba.array[k + 2] = b.y;
+      ba.array[k + 3] = b.x - b.vx * 0.04;
+      ba.array[k + 4] = 36;
+      ba.array[k + 5] = b.y - b.vy * 0.04;
       m++;
     }
-  R3.bul.geometry.setDrawRange(0, m);
+  R3.bul.geometry.setDrawRange(0, m * 2);
   ba.needsUpdate = true;
 }

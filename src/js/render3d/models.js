@@ -128,7 +128,7 @@ function makeCrew(color, zombie) {
   sho.position.z = 16;
   bat.visible = pis.visible = sho.visible = false;
   hold.add(bat, pis, sho);
-  g.userData = { legs, arms, body, visor, mats, hold, wep: { bat, pis, sho } };
+  g.userData = { legs, arms, body, visor, mats, hold, suit: [suit, dark], wep: { bat, pis, sho } };
   return g;
 }
 function makeBody3D(color) {

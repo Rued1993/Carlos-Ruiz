@@ -18,8 +18,31 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | **Niveles** | 12 retos con objetivos y 3 estrellas por tiempo. |
 | **Partida libre** | Impostor clásico, Supervivencia Zombi o Mundo cubo (tipo Minecraft). |
 
-Controles: `WASD` mover · ratón/flechas cámara · `E` usar · `R` reportar · `Q` matar ·
-`V` ventilación · `F` sabotaje/colocar · `C` crafteo · `1-7` hotbar · `P` pausa.
+### Controles
+
+| Acción | Teclado y ratón | Mando |
+|---|---|---|
+| Mover / cámara | `WASD` / ratón (clic para capturarlo) o flechas | stick izq. / stick der. |
+| Correr (gasta resistencia) | `Shift` | L3 |
+| Usar / interactuar | `E` | A |
+| Disparar · picar / atacar | clic izq. o `Espacio` | RT |
+| Recargar (zombi) · reportar (clásico) · colocar (cubo) | `R` · `R` · clic der. o `F` | X |
+| Cambiar arma · matar (impostor) · comer (cubo) | `Tab` / `1-3` · `Q` · `G` | B |
+| Crafteo (cubo) · ventilación (impostor) | `C` · `V` | Y |
+| Sabotaje (impostor) | `F` | cruceta ↑ |
+| Pausa y ajustes | `P` | Start |
+
+Ajustes (en pausa y en el menú): calidad gráfica, dificultad, sensibilidad, campo de visión,
+música y vista 3D/2D.
+
+### Novedades de jugabilidad
+
+- **Zombis:** cargadores con recarga, zombis *tanque* (lentos y resistentes) y *bomba* (explotan al
+  contacto), botín de munición y botiquines, puntuación con combo y récord.
+- **Mundo cubo:** hambre, animales (vaca, cerdo, gallina), carne cruda, horno para cocinar con
+  carbón, cielo con sol, luna, estrellas y nubes, hierba, flores y agua animada.
+- **Gráficos:** postprocesado con MSAA y bloom, tiras de luz en la nave, fogonazo, trazadoras,
+  escombros 3D, zombis que caen, marcadores de objetivo y patada de FOV al correr.
 
 ## Estructura
 
@@ -32,13 +55,13 @@ src/
   manifest.json       ORDEN de carga de los módulos (única fuente de verdad)
   styles/main.css
   js/
-    core/             arranque, utilidades, voz, música, estado, entrada, bucle principal
+    core/             arranque, utilidades, voz, música, ajustes, estado, entrada, mando, bucle
     data/             datos estáticos (mapa de la nave)
     game/             lógica del modo clásico: acciones, sabotajes, reuniones, bots, update
     modes/            modos independientes: zombie.js, sandbox.js
     campaign/         guardado, niveles/historia, motor de misiones, cinemáticas, escenario 3D
     render2d/         dibujo 2D (personajes, mundo, textura del mapa)
-    render3d/         capa three.js: init, escenas, modelos, cámara, sincronización, render
+    render3d/         capa three.js: init, escenas, modelos, cámara, sincronización, postfx, efectos
     ui/               pantallas (menús, reunión, minijuegos, final, pausa, resultado)
 tests/smoke.test.js   pruebas de extremo a extremo (Playwright)
 tools/lint.js         linter con análisis entre archivos

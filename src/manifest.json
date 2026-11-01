@@ -18,8 +18,11 @@
   "src/js/ui/end-and-fx.js",
   "src/js/modes/zombie.js",
   "src/js/modes/sandbox.js",
+  "src/js/modes/sandbox-survival.js",
   "src/js/render3d/core.js",
   "src/js/render3d/models.js",
+  "src/js/render3d/postfx.js",
+  "src/js/render3d/fx.js",
   "src/js/render3d/init.js",
   "src/js/render3d/scene-ship.js",
   "src/js/render3d/scene-voxel.js",
@@ -27,11 +30,14 @@
   "src/js/render3d/entities.js",
   "src/js/render3d/render.js",
   "src/js/campaign/data.js",
+  "src/js/core/settings.js",
   "src/js/campaign/missions.js",
   "src/js/campaign/cutscenes.js",
   "src/js/campaign/stage.js",
   "src/js/ui/screens.js",
+  "src/js/ui/hud-extras.js",
   "src/js/core/music.js",
   "src/js/core/main-loop.js",
-  "src/js/core/input.js"
+  "src/js/core/input.js",
+  "src/js/core/gamepad.js"
 ]

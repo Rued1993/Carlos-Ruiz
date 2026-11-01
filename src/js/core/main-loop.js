@@ -29,6 +29,7 @@ function frame(now) {
     view3d && (stage || gamey) ? 'visible' : 'hidden';
   if (document.pointerLockElement && scene !== 'play') document.exitPointerLock();
   if (G && G.M && !stage) missionTick(dt);
+  pollGamepad(dt);
   musicTick(dt);
   if (stage) drawStageScene(dt);
   else {
@@ -55,6 +56,8 @@ function frame(now) {
       drawHUD();
       drawMissionHUD();
       drawCrosshair();
+      drawObjectiveMarkers();
+      drawStaminaBar();
       drawPauseBtn();
       if (scene == 'task') drawTask();
       if (scene == 'craft') drawCraft();

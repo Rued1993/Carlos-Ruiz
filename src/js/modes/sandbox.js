@@ -37,7 +37,7 @@ const OCOL = {
   8: '#8a5a2a',
   9: '#ffb020',
 };
-const HOTBAR = ['tablon', 'piedra', 'tierra', 'suelo', 'antorcha', 'mesa', 'manzana'];
+const HOTBAR = ['tablon', 'piedra', 'tierra', 'suelo', 'antorcha', 'mesa', 'horno', 'manzana'];
 const INAME = {
   madera: 'Madera',
   tablon: 'Tablones',
@@ -48,6 +48,9 @@ const INAME = {
   mesa: 'Mesa',
   suelo: 'Suelo',
   manzana: 'Manzana',
+  horno: 'Horno',
+  carne: 'Carne cruda',
+  asada: 'Carne asada',
 };
 const ITEMOBJ = {
   tablon: O_PLANK,
@@ -55,12 +58,14 @@ const ITEMOBJ = {
   tierra: O_DIRT,
   antorcha: O_TORCH,
   mesa: O_TABLE,
+  horno: 11,
 };
 const RECIPES = [
   { n: 'Tablones x4', in: { madera: 1 }, out: ['tablon', 4] },
   { n: 'Suelo de madera x2 (puentes)', in: { tablon: 1 }, out: ['suelo', 2] },
   { n: 'Antorchas x4', in: { madera: 1, carbon: 1 }, out: ['antorcha', 4] },
   { n: 'Mesa de trabajo', in: { tablon: 4 }, out: ['mesa', 1] },
+  { n: 'Horno (cocinar carne)', in: { piedra: 8 }, out: ['horno', 1] },
   { n: 'Hacha (talar más rápido)', in: { tablon: 3 }, tool: 'hacha', table: true },
   { n: 'Pico (picar piedra más rápido)', in: { tablon: 3 }, tool: 'pico', table: true },
   { n: 'Espada (más daño a zombis)', in: { tablon: 2 }, tool: 'espada', table: true },
@@ -183,6 +188,15 @@ function buildTex() {
     x.fillRect(0, 15, 16, 1);
     x.fillStyle = '#ffd24a';
     x.fillRect(7, 6, 2, 4);
+    frameTex(x);
+  });
+  T.o[11] = mkTex(['#6f6f6f', '#808080', '#5e5e5e'], x => {
+    x.fillStyle = '#1a1a1a';
+    x.fillRect(3, 6, 10, 7);
+    x.fillStyle = '#ff8a20';
+    x.fillRect(5, 9, 6, 3);
+    x.fillStyle = '#ffd060';
+    x.fillRect(6, 10, 3, 2);
     frameTex(x);
   });
   T.o[9] = mkTex(null, x => {
@@ -393,7 +407,12 @@ function newSandbox(cfg) {
       mesa: 0,
       suelo: 0,
       manzana: 0,
+      horno: 0,
+      carne: 0,
+      asada: 0,
     },
+    food: 20,
+    animals: [],
     tools: {},
     slot: 0,
     hp: 20,
@@ -414,6 +433,7 @@ function newSandbox(cfg) {
       'Tala árboles para conseguir leña (clic izq), construye (clic der) y sobrevive a la noche',
     bannerT: 7,
   };
+  seedAnimals();
   scene = 'play';
   startDrone();
   beep(300, 0.5, 'sine', 0.08, 200);
@@ -539,6 +559,14 @@ function sbAct(dt) {
       }
       return;
     }
+  for (const a of g.animals)
+    if (Math.hypot(a.x - T.wx, a.y - T.wy) < 34 && dist(a, p) < 100) {
+      if (g.hitCD <= 0) {
+        g.hitCD = 0.45;
+        hitAnimal(a, g.tools.espada ? 9 : 4);
+      }
+      return;
+    }
   if (!T.ok) {
     g.mine = null;
     return;
@@ -573,12 +601,8 @@ function sbPlace() {
   const k = HOTBAR[g.slot],
     T = sbTarget();
   if (k == 'manzana') {
-    if (g.inv.manzana > 0 && g.hp < 20) {
-      g.inv.manzana--;
-      g.hp = Math.min(20, g.hp + 4);
-      toast('¡Ñam! +2 corazones', 1.5);
-      beep(500, 0.1, 'sine', 0.06);
-    } else if (!g.inv.manzana) toast('No tienes manzanas', 1.2);
+    if (g.inv.manzana > 0) sbEat();
+    else toast('No tienes manzanas', 1.2);
     return;
   }
   if (!g.inv[k]) {
@@ -652,6 +676,10 @@ function sbInteract() {
       scene = 'craft';
       return;
     }
+    if (OB[i] == O_FURNACE) {
+      sbCook(T.tx, T.ty);
+      return;
+    }
   }
   toast('Nada con lo que interactuar aquí', 1.2);
 }
@@ -721,7 +749,7 @@ function updSandbox(dt) {
       }
   }
   // picar / atacar
-  if (scene === 'play' && (g.mining || g.autoMine)) sbAct(dt);
+  if (scene === 'play' && (g.mining || g.autoMine || pad.fire)) sbAct(dt);
   else g.mine = null;
   // tripulación amiga
   for (const n of g.ps) {
@@ -816,13 +844,15 @@ function updSandbox(dt) {
   }
   for (const z of g.zs) if (z.hp <= 0 && z.hurt) mevent('zkill');
   g.zs = g.zs.filter(z => z.hp > 0 && Math.hypot(z.x - p.x, z.y - p.y) < 1300);
+  updSurvival(dt);
   g.regT += dt;
-  if (g.regT > 6 && g.hp < 20) {
+  if (g.regT > 6 && g.hp < 20 && g.food >= 6) {
     g.hp = Math.min(20, g.hp + 1);
     g.regT = 4;
   }
   if (g.hp <= 0) {
     g.hp = 20;
+    g.food = 20;
     g.zs = [];
     p.x = SPAWN.x * TS + TS / 2;
     p.y = (SPAWN.y + 3) * TS + TS / 2;
@@ -908,6 +938,7 @@ function drawSbWorld() {
     ctx.stroke();
   }
   // entidades
+  drawAnimals2D();
   const ents = [...g.ps.map(q => ({ q, z: false })), ...g.zs.map(q => ({ q, z: true }))].sort(
     (a, b) => a.q.y - b.q.y
   );
@@ -1027,6 +1058,7 @@ function itemIcon(k, x, y, s) {
     suelo: TEX.g[5],
     antorcha: TEX.o[9],
     mesa: TEX.o[7],
+    horno: TEX.o[11],
     madera: TEX.o[1],
     carbon: TEX.o[3],
   };
@@ -1064,11 +1096,29 @@ function drawSbHUD() {
       ctx.fillRect(16 + i * 22 + 11, 14, 12, 28);
     }
   }
+  // hambre
+  ctx.fillStyle = 'rgba(0,0,0,.5)';
+  rr(10, 48, 236, 28, 8);
+  ctx.fill();
+  for (let i = 0; i < 10; i++) {
+    const full = g.food >= 2 * i + 2,
+      half = g.food == 2 * i + 1;
+    ctx.globalAlpha = full ? 1 : half ? 0.7 : 0.22;
+    txt('🍗', 24 + i * 22, 63, 17, '#fff', 'center');
+  }
+  ctx.globalAlpha = 1;
   // inventario / herramientas
   ctx.fillStyle = 'rgba(0,0,0,.5)';
-  rr(10, 50, 236, 66, 8);
+  rr(10, 80, 236, 66, 8);
   ctx.fill();
-  txt(`Madera ${g.inv.madera}   Carbón ${g.inv.carbon}`, 20, 66, 13, '#fff', 'left');
+  txt(
+    `Madera ${g.inv.madera}  Carbón ${g.inv.carbon}  Carne ${g.inv.carne}/${g.inv.asada}`,
+    20,
+    96,
+    13,
+    '#fff',
+    'left'
+  );
   txt(
     'Herramientas: ' +
       (['hacha', 'pico', 'espada']
@@ -1076,7 +1126,7 @@ function drawSbHUD() {
         .map(t => t[0].toUpperCase() + t.slice(1))
         .join(', ') || 'ninguna'),
     20,
-    86,
+    116,
     12,
     '#ffd740',
     'left',
@@ -1085,7 +1135,7 @@ function drawSbHUD() {
   txt(
     g.nearTable ? 'Mesa de trabajo cerca' : 'Sin mesa cerca',
     20,
-    104,
+    134,
     12,
     g.nearTable ? '#8fe39a' : '#9fb3c8',
     'left',
@@ -1149,7 +1199,7 @@ function drawSbHUD() {
   }
   if (g.t < 25)
     txt(
-      'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-7: bloque',
+      'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-8: bloque · G: comer',
       W / 2,
       H * 0.2,
       Math.min(15, W / 50),
@@ -1227,17 +1277,17 @@ function drawCraft() {
   ctx.fillStyle = 'rgba(0,0,0,.6)';
   ctx.fillRect(0, 0, W, H);
   addHit(0, 0, W, H, () => {}, false);
-  beginUI(640, 480);
-  let gr = ctx.createLinearGradient(0, 0, 0, 480);
+  beginUI(640, 540);
+  let gr = ctx.createLinearGradient(0, 0, 0, 540);
   gr.addColorStop(0, '#3a4a30');
   gr.addColorStop(1, '#1a2216');
   ctx.fillStyle = gr;
-  rr(0, 0, 640, 480, 14);
+  rr(0, 0, 640, 540, 14);
   ctx.fill();
   ctx.strokeStyle = '#8fb070';
   ctx.lineWidth = 4;
   ctx.stroke();
-  addHit(0, 0, 640, 480, () => {}, true);
+  addHit(0, 0, 640, 540, () => {}, true);
   txt('CRAFTEO', 320, 30, 26, '#fff', 'center');
   txt(
     g.nearTable ? '✔ Mesa de trabajo cerca' : 'Sin mesa cerca (las herramientas la necesitan)',
@@ -1286,7 +1336,7 @@ function drawCraft() {
   });
   uiBtn(
     250,
-    438,
+    496,
     140,
     34,
     'Cerrar [C]',

@@ -32,14 +32,16 @@ addEventListener('keydown', e => {
     if (!voiceOn) stopSpeech();
   } else if (scene == 'craft' && (k == 'c' || k == 'escape')) scene = 'play';
   else if (scene == 'play' && G.mode === 'sandbox') {
-    if (k >= '1' && k <= '7') G.slot = +k - 1;
+    if (k >= '1' && k <= '8') G.slot = +k - 1;
     else if (k == 'f') sbPlace();
     else if (k == 'e') sbInteract();
     else if (k == 'c') scene = 'craft';
+    else if (k == 'g') sbEat();
   } else if (scene == 'play' && G.mode === 'zombie') {
     if (k == 'e') doUse();
     else if (k == '1' || k == '2' || k == '3') selectWep(+k - 1);
     else if (k == 'tab') cycleWep();
+    else if (k == 'r') startReload();
   } else if (scene == 'play') {
     if (G.player.inVent !== null && (k == 'arrowleft' || k == 'a')) cycleVent(-1);
     else if (G.player.inVent !== null && (k == 'arrowright' || k == 'd')) cycleVent(1);
@@ -105,8 +107,8 @@ cv.addEventListener('pointermove', e => {
   mouse.y = e.clientY;
   mouse.t = performance.now();
   if (view3d && document.pointerLockElement === cv) {
-    CAM.yaw += e.movementX * 0.0028;
-    CAM.elev = clamp(CAM.elev - e.movementY * 0.0022, 0.12, 1.25);
+    CAM.yaw += e.movementX * 0.0028 * SAVE.sens;
+    CAM.elev = clamp(CAM.elev - e.movementY * 0.0022 * SAVE.sens, 0.12, 1.25);
   }
   if (look && look.id == e.pointerId) {
     CAM.yaw += (e.clientX - look.lx) * 0.005;

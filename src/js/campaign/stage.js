@@ -340,7 +340,8 @@ function renderStage(dt) {
       m.rotation.y = Math.sin(S.t * 0.7 + i) * 0.25;
     }
   }
-  R3.renderer.render(S.sc, S.cam);
+  PFX.threshold = 0.9;
+  postRender(S.sc, S.cam);
 }
 function stars2D(t) {
   let g = ctx.createLinearGradient(0, 0, 0, H);
