@@ -4,7 +4,7 @@ import { moveBody } from './entities.js';
 import { B, I, OPAQUE, LIQUID } from './blocks.js';
 import { CH } from './world.js';
 
-const lam = (c, map) => new THREE.MeshLambertMaterial({ color: c, map });
+const lam = (c, map) => new THREE.MeshLambertMaterial(map ? { color: c, map } : { color: c });
 function limb(group, w, h, d, color, x, y, z) { // pivote arriba
   const piv = new THREE.Group(); piv.position.set(x, y, z);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lam(color)); m.position.y = -h / 2; piv.add(m); group.add(piv); return piv;

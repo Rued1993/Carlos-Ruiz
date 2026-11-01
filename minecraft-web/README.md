@@ -18,10 +18,11 @@ npm run build    # versión de producción en dist/
 - **Supervivencia:** vida, hambre, daño por caída, regeneración, muerte y reaparición, tiempos de minado según herramienta y nivel, durabilidad.
 - **Inventario y crafteo:** inventario de 36 ranuras, rejilla 2x2 y mesa de crafteo 3x3, recetas de herramientas (madera, piedra, hierro, diamante), tablones, palos, mesa, cristal, ladrillos.
 - **Mobs:** cerdos y vacas (sueltan comida), zombis (atacan, se queman al sol) y creepers (explotan y destruyen bloques); aparecen de noche y en cuevas.
+- **Horno y antorchas:** el horno funde mena de hierro/oro, cobble, arena, troncos y cocina la carne (usa carbón o madera como combustible); las antorchas dan luz cálida real que se propaga y no se apaga de noche.
+- **Cámaras:** primera persona, tercera persona por detrás y por delante (tecla **V**), con modelo de jugador animado.
+- **Interfaz:** menú rediseñado, HUD con corazones/comida/burbujas en pixel-art, ajustes de render, campo de visión, sensibilidad y volumen (se guardan).
 - **Creativo:** bloques infinitos, rotura instantánea, vuelo y paleta con todos los bloques e ítems.
 - **Guardado automático** en el navegador (IndexedDB) y sonido procedural.
-
-> Simplificaciones: no hay horno; las menas de hierro y oro sueltan el lingote directamente.
 
 ## Controles
 
@@ -33,6 +34,7 @@ npm run build    # versión de producción en dist/
 | Colocar / comer / abrir mesa | Clic derecho |
 | Elegir ranura | 1-9 o rueda |
 | Inventario | E |
+| Cambiar cámara (1ª / 3ª detrás / 3ª delante) | V |
 | Tirar ítem | Q (supervivencia) |
 | Volar | F (creativo; Espacio sube, Q baja) |
 | Cambiar creativo/supervivencia | G |
@@ -45,12 +47,11 @@ npm run build    # versión de producción en dist/
 - `src/mobs.js` – modelos, IA y aparición de mobs
 - `src/blocks.js` – bloques, ítems, herramientas y recetas
 - `src/ui.js` / `src/inventory.js` – HUD, inventario y crafteo
+- `src/playermodel.js` – modelo del jugador para tercera persona
 - `src/sky.js`, `src/atlas.js`, `src/icons.js`, `src/audio.js`, `src/save.js`, `src/entities.js`, `src/noise.js`
 
 ## Hoja de ruta
 
-- [ ] Horno y fundición, comida cocinada
-- [ ] Antorchas e iluminación por bloque
 - [ ] Agua que fluye, lava
 - [ ] Más mobs (esqueletos, arañas), cultivos, camas
 - [ ] Estructuras (aldeas, minas), más biomas

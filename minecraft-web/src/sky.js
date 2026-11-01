@@ -82,8 +82,7 @@ export class Sky {
     // Los materiales de bloques multiplican el color de vértice por el brillo del día
     const b = 0.2 + 0.8 * this.daylight;
     this.tint.setRGB(b * (0.85 + 0.15 * this.daylight), b * (0.88 + 0.12 * this.daylight), 0.3 + 0.7 * b);
-    this.materials.opaque.color.copy(this.tint);
-    this.materials.trans.color.copy(this.tint);
+    this.materials.tint.value.copy(this.tint);
     this.ambient.intensity = 0.35 + 0.65 * this.daylight;
     this.sunLight.intensity = 0.15 + 0.5 * this.daylight;
 

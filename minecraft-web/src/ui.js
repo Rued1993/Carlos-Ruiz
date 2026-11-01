@@ -1,6 +1,6 @@
 // Interfaz: barra rápida, estadísticas, inventario, crafteo y paleta creativa.
-import { iconURL } from './icons.js';
-import { info, BLOCKS, ITEMS, toolOf, maxStack, matchRecipe, isBlock } from './blocks.js';
+import { iconURL, hudSprites } from './icons.js';
+import { info, BLOCKS, ITEMS, toolOf, maxStack, matchRecipe, isFlat, SMELT_TIME } from './blocks.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -10,7 +10,7 @@ function slotEl(item, opts = {}) {
   if (opts.group) { d.dataset.g = opts.group; d.dataset.i = opts.index; }
   if (item) {
     const img = document.createElement('img');
-    img.src = iconURL(item.id); if (!isBlock(item.id)) img.className = 'flat';
+    img.src = iconURL(item.id); if (isFlat(item.id)) img.className = 'flat';
     d.appendChild(img);
     d.title = info(item.id).name;
     if (item.n > 1) { const n = document.createElement('span'); n.className = 'n'; n.textContent = item.n; d.appendChild(n); }
@@ -30,7 +30,7 @@ export class UI {
   constructor(g) {
     this.g = g; // { inv, player, getMode(), dropItem(id,n), sound(name) }
     this.cursor = null; this.craft = []; this.size = 2; this.isOpen = false;
-    this.toastT = 0;
+    this.toastT = 0; this.furnace = null; this.sprites = hudSprites();
     const inv = $('inv');
     inv.addEventListener('mousedown', (e) => this.onDown(e));
     inv.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -52,33 +52,41 @@ export class UI {
     }
   }
   renderStats() {
-    const p = this.g.player, surv = this.g.getMode() === 'survival';
+    const p = this.g.player, surv = this.g.getMode() === 'survival', S = this.sprites;
     $('bars').style.visibility = surv ? 'visible' : 'hidden';
-    const icons = (v, ch) => {
-      let s = '';
-      for (let i = 0; i < 10; i++) s += `<span class="ic ${v >= i * 2 + 2 ? 'full' : v === i * 2 + 1 ? 'half' : 'empty'}">${ch}</span>`;
-      return s;
+    const row = (v, set) => {
+      let h = '';
+      for (let i = 0; i < 10; i++) h += `<img class="hs" src="${set[v >= i * 2 + 2 ? 'full' : v === i * 2 + 1 ? 'half' : 'empty']}">`;
+      return h;
     };
-    $('hearts').innerHTML = icons(Math.ceil(p.hp), '♥');
-    $('food').innerHTML = icons(Math.ceil(p.food), '●');
+    const hp = Math.ceil(p.hp), food = Math.ceil(p.food);
+    const key = hp + ',' + food + ',' + Math.ceil(p.air) + ',' + p.headUnder + ',' + surv + ',' + (hp <= 6 ? Math.floor(performance.now() / 250) % 2 : 0);
+    if (key === this._statKey) return;
+    this._statKey = key;
+    $('hearts').innerHTML = row(hp, S.heart);
+    $('hearts').classList.toggle('low', hp <= 6);
+    $('food').innerHTML = row(food, S.food);
     const air = Math.ceil(p.air);
-    $('air').innerHTML = p.headUnder && surv ? Array.from({ length: 10 }, (_, i) => `<span class="ic" style="opacity:${air > i ? 1 : 0.2}">○</span>`).join('') : '';
+    $('air').innerHTML = p.headUnder && surv ? Array.from({ length: 10 }, (_, i) => `<img class="hs" src="${air > i ? S.bubble.full : S.bubble.empty}">`).join('') : '';
   }
 
   // ---------- Inventario ----------
-  open(size) {
+  open(size, furnace = null) {
+    this.furnace = size === 'furnace' ? furnace : null;
+    if (size === 'furnace') size = 2;
     this.size = size; this.craft = Array(size * size).fill(null); this.isOpen = true;
     const creative = this.g.getMode() === 'creative';
     $('inv').classList.remove('hidden');
-    $('invTitle').textContent = creative ? 'Creativo' : size === 3 ? 'Mesa de crafteo' : 'Inventario';
-    $('craftArea').classList.toggle('hidden', creative);
-    $('paletteWrap').classList.toggle('hidden', !creative);
+    $('invTitle').textContent = this.furnace ? 'Horno' : creative ? 'Creativo' : size === 3 ? 'Mesa de crafteo' : 'Inventario';
+    $('craftArea').classList.toggle('hidden', creative || !!this.furnace);
+    $('furnaceArea').classList.toggle('hidden', !this.furnace);
+    $('paletteWrap').classList.toggle('hidden', !creative || !!this.furnace);
     $('craftGrid').style.gridTemplateColumns = `repeat(${size}, 46px)`;
     this.render();
   }
   close() {
     if (!this.isOpen) return;
-    this.isOpen = false;
+    this.isOpen = false; this.furnace = null;
     const give = (it) => { if (!it) return; const left = this.g.inv.add(it.id, it.n); if (left) this.g.dropItem(it.id, left); };
     this.craft.forEach(give); this.craft = [];
     give(this.cursor); this.cursor = null;
@@ -95,7 +103,13 @@ export class UI {
     for (let i = 9; i < 36; i++) main.appendChild(slotEl(g.inv.slots[i], { group: 'inv', index: i }));
     const hot = $('invHot'); hot.innerHTML = '';
     for (let i = 0; i < 9; i++) hot.appendChild(slotEl(g.inv.slots[i], { group: 'inv', index: i, active: i === g.inv.selected }));
-    if (g.getMode() === 'creative') {
+    if (this.furnace) {
+      const f = this.furnace;
+      $('fIn').innerHTML = ''; $('fIn').appendChild(slotEl(f.slots[0], { group: 'furnace', index: 0 }));
+      $('fFuel').innerHTML = ''; $('fFuel').appendChild(slotEl(f.slots[1], { group: 'furnace', index: 1 }));
+      $('fOut').innerHTML = ''; $('fOut').appendChild(slotEl(f.slots[2], { group: 'furnace', index: 2 }));
+      this.furnaceBars();
+    } else if (g.getMode() === 'creative') {
       const pal = $('palette'); pal.innerHTML = '';
       const ids = [...Object.keys(BLOCKS).map(Number), ...Object.keys(ITEMS).map(Number)];
       ids.forEach((id) => pal.appendChild(slotEl({ id, n: 1, d: 0 }, { group: 'pal', index: id })));
@@ -111,7 +125,12 @@ export class UI {
     } else c.classList.add('hidden');
     this.renderHotbar();
   }
-  arr(group) { return group === 'inv' ? this.g.inv.slots : this.craft; }
+  furnaceBars() {
+    const f = this.furnace; if (!f) return;
+    $('fFlame').style.height = (f.burn > 0 ? Math.min(100, (f.burn / f.burnMax) * 100) : 0) + '%';
+    $('fArrow').style.width = Math.min(100, (f.cook / SMELT_TIME) * 100) + '%';
+  }
+  arr(group) { return group === 'inv' ? this.g.inv.slots : group === 'furnace' ? this.furnace.slots : this.craft; }
 
   onDown(e) {
     const el = e.target.closest('.slot');
@@ -131,6 +150,12 @@ export class UI {
       this.g.sound('craft'); this.render(); return;
     }
     const arr = this.arr(group), slot = arr[i], cur = this.cursor;
+    if (group === 'furnace' && i === 2) { // salida: solo se puede sacar
+      if (!slot) return;
+      if (!cur) { this.cursor = slot; arr[2] = null; }
+      else if (cur.id === slot.id && cur.n + slot.n <= maxStack(cur.id)) { cur.n += slot.n; arr[2] = null; }
+      this.render(); return;
+    }
     if (!right) {
       if (!cur) { arr[i] = null; this.cursor = slot; }
       else if (!slot) { arr[i] = cur; this.cursor = null; }

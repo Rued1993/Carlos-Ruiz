@@ -1,6 +1,6 @@
 // Iconos de bloques (cubo isométrico) e ítems (pixel art) dibujados por código.
 import * as THREE from 'three';
-import { BLOCKS, ITEMS, I, TIERS, TOOL_TYPES } from './blocks.js';
+import { BLOCKS, ITEMS, I, B, TIERS, TOOL_TYPES } from './blocks.js';
 import { TILE_INDEX } from './atlas.js';
 
 let atlasCanvas = null;
@@ -33,8 +33,11 @@ function drawItem(id) {
   const x = c.getContext('2d');
   const stick = '#7a5a30';
   const handle = () => { for (let i = 2; i <= 11; i++) px(x, [[i, 15 - i]], stick); };
-  const info = ITEMS[id];
-  if (info.tool) {
+  const info = ITEMS[id] || {};
+  if (id === B.TORCH) {
+    for (let y = 6; y <= 14; y++) px(x, [[7, y], [8, y]], y % 2 ? '#7a5630' : '#6a4a28');
+    px(x, [[7, 4], [8, 4], [7, 5], [8, 5]], '#ffc83c'); px(x, [[7, 3], [8, 3]], '#ff9a28'); px(x, [[7, 2]], '#ffeb78');
+  } else if (info.tool) {
     const col = TIERS[info.tool.tier].color, dark = shade(col, 0.7), light = rgb(col);
     handle();
     const t = info.tool.type;
@@ -69,13 +72,17 @@ function drawItem(id) {
     const a = id === I.PORK ? '#f0a0a0' : '#b83a3a', b = id === I.PORK ? '#c87070' : '#8a2020';
     for (let yy = 4; yy <= 11; yy++) for (let xx = 3 + (yy < 6 ? 2 : 0); xx <= 12 - (yy > 9 ? 2 : 0); xx++) px(x, [[xx, yy]], (xx + yy) % 5 === 0 ? b : a);
     px(x, [[10, 5], [11, 5], [11, 6]], '#f6f0e0');
+  } else if (id === I.COOKED_PORK || id === I.STEAK) {
+    const a = id === I.STEAK ? '#8a4a22' : '#c8884c', b = id === I.STEAK ? '#5e2e12' : '#a06030';
+    for (let yy = 4; yy <= 11; yy++) for (let xx = 3 + (yy < 6 ? 2 : 0); xx <= 12 - (yy > 9 ? 2 : 0); xx++) px(x, [[xx, yy]], (xx + yy) % 4 === 0 ? b : a);
+    px(x, [[10, 5], [11, 5], [11, 6]], '#f6f0e0'); px(x, [[5, 6], [6, 7], [7, 8], [8, 9]], b);
   } else { px(x, [[7, 7]], '#fff'); }
   return c;
 }
 
 export function iconCanvas(id) {
   if (canvCache.has(id)) return canvCache.get(id);
-  const c = BLOCKS[id] ? drawBlock(id) : drawItem(id);
+  const c = BLOCKS[id] && !BLOCKS[id].flat ? drawBlock(id) : drawItem(id);
   canvCache.set(id, c);
   return c;
 }
@@ -91,4 +98,42 @@ export function iconTexture(id) {
     texCache.set(id, t);
   }
   return texCache.get(id);
+}
+
+// ---------- Sprites del HUD (corazones, comida, burbujas) en pixel-art ----------
+function sprite(rows, pal, emptyMask) {
+  const c = document.createElement('canvas'); c.width = 9; c.height = 9;
+  const x = c.getContext('2d');
+  rows.forEach((row, yy) => [...row].forEach((ch, xx) => { const col = pal(ch, xx); if (col) { x.fillStyle = col; x.fillRect(xx, yy, 1, 1); } }));
+  return c.toDataURL();
+}
+const HEART = ['.##...##.', '#RR#.#RR#', '#RHRRRRR#', '#RRRRRRR#', '.#RRRRR#.', '..#RRR#..', '...#R#...', '....#....', '.........'];
+const FOOD = ['......##.', '.....#CC#', '....#CHC#', '...#CCC#.', '..#CCC#..', '.#CCC#...', '#WW##....', '#WW#.....', '.##......'];
+const BUBBLE = ['..#####..', '.#BBBBB#.', '#BHBBBBB#', '#BHBBBBB#', '#BBBBBBB#', '#BBBBBBB#', '.#BBBBB#.', '..#####..', '.........'];
+export function hudSprites() {
+  const heart = (mode) => sprite(HEART, (ch, xx) => {
+    if (ch === '.') return null;
+    const empty = mode === 'empty' || (mode === 'half' && xx > 4);
+    if (ch === '#') return '#1a0505';
+    return empty ? '#4a3a3a' : ch === 'H' ? '#ff9c9c' : '#e02222';
+  });
+  const food = (mode) => sprite(FOOD, (ch, xx) => {
+    if (ch === '.') return null;
+    if (ch === '#') return '#2a1405';
+    if (ch === 'W') return mode === 'empty' ? '#555' : '#f4efe4';
+    const empty = mode === 'empty' || (mode === 'half' && xx > 4);
+    return empty ? '#4a3d30' : ch === 'H' ? '#e8a05a' : '#c8782b';
+  });
+  const bubble = (mode) => sprite(BUBBLE, (ch) => (ch === '.' ? null : ch === '#' ? '#0a2a5a' : mode === 'empty' ? 'rgba(120,170,230,0.25)' : ch === 'H' ? '#d8f0ff' : '#5aa8f0'));
+  return {
+    heart: { full: heart('full'), half: heart('half'), empty: heart('empty') },
+    food: { full: food('full'), half: food('half'), empty: food('empty') },
+    bubble: { full: bubble('full'), empty: bubble('empty') },
+  };
+}
+export function tileURL(name) {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const i = TILE_INDEX[name];
+  c.getContext('2d').drawImage(atlasCanvas, i * 16, 0, 16, 16, 0, 0, 16, 16);
+  return c.toDataURL();
 }

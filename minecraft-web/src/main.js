@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createAtlas, tileColor } from './atlas.js';
-import { initIcons, iconTexture } from './icons.js';
+import { initIcons, iconTexture, tileURL } from './icons.js';
+import { PlayerModel } from './playermodel.js';
 import { World, terrainHeight, biomeAt, SEA, CH } from './world.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -10,7 +11,7 @@ import { MobManager } from './mobs.js';
 import { UI } from './ui.js';
 import * as audio from './audio.js';
 import * as save from './save.js';
-import { B, I, AIR, BLOCKS, ITEMS, LIQUID, info, isBlock, toolOf, breakTime, dropOf } from './blocks.js';
+import { B, I, AIR, BLOCKS, ITEMS, LIQUID, SOLID, SMELT, FUEL, SMELT_TIME, info, isBlock, isFlat, maxStack, toolOf, breakTime, dropOf } from './blocks.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -23,10 +24,30 @@ scene.add(camera);
 
 const { canvas: atlasCanvas, texture } = createAtlas();
 initIcons(atlasCanvas);
+document.documentElement.style.setProperty('--dirt', `url(${tileURL('dirt')})`);
+// Color final del vértice = luz de cielo * tinte del día + luz cálida de antorchas (que no se atenúa de noche)
+const tint = { value: new THREE.Color(1, 1, 1) };
+function patchChunkMaterial(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTint = tint;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float blight;\nuniform vec3 uTint;')
+      .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_COLOR\nvColor = color * uTint + vec3(1.0, 0.8, 0.5) * blight;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'chunk-light';
+  return m;
+}
 const materials = {
-  opaque: new THREE.MeshBasicMaterial({ map: texture, vertexColors: true }),
-  trans: new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+  opaque: patchChunkMaterial(new THREE.MeshBasicMaterial({ map: texture, vertexColors: true })),
+  trans: patchChunkMaterial(new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide })),
+  tint,
 };
+
+// ---------- Ajustes (persistentes) ----------
+const settings = { radius: 6, fov: 75, sens: 1, vol: 0.5, cam: 0 };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
+const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
+const CAM_NAMES = ['Primera persona', 'Tercera persona (detrás)', 'Tercera persona (delante)'];
 
 // Resaltado y grietas del bloque apuntado
 const highlight = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.005, 1.005, 1.005)), new THREE.LineBasicMaterial({ color: 0x000000 }));
@@ -43,7 +64,9 @@ handIcon.renderOrder = handArm.renderOrder = 999;
 
 // ---------- Estado ----------
 let state = 'menu'; // menu | loading | play | inv | pause | dead
-let mode = 'survival', radius = 6;
+let mode = 'survival', radius = settings.radius, camMode = settings.cam | 0;
+const furnaces = new Map(); // "x,y,z" -> {slots:[entrada,combustible,salida], burn, burnMax, cook}
+let model, furnRenderT = 0;
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1;
 const mouse = { left: false, right: false };
 const mining = { key: '', progress: 0 };
@@ -53,6 +76,7 @@ let seedSpawn = null;
 // ---------- Utilidades ----------
 function showOverlay(which) {
   const o = $('overlay');
+  o.classList.toggle('ingame', which === 'pause' || which === 'death');
   if (!which) { o.classList.add('hidden'); return; }
   o.classList.remove('hidden');
   for (const id of ['menu', 'pause', 'death']) $(id).classList.toggle('hidden', id !== which);
@@ -110,6 +134,10 @@ function breakBlock(hit) {
   if (id === AIR || id === B.BEDROCK) return;
   const held = inv.held();
   world.setBlock(hit.x, hit.y, hit.z, AIR);
+  if (id === B.FURNACE) {
+    const key = hit.x + ',' + hit.y + ',' + hit.z, f = furnaces.get(key);
+    if (f) { for (const sl of f.slots) if (sl) drops.spawn(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, sl.id, sl.n); furnaces.delete(key); }
+  }
   particles.blockBreak(hit.x, hit.y, hit.z, id);
   sound('break');
   if (mode === 'survival') {
@@ -126,6 +154,11 @@ function useItem() {
   const hit = world.raycast(eye, dir, mode === 'creative' ? 7 : 5.5);
   swing = Math.max(swing, 0.001);
   if (hit && hit.id === B.TABLE && !player.keys.has('ShiftLeft')) { openInventory(3); return; }
+  if (hit && hit.id === B.FURNACE && !player.keys.has('ShiftLeft')) {
+    const key = hit.x + ',' + hit.y + ',' + hit.z;
+    if (!furnaces.has(key)) furnaces.set(key, { slots: [null, null, null], burn: 0, burnMax: 1, cook: 0 });
+    openInventory('furnace', furnaces.get(key)); return;
+  }
   const held = inv.held();
   if (!held) return;
   const food = ITEMS[held.id] && ITEMS[held.id].food;
@@ -138,8 +171,8 @@ function useItem() {
   if (py < 0 || py >= CH) return;
   const there = world.getBlock(px, py, pz);
   if (there !== AIR && !LIQUID[there]) return;
-  if (!LIQUID[held.id] && player.intersectsBlock(px, py, pz)) return;
-  if (mobs.list.some((m) => Math.abs(m.pos.x - (px + 0.5)) < m.hw + 0.5 && Math.abs(m.pos.z - (pz + 0.5)) < m.hw + 0.5 && m.pos.y < py + 1 && m.pos.y + m.h > py)) return;
+  if (SOLID[held.id] && player.intersectsBlock(px, py, pz)) return;
+  if (SOLID[held.id] && mobs.list.some((m) => Math.abs(m.pos.x - (px + 0.5)) < m.hw + 0.5 && Math.abs(m.pos.z - (pz + 0.5)) < m.hw + 0.5 && m.pos.y < py + 1 && m.pos.y + m.h > py)) return;
   world.setBlock(px, py, pz, held.id);
   sound('place');
   if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
@@ -185,15 +218,52 @@ function updateInteraction(dt) {
   if (mouse.right && placeCool <= 0) { placeCool = 0.22; useItem(); }
 }
 
+function tickFurnaces(dt) {
+  for (const f of furnaces.values()) {
+    const [inp, fuel, out] = f.slots;
+    const rec = inp && SMELT[inp.id];
+    const can = rec && (!out || (out.id === rec[0] && out.n + rec[1] <= maxStack(rec[0])));
+    if (f.burn > 0) f.burn -= dt;
+    if (can) {
+      if (f.burn <= 0 && fuel && FUEL[fuel.id]) { f.burn = f.burnMax = FUEL[fuel.id]; fuel.n--; if (fuel.n <= 0) f.slots[1] = null; }
+      if (f.burn > 0) {
+        f.cook += dt;
+        if (f.cook >= SMELT_TIME) {
+          f.cook = 0; inp.n--; if (inp.n <= 0) f.slots[0] = null;
+          if (out) out.n += rec[1]; else f.slots[2] = { id: rec[0], n: rec[1], d: 0 };
+        }
+      } else f.cook = Math.max(0, f.cook - dt * 2);
+    } else f.cook = 0;
+  }
+}
+
+let camLabelT = 0;
+function setCamMode(m) {
+  camMode = m; settings.cam = m; saveSettings();
+  $('bCam').textContent = 'Cámara: ' + CAM_NAMES[m];
+  if (ui) ui.toast('Cámara: ' + CAM_NAMES[m]);
+}
+function applyCamera() {
+  if (player.dead) { model.group.visible = false; return; }
+  model.group.visible = camMode !== 0; hand.visible = camMode === 0;
+  if (camMode === 0) return;
+  const eye = player.eye, look = player.lookDir().multiplyScalar(camMode === 1 ? -1 : 1);
+  const r = world.raycast(eye, look, 4.2);
+  const dist = r ? Math.max(0.3, r.dist - 0.3) : 4.2;
+  camera.position.copy(eye).addScaledVector(look, dist);
+  if (camMode === 1) camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+  else camera.rotation.set(-player.pitch, player.yaw + Math.PI, 0, 'YXZ');
+}
+
 function updateHand(dt) {
   const held = inv.held();
   const id = held ? held.id : 0;
+  model.setHeld(id);
   if (id !== lastHeld) {
     lastHeld = id;
     if (id) { handMat.map = iconTexture(id); handMat.needsUpdate = true; }
     handIcon.visible = !!id; handArm.visible = !id;
-    const blk = isBlock(id);
-    handIcon.scale.setScalar(blk ? 0.6 : 0.7);
+    handIcon.scale.setScalar(isFlat(id) ? 0.7 : 0.6);
   }
   if (swing > 0) { swing += dt * 3.5; if (swing >= 1) swing = mouse.left ? 0.001 : 0; }
   const s = Math.sin(Math.min(1, swing) * Math.PI);
@@ -203,11 +273,11 @@ function updateHand(dt) {
 }
 
 // ---------- Estados / UI ----------
-function openInventory(size) {
+function openInventory(size, furnace = null) {
   if (state !== 'play') return;
   state = 'inv'; player.keys.clear(); mouse.left = mouse.right = false;
   document.exitPointerLock();
-  ui.open(size);
+  ui.open(size, furnace);
 }
 function closeInventory(relock) {
   ui.close();
@@ -233,7 +303,7 @@ function onDeath() {
 async function saveGame() {
   if (!world) return;
   const meta = { v: 1, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
-    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON() };
+    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()] };
   const entries = [...world.unsaved].filter((k) => world.chunks.has(k)).map((k) => [k, new Uint8Array(world.chunks.get(k))]);
   const ok = await save.saveAll(meta, entries);
   if (ok) world.unsaved.clear();
@@ -245,10 +315,12 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   showOverlay('menu'); $('msg').textContent = 'Generando mundo…';
   for (const id of ['bContinue', 'bSurvival', 'bCreative']) $(id).classList.add('hidden');
 
+  furnaces.clear();
   world = new World(scene, materials, seed, saved);
   inv = new Inventory();
   player = new Player(world, camera);
   player.mode = mode;
+  if (!model) model = new PlayerModel(scene);
   sky = new Sky(scene, camera, materials);
   drops = new Drops(scene, world);
   particles = new Particles(scene, world);
@@ -267,7 +339,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
 
   let cx, cz;
   if (meta) {
-    inv.load(meta.inv); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
+    inv.load(meta.inv); (meta.furnaces || []).forEach(([k, f]) => furnaces.set(k, f)); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
     player.yaw = meta.yaw; player.pitch = meta.pitch; player.spawn.fromArray(meta.spawn);
     player.pos.fromArray(meta.pos); cx = Math.floor(meta.pos[0]); cz = Math.floor(meta.pos[2]);
   } else { [cx, cz] = findSpawnColumn(seed); player.pos.set(cx + 0.5, 70, cz + 0.5); }
@@ -284,8 +356,8 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   if (!meta) { const sp = groundSpawn(cx, cz); player.pos.copy(sp); player.spawn.copy(sp); }
   else player.vel.set(0, 0, 0);
 
-  ui.renderHotbar(); ui.renderStats(); updateHand(0);
-  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock };
+  ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
+  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -299,8 +371,8 @@ document.addEventListener('pointerlockchange', () => {
 });
 document.addEventListener('mousemove', (e) => {
   if (state !== 'play' || document.pointerLockElement !== canvas) return;
-  player.yaw -= e.movementX * 0.0022;
-  player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch - e.movementY * 0.0022));
+  player.yaw -= e.movementX * 0.0022 * settings.sens;
+  player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch - e.movementY * 0.0022 * settings.sens));
 });
 document.addEventListener('keydown', (e) => {
   audio.unlock();
@@ -313,6 +385,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 9) { inv.selected = n; syncSelect(); } return; }
   switch (e.code) {
     case 'KeyE': openInventory(2); return;
+    case 'KeyV': case 'F5': e.preventDefault(); if (!e.repeat) setCamMode((camMode + 1) % 3); return;
     case 'KeyF': if (mode === 'creative' && !e.repeat) { player.flying = !player.flying; player.vel.y = 0; ui.toast(player.flying ? 'Vuelo activado' : 'Vuelo desactivado'); } return;
     case 'KeyG': if (!e.repeat) { mode = mode === 'creative' ? 'survival' : 'creative'; player.mode = mode; if (mode === 'survival') player.flying = false; ui.renderStats(); ui.toast('Modo ' + (mode === 'creative' ? 'creativo' : 'supervivencia')); } return;
     case 'KeyQ': if (mode === 'survival' && !e.repeat) { const h = inv.held(); if (h) { dropItem(h.id, 1); inv.consumeHeld(1); ui.renderHotbar(); } return; } break;
@@ -340,8 +413,17 @@ addEventListener('resize', resize); resize();
 $('bResume').onclick = () => { audio.unlock(); canvas.requestPointerLock(); };
 $('bSave').onclick = async () => { await saveGame(); location.reload(); };
 $('bRespawn').onclick = () => { audio.unlock(); player.respawn(); state = 'play'; showOverlay(null); ui.renderStats(); canvas.requestPointerLock(); };
-$('rRadius').oninput = (e) => { radius = +e.target.value; $('vRadius').textContent = radius; };
-$('rVol').oninput = (e) => audio.setVolume(+e.target.value);
+$('bCam').onclick = () => setCamMode((camMode + 1) % 3);
+const bind = (id, label, key, fmt, apply) => {
+  const el = $(id), out = $(label);
+  el.value = settings[key]; out.textContent = fmt(settings[key]); if (apply) apply(settings[key]);
+  el.oninput = (e) => { settings[key] = +e.target.value; out.textContent = fmt(settings[key]); if (apply) apply(settings[key]); saveSettings(); };
+};
+bind('rRadius', 'vRadius', 'radius', (v) => v, (v) => (radius = v));
+bind('rFov', 'vFov', 'fov', (v) => v);
+bind('rSens', 'vSens', 'sens', (v) => v.toFixed(1));
+bind('rVol', 'vVol', 'vol', (v) => Math.round(v * 100), (v) => audio.setVolume(v));
+$('bCam').textContent = 'Cámara: ' + CAM_NAMES[camMode];
 
 // ---------- Bucle ----------
 let last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
@@ -353,6 +435,9 @@ function frame(now) {
 
   if (state !== 'pause') {
     player.update(dt);
+    model.update(dt, player, swing);
+    applyCamera();
+    tickFurnaces(dt);
     sky.update(dt, camera.position, radius * 16, player.headUnder);
     world.update(player.pos.x, player.pos.z, radius, 2);
     mobs.update(dt, player, mode, sky.daylight, radius);
@@ -361,7 +446,8 @@ function frame(now) {
     if (state === 'play') updateInteraction(dt);
     updateHand(dt);
     $('water').classList.toggle('hidden', !player.headUnder);
-    camera.fov += ((75 + (player.keys.has('ShiftLeft') && player.keys.has('KeyW') ? 7 : 0)) - camera.fov) * Math.min(1, dt * 8);
+    camera.fov += ((settings.fov + (player.keys.has('ShiftLeft') && player.keys.has('KeyW') ? 7 : 0)) - camera.fov) * Math.min(1, dt * 8);
+    if (ui.isOpen && ui.furnace) { ui.furnaceBars(); furnRenderT -= dt; if (furnRenderT <= 0) { furnRenderT = 0.5; ui.render(); } }
     camera.updateProjectionMatrix();
     hudT -= dt;
     if (hudT <= 0) {
@@ -369,6 +455,7 @@ function frame(now) {
       const h = ((sky.time * 24 + 6) % 24), hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
       $('info').textContent = `${fps} FPS · ${mode === 'creative' ? 'Creativo' : 'Supervivencia'}\nXYZ ${player.pos.x.toFixed(1)} ${player.pos.y.toFixed(1)} ${player.pos.z.toFixed(1)}\n` +
         `Bioma: ${biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z), seed)} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nMobs: ${mobs.list.length}${player.flying ? ' · [VUELO]' : ''}`;
+      $('cam').textContent = '📷 ' + CAM_NAMES[camMode] + '  [V]';
     }
     saveT += dt; if (saveT > 20) { saveT = 0; saveGame(); }
   }

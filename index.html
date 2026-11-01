@@ -5,60 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Minecraft Web</title>
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: system-ui, sans-serif; user-select: none; }
+    :root { --font: "Courier New", ui-monospace, Menlo, Consolas, monospace; --stone: #7d7d7d; --stone-d: #4a4a4a; --stone-l: #b4b4b4; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: var(--font); font-weight: bold; user-select: none; -webkit-user-select: none; }
     canvas#game { display: block; width: 100%; height: 100%; }
     .hidden { display: none !important; }
-    #crosshair { position: fixed; left: 50%; top: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none; }
-    #crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,.85); mix-blend-mode: difference; }
-    #crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
-    #crosshair::after { left: 0; top: 9px; width: 20px; height: 2px; }
-    #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(220,0,0,.0); transition: box-shadow .5s; }
-    #vignette.hurt { box-shadow: inset 0 0 160px 60px rgba(220,0,0,.7); transition: none; }
-    #water { position: fixed; inset: 0; pointer-events: none; background: rgba(20,60,160,.35); }
-    #hud { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
-    #bars { display: flex; justify-content: space-between; width: 100%; font-size: 17px; text-shadow: 1px 1px #000; min-height: 22px; }
-    #hearts, #food, #air { display: flex; gap: 1px; }
+    img { image-rendering: pixelated; }
+
+    /* ---------- HUD ---------- */
+    #crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); pointer-events: none; }
+    #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; mix-blend-mode: difference; }
+    #crosshair::before { left: 10px; top: 1px; width: 2px; height: 20px; }
+    #crosshair::after { left: 1px; top: 10px; width: 20px; height: 2px; }
+    #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(220,0,0,0); transition: box-shadow .6s; }
+    #vignette.hurt { box-shadow: inset 0 0 180px 70px rgba(220,0,0,.75); transition: none; }
+    #water { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(30,80,190,.25), rgba(10,40,130,.55)); }
+    #hud { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
+    #bars { display: flex; justify-content: space-between; width: 100%; min-height: 20px; }
+    #hearts, #food, #air { display: flex; gap: 0; }
     #food { flex-direction: row-reverse; }
-    #air { position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%); }
-    .ic { width: 18px; text-align: center; }
-    .ic.full { color: #e22; } .ic.half { background: linear-gradient(90deg, #e22 50%, #444 50%); -webkit-background-clip: text; background-clip: text; color: transparent; } .ic.empty { color: #444; }
-    #food .ic.full { color: #d9852b; } #food .ic.half { background: linear-gradient(90deg, #d9852b 50%, #444 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    #air .ic { color: #7cf; }
-    #hotbar { display: flex; gap: 3px; padding: 4px; background: rgba(0,0,0,.45); border-radius: 4px; pointer-events: auto; }
-    .slot { width: 46px; height: 46px; border: 3px solid #555; background: #3a3a3a; position: relative; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
-    .slot img { width: 32px; height: 32px; image-rendering: pixelated; pointer-events: none; }
+    #air { position: fixed; left: 50%; bottom: 104px; transform: translateX(-50%); flex-direction: row-reverse; }
+    .hs { width: 20px; height: 20px; filter: drop-shadow(1px 1px 0 rgba(0,0,0,.6)); }
+    #hearts.low .hs { animation: shake .25s infinite alternate; }
+    @keyframes shake { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+    #hotbar { display: flex; gap: 0; padding: 3px; background: rgba(20,20,20,.55); border: 2px solid #111; box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); pointer-events: auto; }
+    .slot { width: 46px; height: 46px; border: 3px solid #2d2d2d; border-right-color: #c9c9c9; border-bottom-color: #c9c9c9; background: #8b8b8b; position: relative; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+    #hotbar .slot { background: rgba(70,70,70,.7); border: 2px solid #1b1b1b; margin: 0 1px; }
+    #hotbar .slot.active { border: 3px solid #fff; background: rgba(130,130,130,.75); transform: scale(1.12); z-index: 2; box-shadow: 0 0 8px rgba(255,255,255,.55); }
+    .slot img { width: 32px; height: 32px; pointer-events: none; }
     .slot img.flat { width: 36px; height: 36px; }
-    .slot.active { border-color: #fff; background: #5a5a5a; }
-    .slot .n { position: absolute; right: 2px; bottom: 0; font-size: 13px; color: #fff; text-shadow: 1px 1px #000; font-weight: bold; pointer-events: none; }
-    .slot .k { position: absolute; left: 2px; top: -1px; font-size: 10px; color: #bbb; text-shadow: 1px 1px #000; pointer-events: none; }
-    .slot .dur { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 3px; background: #222; pointer-events: none; }
-    .slot .dur i { display: block; height: 100%; background: #6f6; }
-    #info { position: fixed; left: 8px; top: 8px; color: #fff; font: 12px monospace; text-shadow: 1px 1px #000; white-space: pre; pointer-events: none; }
-    #toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); color: #fff; font-size: 16px; text-shadow: 1px 1px #000; pointer-events: none; transition: opacity .6s; }
-    #breakbar { position: fixed; left: 50%; top: 56%; width: 60px; height: 4px; background: rgba(0,0,0,.5); transform: translateX(-50%); }
+    .slot .n { position: absolute; right: 2px; bottom: 0; font-size: 14px; color: #fff; text-shadow: 2px 2px 0 #3b3b3b; pointer-events: none; }
+    .slot .k { position: absolute; left: 3px; top: 0; font-size: 10px; color: #ddd; text-shadow: 1px 1px #000; pointer-events: none; }
+    .slot .dur { position: absolute; left: 5px; right: 5px; bottom: 3px; height: 3px; background: #111; pointer-events: none; }
+    .slot .dur i { display: block; height: 100%; }
+    #info { position: fixed; left: 8px; top: 8px; color: #fff; font: bold 12px var(--font); text-shadow: 1px 1px #000; white-space: pre; pointer-events: none; background: rgba(0,0,0,.25); padding: 4px 6px; }
+    #cam { position: fixed; right: 10px; top: 8px; color: #fff; font-size: 12px; text-shadow: 1px 1px #000; pointer-events: none; background: rgba(0,0,0,.25); padding: 4px 6px; }
+    #toast { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); color: #fff; font-size: 18px; text-shadow: 2px 2px 0 #222; pointer-events: none; transition: opacity .6s; white-space: nowrap; }
+    #breakbar { position: fixed; left: 50%; top: 56%; width: 64px; height: 5px; background: rgba(0,0,0,.55); border: 1px solid #000; transform: translateX(-50%); }
     #breakbar i { display: block; height: 100%; background: #fff; width: 0; }
-    /* pantallas */
+
+    /* ---------- Pantallas ---------- */
     .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #fff; z-index: 10; }
-    .panel { background: #c6c6c6; border: 3px solid #333; padding: 14px; color: #222; box-shadow: 0 0 0 3px #888 inset; display: flex; flex-direction: column; gap: 8px; max-height: 94vh; overflow: auto; }
-    .panel h3 { margin: 0; font-size: 15px; }
-    .grid { display: grid; gap: 2px; }
-    .panel .slot { background: #8b8b8b; border: 2px solid #373737; border-right-color: #fff; border-bottom-color: #fff; }
+    .panel { background: #c6c6c6; border: 3px solid #1b1b1b; padding: 14px; color: #3a3a3a; box-shadow: inset 3px 3px 0 #fff, inset -3px -3px 0 #8b8b8b, 0 10px 40px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 8px; max-height: 94vh; overflow: auto; }
+    .panel h3 { margin: 0; font-size: 14px; letter-spacing: 1px; }
+    .grid { display: grid; gap: 0; }
     .panel .slot:hover { background: #a8a8a8; }
-    #craftArea { display: flex; align-items: center; gap: 14px; }
+    #craftArea, #furnaceArea { display: flex; align-items: center; gap: 14px; }
     #craftArea .arrow { font-size: 26px; }
-    #palette { display: grid; grid-template-columns: repeat(9, 46px); gap: 2px; max-height: 160px; overflow: auto; }
+    #furnaceArea .col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    #fFlameBox { width: 16px; height: 18px; background: #555; position: relative; border: 2px solid #222; }
+    #fFlame { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#ffd23c, #ff7a18); }
+    #fArrowBox { width: 70px; height: 16px; background: #555; border: 2px solid #222; position: relative; }
+    #fArrow { position: absolute; left: 0; top: 0; bottom: 0; background: #fff; width: 0; }
+    #palette { display: grid; grid-template-columns: repeat(9, 46px); gap: 0; max-height: 160px; overflow: auto; }
     #cursorItem { position: fixed; pointer-events: none; z-index: 20; width: 36px; height: 36px; transform: translate(-50%, -50%); }
-    #cursorItem img { width: 36px; height: 36px; image-rendering: pixelated; }
-    #cursorItem .n { position: absolute; right: 0; bottom: 0; color: #fff; font-size: 13px; font-weight: bold; text-shadow: 1px 1px #000; }
-    #overlay { z-index: 30; background: rgba(0,0,0,.65); flex-direction: column; gap: 10px; text-align: center; }
-    #overlay h1 { margin: 0 0 6px; font-size: 46px; letter-spacing: 3px; text-shadow: 3px 3px #333; }
-    #overlay p { margin: 2px; color: #ccc; max-width: 640px; font-size: 14px; }
-    .btn { background: #777; color: #fff; border: 3px solid #222; border-top-color: #bbb; border-left-color: #bbb; padding: 10px 24px; min-width: 300px; font-size: 16px; cursor: pointer; text-shadow: 1px 1px #222; }
-    .btn:hover { background: #8a9ad8; }
-    .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-width: 300px; font-size: 14px; }
-    #msg { color: #ff8; }
+    #cursorItem img { width: 36px; height: 36px; }
+    #cursorItem .n { position: absolute; right: 0; bottom: 0; color: #fff; font-size: 14px; text-shadow: 2px 2px 0 #3b3b3b; }
+
+    /* ---------- Menú ---------- */
+    #overlay { z-index: 30; flex-direction: column; text-align: center; background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.75)), var(--dirt) center / 96px 96px; image-rendering: pixelated; }
+    #overlay.ingame { background: rgba(0,0,0,.6); }
+    #menu, #pause, #death { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #logo { position: relative; margin-bottom: 34px; }
+    #logo h1 { margin: 0; font-size: clamp(34px, 8vw, 74px); letter-spacing: 4px; color: #c8c8c8; text-shadow: 0 1px 0 #8e8e8e, 0 2px 0 #7a7a7a, 0 3px 0 #666, 0 4px 0 #555, 0 5px 0 #444, 0 6px 0 #333, 0 8px 12px rgba(0,0,0,.8); -webkit-text-stroke: 2px #2b2b2b; }
+    #logo small { display: block; font-size: clamp(14px, 3vw, 26px); letter-spacing: 12px; color: #6fb04a; text-shadow: 2px 2px 0 #1f3a10; margin-top: -4px; }
+    #splash { position: absolute; right: -70px; bottom: -6px; color: #ffe84a; font-size: 18px; text-shadow: 2px 2px 0 #3a3200; transform: rotate(-14deg); animation: pulse 1s infinite alternate ease-in-out; white-space: nowrap; }
+    @keyframes pulse { from { transform: rotate(-14deg) scale(1); } to { transform: rotate(-14deg) scale(1.12); } }
+    #overlay p { margin: 2px; color: #d6d6d6; max-width: 700px; font-size: 13px; text-shadow: 1px 1px #000; line-height: 1.5; }
+    .btn { background: linear-gradient(#8d8d8d, #6f6f6f 50%, #5f5f5f); color: #fff; border: 3px solid #111; border-top-color: #cfcfcf; border-left-color: #cfcfcf; border-bottom-color: #3d3d3d; border-right-color: #3d3d3d; padding: 11px 24px; width: 340px; max-width: 86vw; font: bold 16px var(--font); cursor: pointer; text-shadow: 2px 2px 0 #333; }
+    .btn:hover { background: linear-gradient(#a1b3ee, #7f92d8 50%, #6c7fc4); border-top-color: #e8eeff; border-left-color: #e8eeff; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: linear-gradient(#6fb04a, #4f8a30 50%, #3f7525); }
+    .btn.primary:hover { background: linear-gradient(#8ad05c, #62a63d 50%, #4f8a30); }
+    .row { display: flex; align-items: center; gap: 10px; justify-content: space-between; width: 340px; max-width: 86vw; font-size: 14px; text-shadow: 1px 1px #000; }
+    .row input[type=range] { flex: 1; accent-color: #6fb04a; }
+    .row b { min-width: 34px; text-align: right; }
+    #msg { color: #ffe84a !important; font-size: 15px !important; }
+    #keys { display: grid; grid-template-columns: auto auto; gap: 2px 18px; text-align: left; font-size: 12px; background: rgba(0,0,0,.35); padding: 10px 16px; border: 2px solid #222; margin-top: 8px; }
+    #keys kbd { background: #ddd; color: #222; padding: 0 5px; border-bottom: 2px solid #777; border-radius: 2px; font: bold 11px var(--font); }
+    #ver { position: fixed; left: 8px; bottom: 6px; font-size: 11px; color: #aaa; text-shadow: 1px 1px #000; }
   </style>
-  <script type="module" crossorigin src="./assets/index-Cg-Un8Cq.js"></script>
+  <script type="module" crossorigin src="./assets/index-CkuNMJLA.js"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -72,12 +98,18 @@
     <div id="hotbar"></div>
   </div>
   <div id="info"></div>
+  <div id="cam"></div>
   <div id="toast"></div>
 
   <div id="inv" class="screen hidden">
     <div class="panel">
       <h3 id="invTitle">Inventario</h3>
       <div id="craftArea"><div id="craftGrid" class="grid"></div><span class="arrow">➜</span><div id="craftOut"></div></div>
+      <div id="furnaceArea" class="hidden">
+        <div class="col"><div id="fIn"></div><div id="fFlameBox"><div id="fFlame"></div></div><div id="fFuel"></div></div>
+        <div id="fArrowBox"><div id="fArrow"></div></div>
+        <div id="fOut"></div>
+      </div>
       <div id="paletteWrap" class="hidden"><h3>Bloques e ítems (clic para coger; soltar aquí para borrar)</h3><div id="palette"></div></div>
       <div id="invMain" class="grid" style="grid-template-columns: repeat(9, 46px)"></div>
       <div id="invHot" class="grid" style="grid-template-columns: repeat(9, 46px)"></div>
@@ -87,29 +119,34 @@
 
   <div id="overlay" class="screen">
     <div id="menu">
-      <h1>MINECRAFT WEB</h1>
+      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡Ahora con hornos!</div></div>
       <p id="msg">Cargando…</p>
-      <div style="display:flex;flex-direction:column;gap:8px;align-items:center;margin-top:10px">
-        <button class="btn hidden" id="bContinue">Continuar mundo guardado</button>
-        <button class="btn" id="bSurvival">Nuevo mundo · Supervivencia</button>
-        <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+      <button class="btn primary hidden" id="bContinue">Continuar mundo guardado</button>
+      <button class="btn" id="bSurvival">Nuevo mundo · Supervivencia</button>
+      <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+      <div id="keys">
+        <span><kbd>WASD</kbd> mover</span><span><kbd>Espacio</kbd> saltar / nadar</span>
+        <span><kbd>Shift</kbd> correr</span><span><kbd>E</kbd> inventario</span>
+        <span><kbd>Clic izq.</kbd> romper / atacar</span><span><kbd>Clic der.</kbd> colocar / usar</span>
+        <span><kbd>V</kbd> cámara 1ª / 3ª persona</span><span><kbd>1-9</kbd> / rueda: ranura</span>
+        <span><kbd>F</kbd> volar (creativo)</span><span><kbd>G</kbd> cambiar modo</span>
       </div>
-      <p style="margin-top:14px"><b>WASD</b> mover · <b>Espacio</b> saltar/nadar · <b>Shift</b> correr · <b>E</b> inventario · <b>1-9</b>/rueda elegir ranura<br>
-        <b>Clic izq.</b> (mantener) romper / atacar · <b>Clic der.</b> colocar / comer / mesa de crafteo · <b>Q</b> tirar ítem · <b>F</b> volar (creativo) · <b>G</b> cambiar modo</p>
     </div>
     <div id="pause" class="hidden">
-      <h1>Pausa</h1>
-      <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
-        <button class="btn" id="bResume">Reanudar</button>
-        <div class="row"><span>Distancia de render</span><input id="rRadius" type="range" min="3" max="10" step="1" value="6" /><b id="vRadius">6</b></div>
-        <div class="row"><span>Volumen</span><input id="rVol" type="range" min="0" max="1" step="0.05" value="0.5" /></div>
-        <button class="btn" id="bSave">Guardar y salir al menú</button>
-      </div>
+      <div id="logo"><h1 style="font-size:40px">PAUSA</h1></div>
+      <button class="btn primary" id="bResume">Reanudar</button>
+      <button class="btn" id="bCam">Cámara: Primera persona</button>
+      <div class="row"><span>Render</span><input id="rRadius" type="range" min="3" max="10" step="1" value="6" /><b id="vRadius">6</b></div>
+      <div class="row"><span>Campo visión</span><input id="rFov" type="range" min="60" max="110" step="1" value="75" /><b id="vFov">75</b></div>
+      <div class="row"><span>Sensibilidad</span><input id="rSens" type="range" min="0.3" max="2.5" step="0.1" value="1" /><b id="vSens">1.0</b></div>
+      <div class="row"><span>Volumen</span><input id="rVol" type="range" min="0" max="1" step="0.05" value="0.5" /><b id="vVol">50</b></div>
+      <button class="btn" id="bSave">Guardar y salir al menú</button>
     </div>
     <div id="death" class="hidden">
-      <h1 style="color:#e33">Has muerto</h1>
-      <button class="btn" id="bRespawn">Reaparecer</button>
+      <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
+      <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
+    <div id="ver">Minecraft Web v0.3</div>
   </div>
 </body>
 </html>

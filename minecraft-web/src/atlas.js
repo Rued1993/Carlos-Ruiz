@@ -5,7 +5,7 @@ import { hash2 } from './noise.js';
 const T = 16;
 const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', 'log_top', 'leaves', 'planks', 'cobble',
   'water', 'glass', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'bedrock', 'snow', 'snow_side',
-  'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side'];
+  'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -71,6 +71,20 @@ const painters = {
   table_top: (x, y) => {
     const line = x === 0 || y === 0 || x === 15 || y === 15 || x === 7 || x === 8 || y === 7 || y === 8;
     return line ? jitter([92, 60, 30], 8, x, y, 66) : planks(x, y);
+  },
+  torch: (x, y) => {
+    if (x < 7 || x > 8) return [0, 0, 0, 0];
+    if (y < 2) return x === 7 ? [255, 235, 120, 255] : [255, 160, 40, 255];
+    if (y < 4) return [255, 200, 60, 255];
+    return jitter([122, 86, 44], 10, x, y, 70);
+  },
+  furnace_top: (x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? jitter([70, 70, 70], 8, x, y, 71) : stone(x, y).map((c) => c - 20)),
+  furnace_front: (x, y) => {
+    const edge = x === 0 || y === 0 || x === 15;
+    if (edge) return jitter([70, 70, 70], 8, x, y, 72);
+    if (x >= 4 && x <= 11 && y >= 8 && y <= 13) return (y > 10 && x > 5 && x < 10 && hash2(x, y, 73) > 0.4) ? [255, 150 + (hash2(x, y, 74) * 80) | 0, 30, 255] : [25, 25, 25, 255];
+    if (x >= 4 && x <= 11 && y >= 3 && y <= 5) return [30, 30, 30, 255];
+    return stone(x, y).map((c) => c - 15);
   },
   table_side: (x, y) => (y < 3 ? jitter([92, 60, 30], 8, x, y, 67) : (x === 7 || x === 8) ? jitter([120, 90, 50], 8, x, y, 68) : planks(x, y)),
 };

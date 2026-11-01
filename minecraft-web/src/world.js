@@ -46,6 +46,8 @@ export class World {
     this.modified = new Set();  // chunks editados (se conservan en memoria)
     this.unsaved = new Set();   // chunks editados desde el último guardado
     this.unloadT = 0;
+    this.torches = new Map();   // k -> Set de índices con antorchas
+    this._lm = null;
     this.onChunkMeshed = null;
   }
 
@@ -59,6 +61,7 @@ export class World {
       this.chunks.set(k, data);
       this.modified.add(k);
       this.computeTops(k, data);
+      this.scanTorches(k, data);
       return data;
     }
     const seed = this.seed;
@@ -136,6 +139,12 @@ export class World {
     return data;
   }
 
+  scanTorches(k, data) {
+    let set = null;
+    for (let i = 0; i < data.length; i++) if (data[i] === B.TORCH) (set || (set = new Set())).add(i);
+    if (set) this.torches.set(k, set); else this.torches.delete(k);
+  }
+
   computeTops(k, data) {
     const tops = new Int16Array(CS * CS).fill(-1);
     for (let lz = 0; lz < CS; lz++)
@@ -184,8 +193,15 @@ export class World {
     const c = this.chunks.get(k);
     if (!c) return false;
     const lx = x - cx * CS, lz = z - cz * CS;
-    c[this.idx(lx, y, lz)] = id;
+    const ii = this.idx(lx, y, lz), old = c[ii];
+    c[ii] = id;
     this.modified.add(k); this.unsaved.add(k);
+    if (old === B.TORCH || id === B.TORCH) {
+      let set = this.torches.get(k);
+      if (id === B.TORCH) { if (!set) this.torches.set(k, (set = new Set())); set.add(ii); }
+      else if (set) { set.delete(ii); if (!set.size) this.torches.delete(k); }
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) this.dirty.add(ckey(cx + a, cz + b));
+    }
     const tops = this.tops.get(k), ti = lz * CS + lx;
     if (OPAQUE[id]) { if (y > tops[ti]) tops[ti] = y; }
     else if (y === tops[ti]) {
@@ -279,8 +295,8 @@ export class World {
     if (!data) return;
     const x0 = cx * CS, z0 = cz * CS;
     const lists = [
-      { pos: [], nor: [], uv: [], col: [], ind: [] }, // opaco
-      { pos: [], nor: [], uv: [], col: [], ind: [] }, // transparente
+      { pos: [], nor: [], uv: [], col: [], bl: [], ind: [] }, // opaco
+      { pos: [], nor: [], uv: [], col: [], bl: [], ind: [] }, // transparente
     ];
     const get = (wx, wy, wz) => {
       const lx = wx - x0, lz = wz - z0;
@@ -289,7 +305,39 @@ export class World {
     };
     const eps = 0.0015;
     const cell = [0, 0, 0], tmp = [0, 0, 0];
-    const ao = [0, 0, 0, 0], lg = [0, 0, 0, 0];
+    const ao = [0, 0, 0, 0], lg = [0, 0, 0, 0], bg = [0, 0, 0, 0];
+
+    // Luz de antorchas: relleno por anchura sobre los 3x3 chunks vecinos
+    const LW = CS * 3, lmx0 = x0 - CS, lmz0 = z0 - CS;
+    let lm = null;
+    const seeds = [];
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const set = this.torches.get(ckey(cx + a, cz + b));
+      if (set) for (const i of set) seeds.push([(cx + a) * CS + (i % CS), Math.floor(i / (CS * CS)), (cz + b) * CS + (Math.floor(i / CS) % CS)]);
+    }
+    if (seeds.length) {
+      lm = this._lm || (this._lm = new Uint8Array(LW * LW * CH));
+      lm.fill(0);
+      const li = (x, y, z) => (y * LW + (z - lmz0)) * LW + (x - lmx0);
+      const q = [];
+      for (const [x, y, z] of seeds) { lm[li(x, y, z)] = 10; q.push(x, y, z); }
+      const D = [1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1];
+      for (let h = 0; h < q.length; h += 3) {
+        const x = q[h], y = q[h + 1], z = q[h + 2], l = lm[li(x, y, z)] - 1;
+        if (l <= 0) continue;
+        for (let d = 0; d < 18; d += 3) {
+          const nx = x + D[d], ny = y + D[d + 1], nz = z + D[d + 2];
+          if (ny < 0 || ny >= CH || nx < lmx0 || nx >= lmx0 + LW || nz < lmz0 || nz >= lmz0 + LW) continue;
+          if (OPAQUE[get(nx, ny, nz)]) continue;
+          const ni = li(nx, ny, nz);
+          if (lm[ni] < l) { lm[ni] = l; q.push(nx, ny, nz); }
+        }
+      }
+    }
+    const bAt = (x, y, z) => {
+      if (!lm || y < 0 || y >= CH || x < lmx0 || x >= lmx0 + LW || z < lmz0 || z >= lmz0 + LW) return 0;
+      return Math.pow(lm[(y * LW + (z - lmz0)) * LW + (x - lmx0)] / 10, 1.7);
+    };
 
     for (let y = 0; y < CH; y++)
       for (let lz = 0; lz < CS; lz++)
@@ -299,6 +347,21 @@ export class World {
           const def = BLOCKS[id];
           const L = def.transparent ? lists[1] : lists[0];
           const wx = x0 + lx, wz = z0 + lz;
+          if (def.torch) {
+            const u0 = (TILE_INDEX.torch + 7 / 16) / TILE_COUNT, u1 = (TILE_INDEX.torch + 9 / 16) / TILE_COUNT;
+            for (const f of FACES) {
+              if (f.bottom) continue;
+              const n = L.pos.length / 3;
+              for (const c of f.corners) {
+                L.pos.push(lx + 7 / 16 + c.p[0] * 2 / 16, y + c.p[1] * 10 / 16, lz + 7 / 16 + c.p[2] * 2 / 16);
+                L.nor.push(f.dir[0], f.dir[1], f.dir[2]);
+                L.uv.push(u0 + (u1 - u0) * c.uv[0], 6 / 16 + (10 / 16) * c.uv[1]);
+                L.col.push(0.8, 0.8, 0.8); L.bl.push(1);
+              }
+              L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
+            }
+            continue;
+          }
           for (const f of FACES) {
             const nx = wx + f.dir[0], ny = y + f.dir[1], nz = wz + f.dir[2];
             const nid = get(nx, ny, nz);
@@ -306,6 +369,7 @@ export class World {
             const tile = TILE_INDEX[f.top ? def.tiles[0] : f.bottom ? def.tiles[1] : def.tiles[2]];
             const [ta, tb] = f.tan;
             const centerL = (ny < CH ? this.skyLit(nx, ny, nz) : 1);
+            const centerB = bAt(nx, ny, nz);
             // AO y luz por vértice
             for (let ci = 0; ci < 4; ci++) {
               const p = f.corners[ci].p;
@@ -314,12 +378,16 @@ export class World {
               tmp[0] = nx; tmp[1] = ny; tmp[2] = nz; tmp[ta] += sa;
               const o1 = OPAQUE[get(tmp[0], tmp[1], tmp[2])];
               const l1 = o1 ? centerL : this.skyLit(tmp[0], tmp[1], tmp[2]);
+              const b1 = o1 ? centerB : bAt(tmp[0], tmp[1], tmp[2]);
               tmp[0] = nx; tmp[1] = ny; tmp[2] = nz; tmp[tb] += sb;
               const o2 = OPAQUE[get(tmp[0], tmp[1], tmp[2])];
               const l2 = o2 ? centerL : this.skyLit(tmp[0], tmp[1], tmp[2]);
+              const b2 = o2 ? centerB : bAt(tmp[0], tmp[1], tmp[2]);
               tmp[0] = nx; tmp[1] = ny; tmp[2] = nz; tmp[ta] += sa; tmp[tb] += sb;
               const oc = OPAQUE[get(tmp[0], tmp[1], tmp[2])];
               const lc = (o1 && o2) || oc ? centerL : this.skyLit(tmp[0], tmp[1], tmp[2]);
+              const bc = (o1 && o2) || oc ? centerB : bAt(tmp[0], tmp[1], tmp[2]);
+              bg[ci] = (centerB + b1 + b2 + bc) / 4;
               ao[ci] = o1 && o2 ? 0 : 3 - (o1 + o2 + oc);
               lg[ci] = (centerL + l1 + l2 + lc) / 4;
             }
@@ -333,6 +401,7 @@ export class World {
               L.uv.push((tile + (c.uv[0] ? 1 - eps : eps)) / TILE_COUNT, c.uv[1] ? 1 - eps : eps);
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
               L.col.push(v, v, v);
+              L.bl.push(f.shade * AO[ao[ci]] * bg[ci]);
             }
             if (ao[0] + ao[3] > ao[1] + ao[2]) L.ind.push(n, n + 1, n + 3, n, n + 3, n + 2);
             else L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
@@ -349,6 +418,7 @@ export class World {
       geo.setAttribute('normal', new THREE.Float32BufferAttribute(L.nor, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(L.uv, 2));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(L.col, 3));
+      geo.setAttribute('blight', new THREE.Float32BufferAttribute(L.bl, 1));
       geo.setIndex(L.ind);
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
