@@ -299,6 +299,7 @@ function drawHUD() {
   }
   if (G.mode === 'sandbox') {
     drawSbHUD();
+    if (G.nights) drawNightsHUD();
     return;
   }
   // --- progreso de la tripulación y lista de tareas (arriba a la izquierda)

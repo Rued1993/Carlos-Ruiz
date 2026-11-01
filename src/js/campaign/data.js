@@ -218,6 +218,42 @@ const LEVELS = [
       { k: 'boss', need: 1, text: 'Derrota al Alfa' },
     ],
   },
+  {
+    id: 'L16',
+    name: 'Primera Hoguera',
+    mode: 'sandbox',
+    cfg: { nights: true },
+    par: 300,
+    desc: 'Te has perdido en un bosque cerrado. Cae la tarde: tala madera, mantén viva la hoguera y aguanta tu primera noche. Algo te observa entre los árboles.',
+    goals: [
+      { k: 'feed', need: 6, text: 'Echa 6 de madera a la hoguera' },
+      { k: 'night', need: 1, text: 'Sobrevive 1 noche' },
+    ],
+  },
+  {
+    id: 'L17',
+    name: 'Niños Perdidos',
+    mode: 'sandbox',
+    cfg: { nights: true, kids: 2 },
+    par: 420,
+    desc: 'Dos niños se adentraron en el bosque. Encuéntralos (E para que te sigan) y llévalos a la luz de la hoguera antes de que el Ciervo los encuentre a ellos.',
+    goals: [
+      { k: 'rescue', need: 2, text: 'Rescata a 2 niños' },
+      { k: 'night', need: 1, text: 'Sobrevive 1 noche' },
+    ],
+  },
+  {
+    id: 'L18',
+    name: 'Noches del Ciervo',
+    mode: 'sandbox',
+    cfg: { nights: true, kids: 3 },
+    par: 760,
+    desc: 'El Ciervo ya conoce tu olor. Cada noche es más rápido. Mantén el fuego, rescata a los niños y no le des la espalda.',
+    goals: [
+      { k: 'rescue', need: 3, text: 'Rescata a 3 niños' },
+      { k: 'night', need: 3, text: 'Sobrevive 3 noches' },
+    ],
+  },
 ];
 const CHAPTERS = [
   {

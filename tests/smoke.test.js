@@ -858,9 +858,80 @@ const check = (name, cond, extra = '') => {
   const sum = await until(() => G.zs.length >= 3, 20000);
   const dr = await ev(() => ({ dyn: R3.dyn, on: SAVE.dynRes }));
   check(
-    '15 niveles, el Alfa convoca zombis y la resolución dinámica está activa',
-    nb.n === 15 && nb.ids === 'L13,L14,L15' && sum && dr.on && dr.dyn >= 0.55 && dr.dyn <= 1,
+    '18 niveles, el Alfa convoca zombis y la resolución dinámica está activa',
+    nb.n === 18 && nb.ids.startsWith('L13,L14,L15') && sum && dr.on && dr.dyn >= 0.55 && dr.dyn <= 1,
     JSON.stringify(nb) + JSON.stringify(dr) + sum
+  );
+
+  console.log('Las 99 Noches');
+  const n9 = await ev(() => {
+    CAMP = { kind: 'level', idx: 16, def: LEVELS[16] };
+    launchMission(LEVELS[16]);
+    G.intro = 0;
+    scene = 'play';
+    const o = { nights: G.nights, kids: G.kids.length, lv: LEVELS.length };
+    const f = G.fire;
+    G.player.x = f.x + 40;
+    G.player.y = f.y;
+    G.inv.madera = 5;
+    G.fire.fuel = 20;
+    nightsInteract();
+    o.fed = G.fire.fuel > 60 && G.inv.madera < 5;
+    const k = G.kids[0];
+    k.x = G.player.x + 20;
+    k.y = G.player.y;
+    nightsInteract();
+    o.follow = k.kstate === 'follow';
+    nightsTick(0.05);
+    o.safe = k.kstate === 'safe';
+    G.sbT = CYCLE * 0.7;
+    G.dark = 0.86;
+    G.deer = null;
+    updDeer(0.05, true);
+    o.deer = !!G.deer;
+    if (G.deer) {
+      G.deer.x = G.player.x + 600;
+      G.deer.y = G.player.y;
+      CAM.yaw = 0;
+      G.player.aim = 0;
+      updDeer(0.05, true);
+      o.frozen = G.deer.frozen;
+      CAM.yaw = Math.PI;
+      G.player.aim = Math.PI;
+      const x0 = G.deer.x;
+      updDeer(0.2, true);
+      o.moves = !G.deer.frozen && G.deer.x !== x0;
+    }
+    return o;
+  });
+  await wait(1200);
+  const n9b = await ev(() => ({ fire3d: !!(R3.n99 && R3.n99.fire.visible), deer3d: !!R3.n99 }));
+  check(
+    'Las 99 Noches: hoguera, niños que te siguen y se salvan, Ciervo que se congela al mirarlo',
+    n9.nights &&
+      n9.kids === 2 &&
+      n9.lv === 18 &&
+      n9.fed &&
+      n9.follow &&
+      n9.safe &&
+      n9.deer &&
+      n9.frozen &&
+      n9.moves &&
+      n9b.fire3d,
+    JSON.stringify(n9) + JSON.stringify(n9b)
+  );
+  const n9c = await ev(() => {
+    sbNights = true;
+    gmode = 'sandbox';
+    newGame();
+    const o = { endless: G.nightsEndless, kids: G.kids.length };
+    sbNights = false;
+    return o;
+  });
+  check(
+    'Partida libre con la variante 99 Noches',
+    n9c.endless && n9c.kids === 4,
+    JSON.stringify(n9c)
   );
 
   console.log('Fallback 2D');

@@ -185,6 +185,43 @@ const MOODS = {
         });
     },
   ],
+  night99: [
+    0.9,
+    (s, t) => {
+      if (s % 8 === 0)
+        tone(NOTE(31), 7, {
+          type: 'sawtooth',
+          vol: 0.05,
+          attack: 2,
+          filter: 220,
+          at: t,
+          bus: A.mus,
+        });
+      if (s % 8 === 4)
+        tone(NOTE(32), 6, { type: 'sine', vol: 0.09, attack: 1.5, at: t, bus: A.mus, verb: 0.6 });
+      if (s % 11 === 5)
+        tone(NOTE(70 + [0, 1, 6][((s / 11) % 3) | 0]), 2.6, {
+          type: 'triangle',
+          vol: 0.025,
+          attack: 1,
+          at: t,
+          bus: A.mus,
+          verb: 1,
+        });
+      if (s % 17 === 9) {
+        // búho lejano
+        tone(420, 0.35, { type: 'sine', vol: 0.03, slide: -60, at: t, bus: A.mus, verb: 0.8 });
+        tone(400, 0.5, {
+          type: 'sine',
+          vol: 0.03,
+          slide: -70,
+          at: t + 0.45,
+          bus: A.mus,
+          verb: 0.8,
+        });
+      }
+    },
+  ],
   sand_night: [
     0.8,
     (s, t) => {
@@ -207,7 +244,8 @@ function currentMood() {
     return 'menu';
   if (!G || !['play', 'task', 'sab', 'craft', 'cams', 'pause', 'shop'].includes(scene)) return null;
   if (G.mode === 'zombie') return G.wave && G.wave.state === 'run' ? 'zombie' : 'zombie_calm';
-  if (G.mode === 'sandbox') return G.dark > 0.5 ? 'sand_night' : 'sand_day';
+  if (G.mode === 'sandbox')
+    return G.dark > 0.5 ? (G.nights ? 'night99' : 'sand_night') : 'sand_day';
   return G.sab ? 'sab' : 'classic';
 }
 function musicTick() {

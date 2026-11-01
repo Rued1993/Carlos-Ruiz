@@ -108,6 +108,7 @@ const RECIPES = [
     table: true,
   },
 ];
+let SBFOREST = false;
 let GR = null,
   OB = null,
   TREES = null,
@@ -358,7 +359,7 @@ function buildWorld() {
         r = hash(x, y, seed + 7),
         f = vnoise(x / 10, y / 10, seed + 9);
       if (g == G_GRASS) {
-        const tp = f > 0.56 ? 0.16 : 0.012;
+        const tp = SBFOREST ? (f > 0.5 ? 0.12 : 0.035) : f > 0.56 ? 0.16 : 0.012;
         if (r < tp && x > 2 && y > 2 && x < WW - 3 && y < WH - 3 && !logNear(x, y)) {
           OB[i] = O_LOG;
           TREES.set(i, { x, y, logs: 4 });
@@ -396,6 +397,7 @@ function sbStand(x, y) {
 }
 function newSandbox(cfg) {
   if (!TEX) buildTex();
+  SBFOREST = !!((cfg && cfg.nights) || (!cfg && sbNights));
   buildWorld();
   const ps = COLORS.map((c, i) => ({
     id: i,
@@ -523,6 +525,8 @@ function newSandbox(cfg) {
     bannerT: 7,
   };
   seedAnimals();
+  cfg = cfg || (sbNights ? NIGHTS_FREE : {});
+  if (cfg.nights) initNights(cfg);
   scene = 'play';
   startDrone();
   beep(300, 0.5, 'sine', 0.08, 200);
@@ -755,6 +759,7 @@ function sbInteract() {
   const g = G,
     p = g.player;
   if (scene !== 'play') return;
+  if (nightsInteract()) return;
   const bx = SPAWN.x * TS + TS / 2,
     by = (SPAWN.y - 1) * TS + TS / 2;
   if (dist(p, { x: bx, y: by }) < TS * 2.4) {
@@ -869,7 +874,7 @@ function updSandbox(dt) {
   else g.mine = null;
   // tripulación amiga
   for (const n of g.ps) {
-    if (n.isP) continue;
+    if (n.isP || n.kid) continue;
     n.moving = false;
     if (n.pause > 0) {
       n.pause -= dt;
@@ -961,6 +966,7 @@ function updSandbox(dt) {
   for (const z of g.zs) if (z.hp <= 0 && z.hurt) mevent('zkill');
   g.zs = g.zs.filter(z => z.hp > 0 && Math.hypot(z.x - p.x, z.y - p.y) < 1300);
   updSurvival(dt);
+  if (g.nights) nightsTick(dt);
   growSaplings(dt);
   updWeather(dt);
   g.regT += dt;
@@ -1071,7 +1077,7 @@ function drawSbWorld() {
         ctx.fillRect(q.x - 16, q.y - 40, 32 * Math.max(0, q.hp / q.max), 4);
       }
     } else {
-      drawCrew(q.x, q.y, q.color, q.face, q.step, 1, 1, q.moving, g.t + q.id);
+      drawCrew(q.x, q.y, q.color, q.face, q.step, 1, q.scale || 1, q.moving, g.t + q.id);
       const l = q.isP ? q.name + ' (Tú)' : q.name;
       ctx.font = 'bold 12px system-ui';
       const w = ctx.measureText(l).width + 10;
@@ -1081,6 +1087,7 @@ function drawSbWorld() {
       txt(l, q.x, q.y - 43, 12, '#fff', 'center');
     }
   }
+  if (g.nights) drawNights2D();
   // copas de árboles (por encima de los jugadores)
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = 0.9;

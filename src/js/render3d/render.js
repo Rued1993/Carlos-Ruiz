@@ -154,6 +154,16 @@ function updSandbox3D() {
       l.distance = 320;
     } else l.intensity = 0;
   });
+  if (g.nights) {
+    // ambiente del bosque: niebla cerrada y verdosa, noche casi negra; solo la hoguera ilumina
+    R3.scene.fog.near *= 0.55;
+    R3.scene.fog.far *= 1 - 0.4 * k;
+    R3.scene.fog.color.lerp(new THREE.Color(0x0a1410), k * 0.7);
+    R3.scene.background.copy(R3.scene.fog.color);
+    L.hemi.intensity *= 1 - 0.55 * k;
+    L.amb.intensity *= 1 - 0.6 * k;
+    L.sun.intensity *= 1 - 0.5 * k;
+  }
   R3.sbBtn.material.emissiveIntensity = 1.1 + 0.5 * Math.sin(t * 5);
   const T = sbTarget();
   sb.hl.visible = scene === 'play';
@@ -210,6 +220,7 @@ function render3D() {
   updCamera3D();
   if (G.mode === 'sandbox') updSandbox3D();
   else updClassic3D();
+  syncNights3D();
   syncEnts();
   if (G.animals) syncAnimals();
   syncPet();

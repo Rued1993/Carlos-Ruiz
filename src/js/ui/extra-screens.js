@@ -52,17 +52,17 @@ function drawWardrobe() {
   endUI();
 }
 function drawAchievements() {
-  beginUI(760, 560);
+  beginUI(760, 600);
   titleGlow('LOGROS', 380, 40, 36, '#ffd740');
   const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
   txt(`${done} / ${ACHIEVEMENTS.length} desbloqueados`, 380, 74, 14, '#9fb3c8', 'center');
   ACHIEVEMENTS.forEach((a, i) => {
     const x = 24 + (i % 2) * 368,
-      y = 96 + Math.floor(i / 2) * 48,
+      y = 92 + Math.floor(i / 2) * 44,
       ok = !!SAVE.ach[a.id],
       pr = achProgress(a);
     ctx.fillStyle = ok ? 'rgba(60,50,10,.85)' : 'rgba(14,22,40,.85)';
-    rr(x, y, 356, 42, 8);
+    rr(x, y, 356, 40, 8);
     ctx.fill();
     ctx.strokeStyle = ok ? '#ffd740' : 'rgba(120,150,200,.35)';
     ctx.lineWidth = 1.5;
@@ -82,12 +82,12 @@ function drawAchievements() {
   txt(
     `Zombis: ${s.zkill || 0}  ·  Tareas: ${s.task || 0}  ·  Bloques: ${s.place || 0}  ·  Animales: ${s.animal || 0}  ·  Oleadas: ${s.wave || 0}`,
     380,
-    520,
+    546,
     12,
     '#9fb3c8',
     'center',
     false
   );
-  uiBtn(30, 524, 110, 30, '‹ Volver', '#444', () => (scene = 'menu'), 14);
+  uiBtn(30, 560, 110, 30, '‹ Volver', '#444', () => (scene = 'menu'), 14);
   endUI();
 }

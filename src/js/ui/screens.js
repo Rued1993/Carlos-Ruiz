@@ -159,23 +159,42 @@ function drawFree() {
       },
       16
     );
-  (gmode == 'sandbox'
+  if (gmode === 'sandbox')
+    uiBtn(
+      225,
+      254,
+      250,
+      40,
+      'Variante: ' + (sbNights ? '🔥 Las 99 Noches' : 'Normal'),
+      sbNights ? '#7a3a14' : '#3a4a6a',
+      () => {
+        sbNights = !sbNights;
+      },
+      16
+    );
+  (gmode == 'sandbox' && sbNights
     ? [
-        'WASD: mover · Clic izq: picar/talar/atacar · Clic der o F: construir',
-        'E: interactuar · C: crafteo · G: comer · 1-0: elegir bloque · Shift: correr',
-        'Mundo abierto con árboles, minas, cofres, día y noche con zombis.',
+        'Sobrevive noche tras noche en un bosque cerrado. E: echar madera a la hoguera',
+        'El Ciervo acecha en la oscuridad: se congela mientras lo miras y teme la luz.',
+        'Rescata a los 4 niños perdidos y llévalos a la hoguera. ¿Llegarás a 99?',
       ]
-    : gmode == 'zombie'
+    : gmode == 'sandbox'
       ? [
-          'WASD: mover · Clic / Espacio: disparar · 1-2-3: cambiar arma · E: registrar bolsas',
-          'Oleada 1: huye sin arma (o encuentra una escondida). Oleada 2: recibes pistola.',
-          'Sobrevive 5 oleadas y escapa en la cápsula. ¡Bate tu mejor tiempo!',
+          'WASD: mover · Clic izq: picar/talar/atacar · Clic der o F: construir',
+          'E: interactuar · C: crafteo · G: comer · 1-0: elegir bloque · Shift: correr',
+          'Mundo abierto con árboles, minas, cofres, día y noche con zombis.',
         ]
-      : [
-          'WASD: mover · E / Espacio: usar · R: reportar · M: voz en juntas',
-          'Impostor: Q matar · V ventilación · F sabotaje',
-          'Tripulante: completa tareas, repara sabotajes y vota. Cámaras en Seguridad.',
-        ]
+      : gmode == 'zombie'
+        ? [
+            'WASD: mover · Clic / Espacio: disparar · 1-2-3: cambiar arma · E: registrar bolsas',
+            'Oleada 1: huye sin arma (o encuentra una escondida). Oleada 2: recibes pistola.',
+            'Sobrevive 5 oleadas y escapa en la cápsula. ¡Bate tu mejor tiempo!',
+          ]
+        : [
+            'WASD: mover · E / Espacio: usar · R: reportar · M: voz en juntas',
+            'Impostor: Q matar · V ventilación · F sabotaje',
+            'Tripulante: completa tareas, repara sabotajes y vota. Cámaras en Seguridad.',
+          ]
   ).forEach((l, i) => txt(l, 350, 330 + i * 24, 14, '#cfe0f5', 'center', false));
   uiBtn(
     30,
@@ -192,7 +211,7 @@ function drawFree() {
   endUI();
 }
 function drawLevels() {
-  beginUI(760, 540);
+  beginUI(760, 640);
   titleGlow('MODO NIVELES', 380, 44, 36, '#6fb8ff');
   txt(`★ ${totalStars()} / ${LEVELS.length * 3}`, 380, 78, 16, '#ffd740', 'center');
   LEVELS.forEach((L, i) => {
@@ -204,7 +223,7 @@ function drawLevels() {
       st = SAVE.stars[L.id] || 0;
     panel(x, y, w, h, st ? '#ffd740' : un ? 'rgba(120,170,230,.7)' : 'rgba(80,90,110,.5)');
     txt(String(i + 1), x + 14, y + 18, 18, '#9fb3c8', 'left');
-    txt(MODE_ICON[L.mode], x + w - 18, y + 20, 22, '#fff', 'center');
+    txt(L.cfg.nights ? '🔥' : MODE_ICON[L.mode], x + w - 18, y + 20, 22, '#fff', 'center');
     txt(L.name, x + w / 2, y + 54, 15, un ? '#fff' : '#667', 'center');
     if (un) {
       stars3(st, x + w / 2, y + 88, 26);
@@ -213,7 +232,7 @@ function drawLevels() {
   });
   uiBtn(
     30,
-    492,
+    604,
     140,
     34,
     '‹ Volver',

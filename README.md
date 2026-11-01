@@ -15,8 +15,9 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | Modo | Descripción |
 |---|---|
 | **Historia** | 5 capítulos con cinemáticas, voz y jefe final (`src/js/campaign/`). |
-| **Niveles** | 15 retos con objetivos y 3 estrellas por tiempo (nuevos: *Herrero*, *Código Rojo*, *La Horda*). |
+| **Niveles** | 18 retos con objetivos y 3 estrellas por tiempo (nuevos: *Herrero*, *Código Rojo*, *La Horda* y las misiones del bosque 🔥 *Primera Hoguera*, *Niños Perdidos*, *Noches del Ciervo*). |
 | **Partida libre** | Impostor clásico, Supervivencia Zombi o Mundo cubo (tipo Minecraft). |
+| **Las 99 Noches** 🔥 | Variante del Mundo cubo (Partida libre → Mundo cubo → Variante): bosque cerrado, hoguera que hay que alimentar con madera (`E`), el Ciervo que acecha de noche (se congela mientras lo miras y teme la luz), 4 niños perdidos que rescatar y contador de noches con récord. |
 | **Tareas (clásico)** | Números, cables, deslizador, interruptores, mantener, más *código de rumbo* (teclado) y *alinear motor* (secuencia de colores tipo Simón). |
 
 ### Controles

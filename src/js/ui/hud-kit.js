@@ -38,6 +38,15 @@ const poly = pts => {
   ctx.fill();
 };
 const ICONS = {
+  flame() {
+    ctx.beginPath();
+    ctx.moveTo(0, -0.5);
+    ctx.bezierCurveTo(0.2, -0.2, 0.42, 0, 0.36, 0.2);
+    ctx.bezierCurveTo(0.3, 0.42, 0.14, 0.5, 0, 0.5);
+    ctx.bezierCurveTo(-0.14, 0.5, -0.3, 0.42, -0.36, 0.2);
+    ctx.bezierCurveTo(-0.42, 0, -0.1, -0.1, 0, -0.5);
+    ctx.fill();
+  },
   heart() {
     ctx.beginPath();
     ctx.moveTo(0, 0.42);
