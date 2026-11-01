@@ -16,6 +16,7 @@ const SAVE = (() => {
     volS: 1,
     hat: 0,
     visor: 0,
+    pet: 0,
     fps: false,
     stats: {},
     ach: {},

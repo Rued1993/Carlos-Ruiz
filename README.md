@@ -42,7 +42,9 @@ música y vista 3D/2D.
   armadura, munición…), zombis *tanque*, *bomba* y *escupidor*, botín, puntos con combo y récord.
 - **Mundo cubo:** hambre, animales, horno y carne asada, cama (duerme de noche), brotes que crecen
   hasta ser árboles, lluvia con tormentas, cielo con sol, luna, estrellas y nubes.
-- **Meta-juego:** armario (7 sombreros y 5 visores), 18 logros con estadísticas, reto diario y
+- **HUD:** kit propio (paneles de cristal, iconos vectoriales, barras con estela de daño, botones circulares con tecla y recarga, mira dinámica con marca de impacto e indicador de dirección del daño, minimapa con cono de visión).
+- **Personajes:** cuerpo en forma de judía con oclusión horneada, visor de cristal con marco y reflejos, mochila redondeada con tira de luz, botas, zombis con garras, ojos brillantes y heridas, Alfa con púas, y 3 mascotas que te siguen.
+- **Meta-juego:** armario (7 sombreros, 5 visores y 3 mascotas), 18 logros con estadísticas, reto diario y
   contador de FPS.
 - **Audio:** motor Web Audio con reverb, efectos con estéreo según la posición y música adaptativa
   distinta por ambiente (menú, cinemática, nave, sabotaje, zombis, día y noche). Volúmenes ajustables.

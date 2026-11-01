@@ -416,71 +416,66 @@ function drawCut(dt) {
 function drawMissionHUD() {
   const M = G.M;
   if (!M || M.over) return;
-  const x = 12,
-    y = G.mode === 'classic' ? 156 : G.mode === 'zombie' ? 108 : 160,
-    h = 44 + M.goals.length * 21;
-  ctx.fillStyle = 'rgba(8,10,28,.7)';
-  rr(x, y, 290, h, 10);
-  ctx.fill();
-  ctx.strokeStyle = CAMP && CAMP.kind === 'story' ? '#e57cff' : '#6fb8ff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  txt(
-    '★ ' + M.def.name,
-    x + 12,
-    y + 16,
-    14,
-    CAMP && CAMP.kind === 'story' ? '#e8a0ff' : '#9fd0ff',
-    'left'
+  const story = CAMP && CAMP.kind === 'story',
+    acc = story ? '#e57cff' : '#6fb8ff',
+    x = 14,
+    y = G.mode === 'classic' ? 14 + 64 + p0TaskRows() * 24 + 10 : G.mode === 'zombie' ? 118 : 154,
+    h = 40 + M.goals.length * 26,
+    rem = M.def.limit ? M.def.limit - M.t : null;
+  glass(x, y, 300, h, story ? 'rgba(229,124,255,.45)' : 'rgba(111,184,255,.45)', 14);
+  icon('star', x + 20, y + 20, 17, acc);
+  txt(M.def.name, x + 36, y + 20, 14, acc, 'left');
+  chip(
+    x + 300 - 78,
+    y + 8,
+    rem !== null ? fmtT(Math.max(0, rem)) : fmtT(M.t),
+    'clock',
+    rem !== null && rem < 30 ? '#ff5252' : '#ffd54f',
+    12
   );
-  const rem = M.def.limit ? M.def.limit - M.t : null;
-  txt(
-    rem !== null ? `⏱ ${fmtT(Math.max(0, rem))}` : `⏱ ${fmtT(M.t)}`,
-    x + 278,
-    y + 16,
-    14,
-    rem !== null && rem < 30 ? '#ff5252' : '#ffd740',
-    'right'
-  );
-  M.goals.forEach((g, i) =>
-    txt(
-      (g.done ? '✔ ' : '○ ') + g.text + (g.need > 1 && !g.done ? ` (${g.cur}/${g.need})` : ''),
-      x + 12,
-      y + 40 + i * 21,
-      13,
-      g.done ? '#7dff9a' : '#fff',
-      'left',
-      false
-    )
-  );
+  M.goals.forEach((g, i) => {
+    const gy = y + 48 + i * 26;
+    icon(g.done ? 'check' : 'dot', x + 22, gy, 14, g.done ? '#6fe08a' : '#cfd8dc');
+    txt(g.text, x + 38, gy - 3, 12, g.done ? '#7fcf95' : '#fff', 'left', false);
+    if (g.need > 1 && !g.done) {
+      ctx.fillStyle = 'rgba(255,255,255,.14)';
+      rr(x + 38, gy + 6, 190, 4, 2);
+      ctx.fill();
+      ctx.fillStyle = acc;
+      rr(x + 38, gy + 6, (190 * g.cur) / g.need, 4, 2);
+      ctx.fill();
+      txt(`${g.cur}/${g.need}`, x + 290, gy + 2, 11, '#9fb3c8', 'right', false);
+    }
+  });
   const boss = G.zs && G.zs.find(z => z.boss);
   if (boss) {
-    const bw = Math.min(380, W * 0.5);
-    ctx.fillStyle = 'rgba(0,0,0,.65)';
-    rr(W / 2 - bw / 2 - 6, 78, bw + 12, 26, 8);
+    const bw = Math.min(400, W * 0.5);
+    glass(W / 2 - bw / 2 - 10, 84, bw + 20, 34, 'rgba(255,60,60,.5)', 17);
+    icon('skull', W / 2 - bw / 2 + 12, 101, 18, '#ff6a5a');
+    ctx.fillStyle = 'rgba(0,0,0,.5)';
+    rr(W / 2 - bw / 2 + 30, 94, bw - 24, 14, 7);
     ctx.fill();
-    ctx.fillStyle = '#b71c1c';
-    rr(W / 2 - bw / 2, 82, bw * Math.max(0, boss.hp / boss.max), 18, 6);
+    const g = ctx.createLinearGradient(0, 94, 0, 108);
+    g.addColorStop(0, '#ff5a4a');
+    g.addColorStop(1, '#8a1a14');
+    ctx.fillStyle = g;
+    rr(W / 2 - bw / 2 + 30, 94, Math.max(8, (bw - 24) * Math.max(0, boss.hp / boss.max)), 14, 7);
     ctx.fill();
-    txt('ALFA', W / 2, 92, 12, '#fff', 'center');
+    txt('ALFA', W / 2 + 6, 101, 11, '#fff', 'center');
   }
+}
+/** Número de filas de tareas del HUD clásico (para colocar el panel de misión debajo). */
+function p0TaskRows() {
+  return G.player.tasks.length;
 }
 function drawPauseBtn() {
   if (scene !== 'play' || G.intro > 0) return;
-  ctx.fillStyle = 'rgba(0,0,0,.55)';
-  rr(W - 44, 134, 32, 32, 8);
-  ctx.fill();
-  txt('II', W - 28, 150, 15, '#fff', 'center');
-  addHit(
-    W - 44,
-    134,
-    32,
-    32,
-    () => {
-      scene = 'pause';
-    },
-    false
-  );
+  const x = W - 52,
+    y = 150,
+    hov = Math.hypot(mouse.x - (x + 18), mouse.y - (y + 18)) < 20;
+  glass(x, y, 36, 36, hov ? 'rgba(255,255,255,.8)' : 'rgba(140,180,240,.4)', 18);
+  icon('pause', x + 18, y + 18, 18, '#fff');
+  addHit(x, y, 36, 36, () => (scene = 'pause'), false);
 }
 function drawPause() {
   ctx.fillStyle = 'rgba(0,0,0,.62)';

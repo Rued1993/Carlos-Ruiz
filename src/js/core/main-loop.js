@@ -7,6 +7,8 @@ let last = performance.now();
 let fpsAvg = 60;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
+  HUDS.dt = dt;
+  if (HUDS.hitMark > 0) HUDS.hitMark -= dt;
   last = now;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   hits.length = 0;
@@ -60,6 +62,7 @@ function frame(now) {
       drawHUD();
       drawMissionHUD();
       drawCrosshair();
+      drawDamageIndicator();
       drawObjectiveMarkers();
       drawStaminaBar();
       drawPauseBtn();

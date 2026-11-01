@@ -45,7 +45,7 @@ function makeHat(i) {
       g.add(m);
       return m;
     };
-  g.position.y = 60;
+  g.position.y = 62;
   if (i === 1) {
     add(new THREE.SphereGeometry(13, 16, 10, 0, 6.283, 0, 1.45), st(0xd32f2f), 0, 0, 1);
     add(new THREE.BoxGeometry(18, 2, 12), st(0xb71c1c), 0, 0, 12);
@@ -104,6 +104,79 @@ function makeHat(i) {
     add(new THREE.CylinderGeometry(12, 12, 1.6, 20), st(0x1a1a1f), 0, 0, 0);
     add(new THREE.CylinderGeometry(8, 8.5, 16, 20), st(0x1a1a1f), 0, 8, 0);
     add(new THREE.CylinderGeometry(8.6, 8.6, 3, 20), st(0xb71c1c), 0, 3, 0);
+  }
+  return g;
+}
+
+const PETS = ['Ninguna', 'Cubito', 'Robot', 'Fantasma'];
+/** Mascota flotante que sigue al jugador. */
+function makePet(i) {
+  const g = new THREE.Group(),
+    st = (col, o) =>
+      new THREE.MeshStandardMaterial(
+        Object.assign({ color: col, roughness: 0.4, metalness: 0.3 }, o || {})
+      );
+  if (i === 1) {
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(9, 9, 9),
+      st(0x0b3a4a, { emissive: 0x20c8ff, emissiveIntensity: 0.9 })
+    );
+    cube.castShadow = true;
+    g.add(cube);
+    g.add(
+      new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(9.6, 9.6, 9.6)),
+        new THREE.LineBasicMaterial({ color: new THREE.Color(0.5, 2, 3) })
+      )
+    );
+    g.userData.spin = true;
+  } else if (i === 2) {
+    const body = new THREE.Mesh(
+      new THREE.SphereGeometry(5.2, 18, 14),
+      st(0xdfe6ee, { metalness: 0.7, roughness: 0.25 })
+    );
+    body.castShadow = true;
+    g.add(body);
+    for (const sx of [-2, 2]) {
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 8, 6),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.6, 3.4) })
+      );
+      eye.scale.set(0.9, 1.3, 0.5);
+      eye.position.set(sx, 0.8, 4.6);
+      g.add(eye);
+    }
+    const an = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 5, 6), st(0x888888));
+    an.position.y = 7.2;
+    g.add(an);
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(1.4, 8, 6),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.6, 0.5) })
+    );
+    bulb.position.y = 10;
+    g.add(bulb);
+  } else if (i === 3) {
+    const m = st(0xeaf4ff, {
+      transparent: true,
+      opacity: 0.78,
+      emissive: 0x6a8aff,
+      emissiveIntensity: 0.35,
+      roughness: 0.3,
+    });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(5.2, 16, 12), m);
+    g.add(head);
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(5.2, 9, 14), m);
+    tail.position.y = -6;
+    tail.rotation.x = Math.PI;
+    g.add(tail);
+    for (const sx of [-2, 2]) {
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.9, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0x10131c })
+      );
+      eye.position.set(sx, 0.8, 4.4);
+      g.add(eye);
+    }
   }
   return g;
 }

@@ -42,6 +42,7 @@
   "src/js/campaign/stage.js",
   "src/js/ui/screens.js",
   "src/js/ui/extra-screens.js",
+  "src/js/ui/hud-kit.js",
   "src/js/ui/hud-extras.js",
   "src/js/core/music.js",
   "src/js/core/main-loop.js",

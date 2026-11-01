@@ -290,52 +290,6 @@ function drawWorld() {
     ctx.fillRect(0, 0, W, H);
   }
 }
-function drawMinimap() {
-  const s = 0.07,
-    w = 2400 * s,
-    h = 1600 * s,
-    x0 = W - w - 12,
-    y0 = 12;
-  ctx.fillStyle = 'rgba(0,0,0,.65)';
-  ctx.fillRect(x0 - 4, y0 - 4, w + 8, h + 8);
-  ctx.strokeStyle = 'rgba(255,255,255,.2)';
-  ctx.strokeRect(x0 - 4, y0 - 4, w + 8, h + 8);
-  ctx.fillStyle = '#6b7a8c';
-  for (const r of ALL) ctx.fillRect(x0 + r[0] * s, y0 + r[1] * s, r[2] * s, r[3] * s);
-  if (!G.player.imp)
-    G.player.tasks.forEach(t => {
-      if (!t.done) {
-        const st = STATIONS[t.st];
-        ctx.fillStyle = '#ffd740';
-        ctx.fillRect(x0 + st.x * s - 3, y0 + st.y * s - 3, 6, 6);
-      }
-    });
-  for (const f of fixPts()) {
-    ctx.fillStyle = Math.sin(G.t * 8) > 0 ? '#f33' : '#811';
-    ctx.fillRect(x0 + f.x * s - 4, y0 + f.y * s - 4, 8, 8);
-  }
-  if (G.player.imp)
-    VENTS.forEach(v => {
-      ctx.fillStyle = '#f88';
-      ctx.fillRect(x0 + v.x * s - 2, y0 + v.y * s - 2, 4, 4);
-    });
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(x0 + G.player.x * s, y0 + G.player.y * s, 4, 0, 6.3);
-  ctx.fill();
-  if (G.mode === 'zombie') {
-    ctx.fillStyle = '#f33';
-    for (const z of G.zs) {
-      ctx.fillRect(x0 + z.x * s - 2, y0 + z.y * s - 2, 4, 4);
-    }
-    if (G.pod) {
-      ctx.fillStyle = '#4f8';
-      ctx.beginPath();
-      ctx.arc(x0 + POD.x * s, y0 + POD.y * s, 6, 0, 6.3);
-      ctx.fill();
-    }
-  }
-}
 function drawHUD() {
   const p = G.player,
     pulse = 0.5 + 0.5 * Math.sin(G.t * 6);
@@ -347,43 +301,36 @@ function drawHUD() {
     drawSbHUD();
     return;
   }
-  const bw = Math.min(300, W * 0.4);
-  ctx.fillStyle = 'rgba(0,0,0,.6)';
-  rr(12, 12, bw + 8, 30, 8);
-  ctx.fill();
-  ctx.fillStyle = '#2e9d4a';
-  rr(16, 16, Math.max(0, (bw * G.done) / G.total), 22, 6);
-  ctx.fill();
-  ctx.strokeStyle = '#fff6';
-  ctx.lineWidth = 2;
-  rr(16, 16, bw, 22, 6);
-  ctx.stroke();
-  txt('TAREAS', 26, 27, 13, '#fff', 'left');
-  ctx.fillStyle = 'rgba(0,0,0,.55)';
-  rr(12, 48, 280, 18 + p.tasks.length * 20, 8);
-  ctx.fill();
-  txt(
-    p.imp ? 'IMPOSTOR — tareas falsas:' : 'Tus tareas:',
+  // --- progreso de la tripulación y lista de tareas (arriba a la izquierda)
+  const rows = p.tasks.length,
+    panelH = 64 + rows * 24;
+  glass(14, 14, 300, panelH, p.imp ? 'rgba(255,90,74,.5)' : 'rgba(111,224,138,.4)', 14);
+  hudBar(
+    'crew',
+    24,
     22,
+    280,
+    24,
+    G.done,
+    G.total,
+    '#43b05a',
+    'check',
+    Math.round((100 * G.done) / G.total) + '%'
+  );
+  txt(
+    p.imp ? 'IMPOSTOR · tareas falsas' : 'TUS TAREAS',
+    28,
     62,
-    13,
-    p.imp ? '#ff5252' : '#ffd740'
+    11,
+    p.imp ? '#ff8a80' : '#ffd54f',
+    'left'
   );
-  p.tasks.forEach((t, i) =>
-    txt(
-      (t.done ? '✔ ' : '• ') +
-        STATIONS[t.st].name +
-        ' (' +
-        roomOf(STATIONS[t.st].x, STATIONS[t.st].y) +
-        ')',
-      22,
-      84 + i * 20,
-      13,
-      t.done ? '#6fcf73' : p.imp ? '#e88' : '#fff',
-      'left',
-      false
-    )
-  );
+  p.tasks.forEach((t, i) => {
+    const y = 82 + i * 24;
+    icon(t.done ? 'check' : 'dot', 34, y, 14, t.done ? '#6fe08a' : p.imp ? '#e88' : '#ffd54f');
+    txt(STATIONS[t.st].name, 50, y, 13, t.done ? '#7a9a80' : '#fff', 'left', false);
+    txt(roomOf(STATIONS[t.st].x, STATIONS[t.st].y), 302, y, 11, '#7f93a8', 'right', false);
+  });
   drawMinimap();
   if (G.sab) {
     const s = G.sab,
@@ -391,120 +338,120 @@ function drawHUD() {
         s.type == 'lights'
           ? 'LUCES APAGADAS — repáralas en Eléctrico'
           : `REACTOR CRÍTICO ${Math.ceil(s.t)}s — paneles en Reactor y Motores`;
-    ctx.fillStyle = `rgba(160,0,0,${0.6 + 0.3 * pulse})`;
-    rr(W / 2 - 230, 12, 460, 40, 10);
+    glass(W / 2 - 250, 14, 500, 44, `rgba(255,70,60,${0.5 + 0.4 * pulse})`, 12);
+    ctx.fillStyle = `rgba(160,0,0,${0.35 + 0.25 * pulse})`;
+    rr(W / 2 - 250, 14, 500, 44, 12);
     ctx.fill();
-    txt('⚠ ' + msg, W / 2, 32, 15, '#fff', 'center');
+    icon('bolt', W / 2 - 226, 36, 22, '#ffd54f');
+    txt(msg, W / 2 + 10, 36, 15, '#fff', 'center');
   } else if (G.doorsT > 0) {
-    ctx.fillStyle = 'rgba(160,0,0,.7)';
-    rr(W / 2 - 150, 12, 300, 36, 10);
-    ctx.fill();
-    txt('⚠ PUERTAS BLOQUEADAS ' + Math.ceil(G.doorsT) + 's', W / 2, 30, 15, '#fff', 'center');
+    glass(W / 2 - 160, 14, 320, 40, `rgba(255,70,60,${0.5 + 0.4 * pulse})`, 12);
+    icon('bolt', W / 2 - 134, 34, 20, '#ffd54f');
+    txt('PUERTAS BLOQUEADAS ' + Math.ceil(G.doorsT) + 's', W / 2 + 10, 34, 15, '#fff', 'center');
   }
-  if (G.toastT > 0) {
-    ctx.font = 'bold 18px system-ui';
-    const w = ctx.measureText(G.toast).width + 40;
-    ctx.fillStyle = 'rgba(0,0,0,.6)';
-    rr(W / 2 - w / 2, H - 130, w, 38, 6);
-    ctx.fill();
-    txt(G.toast, W / 2, H - 111, 18, '#fff', 'center');
-  }
+  drawToast(H - 150);
   if (p.inVent !== null)
-    txt(
-      'EN VENTILACIÓN — ← → cambiar conducto · V / USAR salir',
-      W / 2,
-      H - 60,
-      16,
+    chip(
+      W / 2 - 190,
+      H - 110,
+      'EN VENTILACIÓN · ← → cambiar conducto · V / E salir',
+      'vent',
       '#ff9090',
-      'center'
+      13
     );
-  const bs = Math.min(88, W * 0.17),
-    bx = W - bs - 14,
-    by = H - bs - 14;
-  const btn = (x, y, label, sub, on, col, fn) => {
-    ctx.globalAlpha = on ? 1 : 0.32;
-    const g = ctx.createRadialGradient(
-      x + bs * 0.4,
-      y + bs * 0.35,
-      4,
-      x + bs / 2,
-      y + bs / 2,
-      bs / 2
-    );
-    g.addColorStop(0, shade(col, 0.3));
-    g.addColorStop(1, shade(col, -0.4));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x + bs / 2, y + bs / 2, bs / 2, 0, 6.3);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    txt(label, x + bs / 2, y + bs / 2 - 6, bs > 76 ? 15 : 12, '#fff', 'center');
-    txt(sub, x + bs / 2, y + bs / 2 + 13, 11, '#fff', 'center', false);
-    ctx.globalAlpha = 1;
-    if (on) addHit(x, y, bs, bs, fn, false);
-  };
-  const canUse = G.nearFix || G.nearSt != null || G.nearCam || G.nearBtn || p.inVent !== null;
-  btn(bx, by, p.inVent !== null ? 'SALIR' : 'USAR', '[E]', !!canUse, '#3a7bd5', doUse);
-  btn(bx - bs - 8, by, 'REPORTAR', '[R]', !!G.nearBody, '#e0a020', doReport);
+  const r = Math.min(44, W * 0.085),
+    bx = W - r - 16,
+    by = H - r - 16,
+    canUse = G.nearFix || G.nearSt != null || G.nearCam || G.nearBtn || p.inVent !== null;
+  actionBtn(
+    bx,
+    by,
+    r,
+    p.inVent !== null ? 'SALIR' : 'USAR',
+    'E',
+    'touch',
+    !!canUse,
+    '#3a7bd5',
+    doUse
+  );
+  actionBtn(
+    bx - r * 2 - 10,
+    by,
+    r,
+    'REPORTAR',
+    'R',
+    'megaphone',
+    !!G.nearBody,
+    '#e0a020',
+    doReport
+  );
   if (p.imp && p.alive) {
-    btn(
+    actionBtn(
       bx,
-      by - bs - 8,
-      p.kcd > 0 ? Math.ceil(p.kcd) + 's' : 'MATAR',
-      p.kcd > 0 ? 'espera' : '[Q]',
+      by - r * 2 - 10,
+      r,
+      'MATAR',
+      'Q',
+      'dagger',
       p.kcd <= 0 && !!G.nearVic,
       '#c62828',
-      doKill
+      doKill,
+      p.kcd > 0 ? p.kcd / KCD : 0
     );
-    btn(
-      bx - bs - 8,
-      by - bs - 8,
+    actionBtn(
+      bx - r * 2 - 10,
+      by - r * 2 - 10,
+      r,
       'VENT',
-      '[V]',
+      'V',
+      'vent',
       G.nearVent !== null || p.inVent !== null,
       '#7b4a9a',
       toggleVent
     );
     const can = !G.sab && G.doorsT <= 0 && G.sabCD <= 0;
-    btn(
-      bx - 2 * bs - 16,
+    actionBtn(
+      bx - r * 4 - 20,
       by,
-      G.sabCD > 0 ? Math.ceil(G.sabCD) + 's' : 'SABOTAJE',
-      '[F]',
+      r,
+      'SABOTAJE',
+      'F',
+      'bolt',
       can && p.inVent === null,
       '#a04020',
-      openSabMenu
+      openSabMenu,
+      G.sabCD > 0 ? G.sabCD / 35 : 0
     );
   }
   if (!p.alive && G.deadT <= 0)
-    txt('Eres un fantasma: completa tareas y observa', W / 2, H - 30, 16, '#cfd8dc', 'center');
+    chip(
+      W / 2 - 200,
+      H - 60,
+      'Eres un fantasma: completa tareas y observa',
+      'skull',
+      '#cfd8dc',
+      13
+    );
   if (G.deadT > 0) {
-    ctx.fillStyle = 'rgba(120,0,0,.55)';
-    ctx.fillRect(0, H / 2 - 60, W, 120);
-    txt('HAS SIDO ELIMINADO', W / 2, H / 2 - 10, 40, '#fff', 'center');
+    const g2 = ctx.createLinearGradient(0, 0, W, 0);
+    g2.addColorStop(0, 'rgba(120,0,0,0)');
+    g2.addColorStop(0.2, 'rgba(120,0,0,.65)');
+    g2.addColorStop(0.8, 'rgba(120,0,0,.65)');
+    g2.addColorStop(1, 'rgba(120,0,0,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, H / 2 - 64, W, 128);
+    txt('HAS SIDO ELIMINADO', W / 2, H / 2 - 12, 40, '#fff', 'center');
     txt(
       'Sigues como fantasma y puedes completar tareas',
       W / 2,
       H / 2 + 30,
       18,
-      '#fff',
+      '#ffd0d0',
       'center',
       false
     );
   }
-  if (joy && joy.active) {
-    ctx.strokeStyle = '#fff7';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(joy.sx, joy.sy, 50, 0, 6.3);
-    ctx.stroke();
-    ctx.fillStyle = '#fff6';
-    ctx.beginPath();
-    ctx.arc(joy.sx + (joy.vx || 0) * 50, joy.sy + (joy.vy || 0) * 50, 22, 0, 6.3);
-    ctx.fill();
-  }
+  drawJoystick();
   if (G.intro > 0) drawIntro();
 }
 function drawIntro() {

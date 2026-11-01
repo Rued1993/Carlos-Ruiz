@@ -147,6 +147,78 @@ function buildClassic3D(scene) {
   walls.instanceMatrix.needsUpdate = true;
   walls.instanceColor.needsUpdate = true;
   scene.add(walls);
+  // tuberías pegadas a las paredes, tiras guía en los pasillos y marcos luminosos en las puertas
+  {
+    const pipes = [],
+      dirs = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ];
+    for (const c of cells) {
+      if ((c[0] * 5 + c[1] * 3) % 4 !== 0) continue;
+      for (const [dx, dz] of dirs) {
+        const a = c[0] + dx,
+          b = c[1] + dz;
+        if (a >= 0 && b >= 0 && a < nx && b < ny && wk[b * nx + a]) {
+          pipes.push([c[0] * C + 5 + dx * 6.5, c[1] * C + 5 + dz * 6.5, dx !== 0]);
+          break;
+        }
+      }
+    }
+    const pm = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(2.6, 2.6, C, 8),
+      mat('#7b8696', { roughness: 0.35, metalness: 0.85 }),
+      pipes.length
+    );
+    const d2 = new THREE.Object3D();
+    pipes.forEach((q, k) => {
+      d2.position.set(q[0], 72, q[1]);
+      d2.rotation.set(q[2] ? Math.PI / 2 : 0, 0, q[2] ? 0 : Math.PI / 2);
+      d2.updateMatrix();
+      pm.setMatrixAt(k, d2.matrix);
+    });
+    pm.castShadow = true;
+    pm.instanceMatrix.needsUpdate = true;
+    scene.add(pm);
+    const dashes = [],
+      posts = [];
+    for (const r of CORR) {
+      const horiz = r[2] > r[3];
+      for (let t = 18; t < (horiz ? r[2] : r[3]) - 8; t += 36)
+        dashes.push(horiz ? [r[0] + t, r[1] + r[3] / 2, 1] : [r[0] + r[2] / 2, r[1] + t, 0]);
+      for (const e of horiz ? [r[0], r[0] + r[2]] : [r[1], r[1] + r[3]])
+        for (const o of horiz ? [r[1], r[1] + r[3]] : [r[0], r[0] + r[2]])
+          posts.push(horiz ? [e, o] : [o, e]);
+    }
+    const gm = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(14, 1, 2.6),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.4, 0.3) }),
+      dashes.length
+    );
+    dashes.forEach((q, k) => {
+      d2.position.set(q[0], 0.9, q[1]);
+      d2.rotation.set(0, q[2] ? 0 : Math.PI / 2, 0);
+      d2.updateMatrix();
+      gm.setMatrixAt(k, d2.matrix);
+    });
+    gm.instanceMatrix.needsUpdate = true;
+    scene.add(gm);
+    const fm = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(4, 96, 4),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 2, 3) }),
+      posts.length
+    );
+    posts.forEach((q, k) => {
+      d2.position.set(q[0], 48, q[1]);
+      d2.rotation.set(0, 0, 0);
+      d2.updateMatrix();
+      fm.setMatrixAt(k, d2.matrix);
+    });
+    fm.instanceMatrix.needsUpdate = true;
+    scene.add(fm);
+  }
   // tiras de luz HDR en la cara interior de los muros (brillan con el bloom)
   {
     const strips = cells.filter(

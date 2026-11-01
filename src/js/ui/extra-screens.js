@@ -16,6 +16,9 @@ function refreshStagePlayer() {
   S.sc.remove(old);
   S.sc.add(m);
   S.models.Rojo = m;
+  if (S.pet) S.sc.remove(S.pet);
+  S.pet = SAVE.pet ? makePet(SAVE.pet) : null;
+  if (S.pet) S.sc.add(S.pet);
 }
 function drawWardrobe() {
   beginUI(700, 500);
@@ -27,19 +30,25 @@ function drawWardrobe() {
     txt(value, 350, y + 16, 20, '#fff', 'center');
     uiBtn(524, y - 6, 56, 44, '›', '#3a4a6a', () => step(1), 24);
   };
-  row(372, 'SOMBRERO', HATS[SAVE.hat | 0], d => {
+  row(318, 'SOMBRERO', HATS[SAVE.hat | 0], d => {
     SAVE.hat = (SAVE.hat + d + HATS.length) % HATS.length;
     saveGame();
     refreshStagePlayer();
     sfx.ui();
   });
-  row(436, 'VISOR', VISORS[SAVE.visor | 0].name, d => {
+  row(380, 'VISOR', VISORS[SAVE.visor | 0].name, d => {
     SAVE.visor = (SAVE.visor + d + VISORS.length) % VISORS.length;
     saveGame();
     refreshStagePlayer();
     sfx.ui();
   });
-  uiBtn(24, 460, 120, 30, '‹ Volver', '#444', () => (scene = 'menu'), 14);
+  row(442, 'MASCOTA', PETS[SAVE.pet | 0], d => {
+    SAVE.pet = (SAVE.pet + d + PETS.length) % PETS.length;
+    saveGame();
+    refreshStagePlayer();
+    sfx.ui();
+  });
+  uiBtn(24, 18, 120, 30, '‹ Volver', '#444', () => (scene = 'menu'), 14);
   endUI();
 }
 function drawAchievements() {

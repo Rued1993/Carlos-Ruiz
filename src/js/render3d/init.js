@@ -38,6 +38,8 @@ function rebuild3D() {
   R3.bodies.clear();
   R3.blood.clear();
   R3.dropM = null;
+  R3.pet = null;
+  R3.petI = -1;
   R3.animalM = null;
   R3.grM = null;
   R3.spitP = null;

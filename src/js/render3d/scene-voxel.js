@@ -33,17 +33,20 @@ function buildSandbox3D(scene) {
     bGeo = new THREE.BoxGeometry(TS, TS, TS),
     sb = (R3.sb = {});
   sb.g = TEX.g.map((c, i) => {
-    const m = new THREE.InstancedMesh(
-      gGeo,
-      new THREE.MeshStandardMaterial({
-        map: glTex(c, true, i == 0),
-        roughness: i == 0 ? 0.25 : 0.95,
-        metalness: i == 0 ? 0.1 : 0,
-        transparent: i == 0,
-        opacity: i == 0 ? 0.85 : 1,
-      }),
-      WW * WH
-    );
+    const tx = glTex(c, true, i == 0),
+      m = new THREE.InstancedMesh(
+        gGeo,
+        new THREE.MeshStandardMaterial({
+          map: tx,
+          bumpMap: i == 0 ? null : tx,
+          bumpScale: 1.1,
+          roughness: i == 0 ? 0.25 : 0.95,
+          metalness: i == 0 ? 0.1 : 0,
+          transparent: i == 0,
+          opacity: i == 0 ? 0.85 : 1,
+        }),
+        WW * WH
+      );
     m.receiveShadow = true;
     m.count = 0;
     m.frustumCulled = false;
@@ -52,11 +55,12 @@ function buildSandbox3D(scene) {
   });
   sb.o = [];
   for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
-    const m = new THREE.InstancedMesh(
-      bGeo,
-      new THREE.MeshStandardMaterial({ map: glTex(TEX.o[k], true), roughness: 0.9 }),
-      4000
-    );
+    const tx = glTex(TEX.o[k], true),
+      m = new THREE.InstancedMesh(
+        bGeo,
+        new THREE.MeshStandardMaterial({ map: tx, bumpMap: tx, bumpScale: 1.3, roughness: 0.85 }),
+        4000
+      );
     m.castShadow = true;
     m.receiveShadow = true;
     m.count = 0;

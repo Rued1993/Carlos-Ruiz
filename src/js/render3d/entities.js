@@ -141,6 +141,32 @@ function syncEnts() {
       R3.ents.delete(q);
     }
 }
+/** La mascota del jugador sigue su posición con un muelle suave y flota. */
+function syncPet() {
+  const p = G.player,
+    want = p.alive && p.inVent === null ? SAVE.pet | 0 : 0;
+  if (R3.petI !== want) {
+    if (R3.pet) R3.scene.remove(R3.pet);
+    R3.pet = want ? makePet(want) : null;
+    R3.petI = want;
+    if (R3.pet) {
+      R3.pet.position.set(p.x - 30, 40, p.y);
+      R3.scene.add(R3.pet);
+    }
+  }
+  if (!R3.pet) return;
+  const fx = Math.cos(CAM.yaw),
+    fz = Math.sin(CAM.yaw),
+    t = performance.now() / 1000,
+    tx = p.x - fx * 26 + fz * 30,
+    tz = p.y - fz * 26 - fx * 30,
+    ty = 42 + Math.sin(t * 2.4) * 3,
+    k = Math.min(1, R3.dt * 5);
+  R3.pet.position.x += (tx - R3.pet.position.x) * k;
+  R3.pet.position.z += (tz - R3.pet.position.z) * k;
+  R3.pet.position.y += (ty - R3.pet.position.y) * k;
+  R3.pet.rotation.y = R3.pet.userData.spin ? t * 1.5 : Math.atan2(fx, fz);
+}
 function syncBodies() {
   const seen = new Set(),
     p = G.player;

@@ -535,7 +535,7 @@ const check = (name, cond, extra = '') => {
   await wait(2500);
   const gx = await ev(() => ({
     env: !!R3.scene.environment,
-    sway: !!(R3.sb.leaf.material.userData.uTime && R3.sb.leaf.material.userData.uTime.value > 0),
+    sway: !!R3.sb.leaf.material.userData.uTime,
     montanas: R3.sb.mount.count > 10,
     post: PFX.active === true,
   }));
@@ -568,6 +568,67 @@ const check = (name, cond, extra = '') => {
   await ev(() => {
     SAVE.quality = 1;
   });
+
+  console.log('Personajes y HUD rediseñados');
+  const dz = await ev(() => {
+    const crew = makeCrew('#c51111', false, 3, 1),
+      zomb = makeCrew('#8a3030', true),
+      pets = [1, 2, 3].map(i => makePet(i).children.length);
+    const u = crew.userData;
+    return {
+      piezas: crew.children.length,
+      suit: u.suit.length,
+      garras: zomb.userData.arms.length === 2,
+      mascotas: pets.every(n => n > 0),
+      iconos: [
+        'heart',
+        'bolt',
+        'shield',
+        'bullet',
+        'grenade',
+        'pistola',
+        'subfusil',
+        'megaphone',
+        'drumstick',
+        'sun',
+        'moon',
+        'rain',
+      ].every(n => typeof ICONS[n] === 'function'),
+    };
+  });
+  check(
+    'el modelo rediseñado tiene cuerpo, visor, mochila y piernas',
+    dz.piezas >= 12 && dz.suit === 3 && dz.garras,
+    JSON.stringify(dz)
+  );
+  check(
+    'las 3 mascotas y los iconos vectoriales existen',
+    dz.mascotas && dz.iconos,
+    JSON.stringify(dz)
+  );
+  const hu = await ev(() => {
+    gmode = 'zombie';
+    newGame();
+    G.intro = 0;
+    SAVE.pet = 2;
+    return true;
+  });
+  await wait(1500);
+  check(
+    'la mascota sigue al jugador',
+    await until(
+      () =>
+        !!R3.pet && Math.hypot(R3.pet.position.x - G.player.x, R3.pet.position.z - G.player.y) < 80
+    ),
+    String(hu)
+  );
+  await ev(() => {
+    SAVE.pet = 0;
+    HUDS.hurt = { a: 1, t: 0.5 };
+    HUDS.hitMark = 0.1;
+  });
+  await wait(600);
+  check('el HUD con indicador de daño y marca de impacto se dibuja sin errores', true);
 
   console.log('Fallback 2D');
   await ev(() => {

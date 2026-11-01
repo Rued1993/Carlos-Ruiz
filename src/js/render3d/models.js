@@ -3,6 +3,133 @@
  */
 'use strict';
 
+/** Caja con esquinas redondeadas (extrusión de un rectángulo con bisel), centrada en el origen. */
+function roundBox(w, h, d, r) {
+  const sh = new THREE.Shape(),
+    x = -w / 2,
+    y = -h / 2;
+  sh.moveTo(x + r, y);
+  sh.lineTo(x + w - r, y);
+  sh.quadraticCurveTo(x + w, y, x + w, y + r);
+  sh.lineTo(x + w, y + h - r);
+  sh.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  sh.lineTo(x + r, y + h);
+  sh.quadraticCurveTo(x, y + h, x, y + h - r);
+  sh.lineTo(x, y + r);
+  sh.quadraticCurveTo(x, y, x + r, y);
+  const geo = new THREE.ExtrudeGeometry(sh, {
+    depth: d - 2,
+    bevelEnabled: true,
+    bevelThickness: 1,
+    bevelSize: 1,
+    bevelSegments: 2,
+    curveSegments: 6,
+  });
+  geo.translate(0, 0, -(d - 2) / 2);
+  return geo;
+}
+const _visorTex = {};
+/** Textura del cristal del visor: degradado, reflejos y (zombi) ojos brillantes con grietas. */
+function visorTexture(idx, zombie) {
+  const key = zombie ? 'z' : String(idx);
+  if (_visorTex[key]) return _visorTex[key];
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 160;
+  const x = c.getContext('2d'),
+    em = zombie ? 0xff2a1a : VISORS[idx].emissive,
+    hex = '#' + em.toString(16).padStart(6, '0'),
+    g = x.createLinearGradient(0, 0, 0, 160);
+  g.addColorStop(0, zombie ? '#1a0404' : '#04101a');
+  g.addColorStop(0.55, zombie ? '#4a0a08' : shade(hex, -0.55));
+  g.addColorStop(1, zombie ? '#8a1410' : shade(hex, -0.1));
+  x.fillStyle = g;
+  x.fillRect(0, 0, 256, 160);
+  if (zombie) {
+    x.fillStyle = '#ffdf60';
+    x.shadowColor = '#ff3020';
+    x.shadowBlur = 18;
+    for (const ex of [88, 168]) {
+      x.beginPath();
+      x.ellipse(ex, 82, 17, 11, ex < 128 ? 0.25 : -0.25, 0, 6.3);
+      x.fill();
+    }
+    x.shadowBlur = 0;
+    x.fillStyle = '#220000';
+    for (const ex of [92, 164]) {
+      x.beginPath();
+      x.ellipse(ex, 82, 4, 8, 0, 0, 6.3);
+      x.fill();
+    }
+    x.strokeStyle = 'rgba(255,200,180,.55)';
+    x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(30, 20);
+    x.lineTo(78, 62);
+    x.lineTo(70, 100);
+    x.moveTo(200, 14);
+    x.lineTo(176, 54);
+    x.lineTo(214, 96);
+    x.stroke();
+  } else {
+    x.fillStyle = 'rgba(255,255,255,.55)';
+    x.save();
+    x.translate(78, 38);
+    x.rotate(-0.35);
+    x.beginPath();
+    x.ellipse(0, 0, 54, 12, 0, 0, 6.3);
+    x.fill();
+    x.restore();
+    x.fillStyle = 'rgba(255,255,255,.28)';
+    x.save();
+    x.translate(196, 112);
+    x.rotate(-0.35);
+    x.beginPath();
+    x.ellipse(0, 0, 22, 5, 0, 0, 6.3);
+    x.fill();
+    x.restore();
+    x.strokeStyle = 'rgba(255,255,255,.3)';
+    x.lineWidth = 3;
+    x.beginPath();
+    x.arc(128, 80, 118, 0.25, 2.9);
+    x.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding;
+  return (_visorTex[key] = t);
+}
+/** Cuerpo en forma de judía (revolución suavizada) con oscurecimiento inferior horneado. */
+function beanGeometry() {
+  const pts = [
+    [0.01, -24.5],
+    [7, -25],
+    [12, -23.4],
+    [15.4, -18.5],
+    [16.7, -9],
+    [17.1, 2],
+    [16.9, 13],
+    [15.8, 21],
+    [13, 25.4],
+    [8, 27.4],
+    [0.01, 28],
+  ].map(p => new THREE.Vector2(p[0], p[1]));
+  const geo = new THREE.LatheGeometry(
+      new THREE.SplineCurve(pts)
+        .getPoints(40)
+        .map(v => new THREE.Vector2(Math.max(0.01, v.x), v.y)),
+      40
+    ),
+    pos = geo.attributes.position,
+    col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i),
+      t = clamp((y + 24) / 22, 0, 1),
+      f = 0.5 + 0.5 * t * t * (3 - 2 * t);
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = f;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
 function makeCrew(color, zombie, hat, visorIdx) {
   const g = new THREE.Group(),
     c = new THREE.Color(color),
@@ -12,19 +139,24 @@ function makeCrew(color, zombie, hat, visorIdx) {
     mats.push(m);
     return m;
   };
-  const suit = M({ color: c, roughness: 0.42, metalness: 0.18 }),
+  const rimC = zombie ? 0xff3a2a : 0x7fd0ff,
+    suit = M({ color: c, roughness: 0.42, metalness: 0.18 }),
+    suitV = M({ color: c, roughness: 0.4, metalness: 0.2, vertexColors: true }),
     dark = M({ color: c.clone().multiplyScalar(0.5), roughness: 0.6, metalness: 0.1 });
-  addRim(suit, zombie ? 0xff3a2a : 0x7fd0ff, zombie ? 0.85 : 0.5);
-  addRim(dark, zombie ? 0xff3a2a : 0x7fd0ff, zombie ? 0.6 : 0.3);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(16, 18, 8, 18), suit);
+  addRim(suit, rimC, zombie ? 0.85 : 0.5);
+  addRim(suitV, rimC, zombie ? 0.85 : 0.5);
+  addRim(dark, rimC, zombie ? 0.6 : 0.3);
+  const body = new THREE.Mesh(beanGeometry(), suitV);
   body.position.y = 36;
+  body.scale.set(1, 1, 0.95);
   body.castShadow = true;
   g.add(body);
   const belt = new THREE.Mesh(
-    new THREE.CylinderGeometry(16.4, 16.4, 3, 24),
+    new THREE.CylinderGeometry(17.3, 17.3, 2.6, 36),
     M({ color: 0x14161b, roughness: 0.8 })
   );
-  belt.position.y = 26;
+  belt.position.y = 28;
+  belt.scale.z = 0.95;
   g.add(belt);
   for (const sx of [-6, 6]) {
     const led = new THREE.Mesh(
@@ -33,66 +165,72 @@ function makeCrew(color, zombie, hat, visorIdx) {
         color: zombie ? new THREE.Color(3.2, 0.4, 0.3) : new THREE.Color(0.6, 2.4, 3.2),
       })
     );
-    led.position.set(sx, 31, 15.6);
+    led.position.set(sx, 32, 15.9);
     g.add(led);
   }
+  // visor: marco metálico + cristal con textura
   const visor = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 28, 18),
-    M(
-      zombie
-        ? {
-            color: 0x200404,
-            roughness: 0.2,
-            metalness: 0.4,
-            emissive: 0xa01010,
-            emissiveIntensity: 1.4,
-          }
-        : {
-            color: VISORS[visorIdx | 0].color,
-            roughness: 0.05,
-            metalness: 0.7,
-            emissive: VISORS[visorIdx | 0].emissive,
-            emissiveIntensity: 0.5,
-          }
-    )
-  );
-  visor.scale.set(12.5, 8.5, 8);
-  visor.position.set(0, 45, 11);
-  g.add(visor);
-  if (!zombie) {
-    const hl = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 12, 8),
+      new THREE.SphereGeometry(1, 110, 56, Math.PI / 2 - 1.1, 2.2, Math.PI / 2 - 0.85, 1.7),
       M({
-        color: 0xffffff,
+        map: visorTexture(visorIdx | 0, zombie),
+        emissiveMap: visorTexture(visorIdx | 0, zombie),
         emissive: 0xffffff,
-        emissiveIntensity: 0.9,
-        transparent: true,
-        opacity: 0.75,
+        emissiveIntensity: zombie ? 1.3 : 0.55,
+        roughness: 0.06,
+        metalness: 0.55,
+        envMapIntensity: 1.6,
       })
+    ),
+    frame = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 110, 56, Math.PI / 2 - 1.12, 2.24, Math.PI / 2 - 0.9, 1.8),
+      M({ color: c.clone().multiplyScalar(0.35), roughness: 0.3, metalness: 0.85 })
     );
-    hl.scale.set(4.5, 1.6, 1.2);
-    hl.position.set(-4, 48, 18);
-    hl.rotation.z = 0.3;
-    g.add(hl);
-  }
-  const pack = new THREE.Mesh(new THREE.BoxGeometry(22, 28, 11), dark);
+  visor.scale.set(13.6, 8.8, 14.4);
+  frame.scale.set(14.8, 9.8, 12.4);
+  visor.position.set(0, 45, 4);
+  frame.position.set(0, 45, 4);
+  g.add(frame, visor);
+  // mochila redondeada con tira de luz del color del traje
+  const pack = new THREE.Mesh(roundBox(21, 26, 9, 5), dark);
   pack.position.set(0, 36, -19);
   pack.castShadow = true;
   g.add(pack);
+  const strip = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 2, 0.8),
+    new THREE.MeshBasicMaterial({ color: c.clone().multiplyScalar(zombie ? 2 : 2.6) })
+  );
+  strip.position.set(0, 30, -23.7);
+  g.add(strip);
+  for (const sx of [-6, 6]) {
+    const tank = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.6, 2.6, 8, 10),
+      M({ color: 0x2a2f38, roughness: 0.35, metalness: 0.85 })
+    );
+    tank.position.set(sx, 51, -19);
+    g.add(tank);
+  }
   const legs = [];
   for (const sx of [-8, 8]) {
     const lg = new THREE.Group();
     lg.position.set(sx, 16, 0);
-    const l = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 6, 16, 14), dark);
-    l.position.y = -8;
+    const l = new THREE.Mesh(new THREE.CapsuleGeometry(6.6, 7, 6, 14), dark);
+    l.position.y = -6;
     l.castShadow = true;
     lg.add(l);
     const boot = new THREE.Mesh(
-      new THREE.BoxGeometry(12, 6, 16),
-      M({ color: 0x14161b, roughness: 0.8 })
+      new THREE.SphereGeometry(1, 14, 10),
+      M({ color: 0x1b1e25, roughness: 0.55, metalness: 0.3 })
     );
-    boot.position.set(0, -14, 2);
+    boot.scale.set(7.6, 5.2, 10.6);
+    boot.position.set(0, -14, 2.2);
+    boot.castShadow = true;
     lg.add(boot);
+    const sole = new THREE.Mesh(
+      new THREE.BoxGeometry(14.4, 1.4, 20),
+      M({ color: 0x0c0d11, roughness: 0.9 })
+    );
+    sole.position.set(0, -18.6, 2.2);
+    lg.add(sole);
     g.add(lg);
     legs.push(lg);
   }
@@ -106,9 +244,45 @@ function makeCrew(color, zombie, hat, visorIdx) {
       a.position.z = 14;
       a.castShadow = true;
       ag.add(a);
+      for (const cx of [-2.6, 0, 2.6]) {
+        const claw = new THREE.Mesh(
+          new THREE.ConeGeometry(1.3, 6, 5),
+          M({ color: 0xd8d4c0, roughness: 0.6 })
+        );
+        claw.rotation.x = Math.PI / 2;
+        claw.position.set(cx, 0, 31.5);
+        ag.add(claw);
+      }
       g.add(ag);
       arms.push(ag);
     }
+  if (zombie) {
+    for (const [wx, wy] of [
+      [-7, 40],
+      [8, 33],
+    ]) {
+      const w = new THREE.Mesh(
+        new THREE.CircleGeometry(3.6, 12),
+        new THREE.MeshBasicMaterial({
+          color: 0x4a0606,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+        })
+      );
+      w.position.set(wx, wy, 16.4);
+      g.add(w);
+    }
+    if (color === '#8a3030')
+      for (let k = 0; k < 5; k++) {
+        const sp = new THREE.Mesh(
+          new THREE.ConeGeometry(2.6, 12, 5),
+          M({ color: 0x2a1010, roughness: 0.7 })
+        );
+        sp.position.set((k - 2) * 4.4, 56 - Math.abs(k - 2) * 2, -23);
+        sp.rotation.x = -1.1;
+        g.add(sp);
+      }
+  }
   // arma en mano (modo zombi)
   const hold = new THREE.Group();
   hold.position.set(17, 34, 12);
@@ -155,7 +329,7 @@ function makeCrew(color, zombie, hat, visorIdx) {
     visor,
     mats,
     hold,
-    suit: [suit, dark],
+    suit: [suit, suitV, dark],
     wep: { bat, pis, sho, smg },
   };
   return g;

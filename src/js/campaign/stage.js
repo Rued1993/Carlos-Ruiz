@@ -327,6 +327,7 @@ function renderStage(dt) {
       stageSet('space', ['Rojo'], 'Rojo');
       S.models.Rojo.position.set(0, 0, 0);
       S.models.Rojo.rotation.set(0, 0, 0);
+      refreshStagePlayer();
     } else stageHome();
   }
   if (R3.w !== W || R3.h !== H) {
@@ -344,7 +345,7 @@ function renderStage(dt) {
       py = 64 + Math.sin(S.t * 0.3) * 4;
       pz = (S.focus === 'Alfa' ? 330 : 190) - Math.cos(S.t * 0.2) * 10;
       tx = foc.position.x;
-      ty = S.focus === 'Alfa' ? 110 : 48;
+      ty = S.focus === 'Alfa' ? 110 : scene === 'wardrobe' ? 12 : 48;
       tz = 0;
     } else {
       px = Math.sin(S.t * 0.15) * 80;
@@ -402,6 +403,11 @@ function renderStage(dt) {
     }
   }
   if (scene === 'wardrobe') S.models.Rojo.rotation.y = S.t * 0.7;
+  if (S.pet) {
+    S.pet.visible = scene === 'wardrobe';
+    S.pet.position.set(48, 40 + Math.sin(S.t * 2.2) * 3, 12);
+    if (S.pet.userData.spin) S.pet.rotation.y = S.t * 1.5;
+  }
   {
     const pa = S.bokeh.geometry.attributes.position;
     S.bokehSeed.forEach((b, i) => {

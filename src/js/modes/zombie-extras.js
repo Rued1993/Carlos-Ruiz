@@ -19,8 +19,9 @@ function dmgMul() {
   return 1 + 0.2 * ((G.up && G.up.dmg) || 0);
 }
 /** Daño al jugador reducido por la armadura. */
-function hurtPlayer(raw) {
+function hurtPlayer(raw, src) {
   const g = G;
+  if (src) HUDS.hurt = { a: Math.atan2(src.y - g.player.y, src.x - g.player.x), t: 0.9 };
   g.hp -= Math.max(1, Math.round(raw * (1 - 0.2 * ((g.up && g.up.armor) || 0))));
   g.flash = 0.5;
   g.shake = 0.3;
@@ -62,7 +63,7 @@ function explodeGrenade(gr) {
       move(z, Math.cos(a) * 30, Math.sin(a) * 30);
     }
   }
-  if (dist(p, gr) < 90) hurtPlayer(10);
+  if (dist(p, gr) < 90) hurtPlayer(10, gr);
 }
 /** Granadas y proyectiles ácidos. */
 function updExtras(dt) {
@@ -91,7 +92,7 @@ function updExtras(dt) {
     if (!walk(s.x, s.y)) s.life = 0;
     else if (p.alive && dist(s, p) < 20) {
       s.life = 0;
-      hurtPlayer(8 * diff().zdmg);
+      hurtPlayer(8 * diff().zdmg, s);
       burst(p.x, p.y, 8, '#9acd32', 140, 0.5);
     }
   }

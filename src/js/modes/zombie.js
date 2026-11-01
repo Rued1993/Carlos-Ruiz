@@ -26,8 +26,7 @@ const WAVES = [
 ];
 const POD = { x: 1850, y: 250 };
 const WORDER = ['bate', 'pistola', 'escopeta', 'subfusil'],
-  WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta', subfusil: 'Subfusil' },
-  WICON = { bate: '🏏', pistola: '🔫', escopeta: '💥', subfusil: '⚡' };
+  WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta', subfusil: 'Subfusil' };
 const MAG = { pistola: 12, escopeta: 6, subfusil: 30 };
 /** Color del zombi según su tipo. */
 function zColor(z) {
@@ -559,6 +558,7 @@ function updZombie(dt) {
         if (Math.hypot(z.x - b.x, z.y - b.y) < (z.boss ? 38 : 20)) {
           z.hp -= b.dmg;
           z.hurt = 0.15;
+          HUDS.hitMark = 0.16;
           b.life = 0;
           burst(z.x, z.y, 6, '#4a7a2a', 120);
           move(z, b.vx * 0.012, b.vy * 0.012);
@@ -617,7 +617,7 @@ function updZombie(dt) {
     if (z.bomb && d < 46 && p.alive) {
       z.hp = 0;
       z.selfDestruct = true;
-      if (d < 110) hurtPlayer(24 * diff().zdmg);
+      if (d < 110) hurtPlayer(24 * diff().zdmg, z);
       for (const o of g.zs) if (o !== z && dist(o, z) < 110) o.hp -= 40;
       g.flash = 0.7;
       g.shake = 0.6;
@@ -626,7 +626,7 @@ function updZombie(dt) {
       sfx.explosion(z.x, z.y);
     } else if (d < (z.boss ? 58 : z.tank ? 40 : 32) && z.cd <= 0 && p.alive) {
       z.cd = 0.9;
-      hurtPlayer((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg);
+      hurtPlayer((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg, z);
       burst(p.x, p.y, 8, '#7a0b0b', 160);
     }
   }
@@ -821,174 +821,179 @@ function drawZHUD() {
   const g = G,
     w = g.wave,
     pulse = 0.5 + 0.5 * Math.sin(g.t * 6);
-  ctx.fillStyle = 'rgba(0,0,0,.62)';
-  rr(W / 2 - 100, 10, 200, 60, 10);
-  ctx.fill();
-  txt('⏱ ' + fmtT(g.surv), W / 2, 30, 28, '#fff', 'center');
-  txt(
+  // --- cronómetro y oleadas (arriba al centro)
+  glass(W / 2 - 110, 10, 220, 66, 'rgba(255,170,80,.45)', 14);
+  icon('clock', W / 2 - 78, 30, 20, '#ffcc80');
+  txt(fmtT(g.surv), W / 2 + 6, 31, 28, '#fff', 'center');
+  const lab =
     w.state == 'wait'
       ? 'PREPÁRATE…'
       : w.state == 'break'
-        ? 'DESCANSO'
+        ? 'DESCANSO · [B] TIENDA'
         : w.state == 'escape'
           ? '¡ESCAPA!'
-          : `OLEADA ${w.n} / ${g.zc.waves}`,
-    W / 2,
-    54,
-    13,
-    '#ffb74d',
-    'center'
-  );
-  if (w.state == 'run') {
-    ctx.fillStyle = '#222';
-    rr(W / 2 - 90, 62, 180, 4, 2);
+          : `OLEADA ${w.n} / ${g.zc.waves}`;
+  txt(lab, W / 2, 54, 12, '#ffb74d', 'center');
+  for (let i = 0; i < g.zc.waves; i++) {
+    const done = i + 1 < w.n || (i + 1 === w.n && w.state === 'break'),
+      cur = i + 1 === w.n && w.state === 'run';
+    ctx.fillStyle = done ? '#6fe08a' : cur ? '#ffb74d' : 'rgba(255,255,255,.2)';
+    rr(W / 2 - 54 + i * (108 / g.zc.waves), 64, 108 / g.zc.waves - 4, 5, 2.5);
     ctx.fill();
-    ctx.fillStyle = '#ff7043';
-    rr(W / 2 - 90, 62, 180 * Math.min(1, w.t / w.len), 4, 2);
-    ctx.fill();
+    if (cur) {
+      ctx.fillStyle = '#ffd180';
+      rr(
+        W / 2 - 54 + i * (108 / g.zc.waves),
+        64,
+        (108 / g.zc.waves - 4) * Math.min(1, w.t / w.len),
+        5,
+        2.5
+      );
+      ctx.fill();
+    }
   }
-  ctx.fillStyle = 'rgba(0,0,0,.55)';
-  rr(12, 12, 300, 86, 8);
-  ctx.fill();
-  txt('Zombis: ' + g.zs.length, 24, 28, 14, '#ff8a80');
-  txt(
-    'Bajas: ' +
-      g.kills +
-      '  ·  Puntos: ' +
-      g.score +
-      '  ·  Fondos: ' +
-      g.cash +
-      (g.combo > 1 ? '  x' + (1 + g.combo * 0.25).toFixed(2) : ''),
-    24,
-    46,
-    14,
-    '#fff'
-  );
-  txt('Mejor tiempo: ' + fmtT(g.best), 24, 64, 13, '#9fb3c8', 'left', false);
+  // --- estadísticas (arriba a la izquierda)
+  glass(14, 14, 290, 92, 'rgba(255,90,74,.4)', 14);
+  icon('skull', 34, 34, 20, '#ff8a80');
+  txt(`${g.zs.length}`, 52, 35, 17, '#ff8a80', 'left');
+  txt(`bajas ${g.kills}`, 92, 35, 14, '#fff', 'left');
+  icon('star', 34, 60, 18, '#ffd54f');
+  txt(`${g.score}`, 52, 61, 16, '#ffd54f', 'left');
+  if (g.combo > 1) chip(130, 49, 'x' + (1 + g.combo * 0.25).toFixed(2), 'bolt', '#ffb74d', 12);
+  icon('coin', 34, 84, 18, '#ffe082');
+  txt(`${g.cash}`, 52, 85, 16, '#ffe082', 'left');
+  txt(`Récord ${fmtT(g.best)}`, 292, 85, 11, '#9fb3c8', 'right', false);
   txt(
     g.pod
-      ? 'Objetivo: llega a la cápsula (Navegación)'
+      ? 'Llega a la cápsula (Navegación)'
       : !g.wep
-        ? 'Busca bolsas escondidas con armas [E]'
+        ? 'Busca bolsas escondidas [E]'
         : 'Sobrevive a las ' + g.zc.waves + ' oleadas',
-    24,
-    84,
-    12,
-    '#ffd740',
-    'left',
+    292,
+    35,
+    11,
+    '#ffd180',
+    'right',
     false
   );
   drawMinimap();
-  // salud
-  ctx.fillStyle = 'rgba(0,0,0,.6)';
-  rr(12, H - 46, 244, 34, 8);
-  ctx.fill();
-  ctx.fillStyle = g.hp > 50 ? '#43a047' : g.hp > 25 ? '#fbc02d' : '#e53935';
-  rr(16, H - 42, Math.max(0, (236 * g.hp) / 100), 26, 6);
-  ctx.fill();
-  txt('❤ ' + Math.ceil(g.hp), 28, H - 29, 15, '#fff', 'left');
+  // --- salud, armadura y resistencia (abajo a la izquierda)
+  hudBar(
+    'hp',
+    16,
+    H - 48,
+    250,
+    30,
+    g.hp,
+    100,
+    g.hp > 50 ? '#43b05a' : g.hp > 25 ? '#e0b020' : '#e53935',
+    'heart',
+    Math.ceil(g.hp)
+  );
+  for (let i = 0; i < 2; i++)
+    icon('shield', 284 + i * 22, H - 33, 17, i < g.up.armor ? '#7fd0ff' : 'rgba(255,255,255,.18)');
+  if (g.stam !== undefined) {
+    ctx.fillStyle = 'rgba(0,0,0,.45)';
+    rr(16, H - 14, 250, 5, 2.5);
+    ctx.fill();
+    ctx.fillStyle = g.stamLock ? '#e57373' : '#ffd54f';
+    rr(16, H - 14, (250 * g.stam) / 100, 5, 2.5);
+    ctx.fill();
+  }
   if (g.hp < 35) {
     ctx.fillStyle = `rgba(150,0,0,${0.12 + 0.12 * pulse})`;
     ctx.fillRect(0, 0, W, H);
   }
-  // armas
+  // --- armas (abajo al centro)
+  const sw = 92,
+    gap = 8,
+    bw0 = WORDER.length * (sw + gap) - gap,
+    sx0 = W / 2 - bw0 / 2,
+    sy = H - 66;
   WORDER.forEach((k, i) => {
-    const x = W / 2 - 230 + i * 115,
-      y = H - 58,
-      own = g.weps[k];
+    const x = sx0 + i * (sw + gap),
+      own = g.weps[k],
+      sel = g.wep == k;
     ctx.globalAlpha = own ? 1 : 0.35;
-    ctx.fillStyle = g.wep == k ? 'rgba(255,200,60,.35)' : 'rgba(0,0,0,.6)';
-    rr(x, y, 108, 42, 8);
-    ctx.fill();
-    ctx.strokeStyle = g.wep == k ? '#ffd740' : '#fff4';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    txt(`${i + 1} ${WICON[k]} ${WNAME[k]}`, x + 54, y + 21, 13, '#fff', 'center');
+    glass(x, sy, sw, 54, sel ? 'rgba(255,213,79,.9)' : 'rgba(140,180,240,.3)', 10);
+    if (sel) {
+      ctx.fillStyle = 'rgba(255,213,79,.12)';
+      rr(x, sy, sw, 54, 10);
+      ctx.fill();
+    }
+    icon(k === 'bate' ? 'bat' : k, x + sw / 2, sy + 22, 46, sel ? '#ffe082' : '#cfd8dc');
+    txt(`${i + 1}`, x + 10, sy + 12, 11, '#9fb3c8', 'left');
+    txt(WNAME[k], x + sw / 2, sy + 44, 11, '#fff', 'center', false);
     ctx.globalAlpha = 1;
   });
   if (g.wep && g.wep != 'bate') {
     const mg = g.mags[g.wep] === undefined ? Math.min(magSize(g.wep), g.ammo) : g.mags[g.wep],
-      rs = g.mags[g.wep] === undefined ? g.ammo - mg : g.ammo;
+      rs = g.mags[g.wep] === undefined ? g.ammo - mg : g.ammo,
+      empty = mg === 0;
+    icon('bullet', W / 2 - 62, sy - 22, 20, empty ? '#ff5a4a' : '#ffd54f');
     txt(
-      `${g.reloadT > 0 ? 'Recargando…' : mg + ' / ' + rs}   [R] recargar`,
-      W / 2,
-      H - 70,
-      14,
-      '#ffd740',
-      'center'
+      g.reloadT > 0 ? 'RECARGANDO' : String(mg),
+      W / 2 - 46,
+      sy - 22,
+      24,
+      empty ? '#ff5a4a' : '#fff',
+      'left'
     );
+    txt('/ ' + rs, W / 2 + (g.reloadT > 0 ? 66 : 4), sy - 20, 15, '#9fb3c8', 'left', false);
     if (g.reloadT > 0) {
       const tot = g.reloadW === 'escopeta' ? 1.6 : 1.1;
-      ctx.fillStyle = 'rgba(0,0,0,.6)';
-      rr(W / 2 - 60, H - 86, 120, 6, 3);
+      ctx.fillStyle = 'rgba(0,0,0,.5)';
+      rr(W / 2 - 62, sy - 6, 124, 4, 2);
       ctx.fill();
-      ctx.fillStyle = '#ffd740';
-      rr(W / 2 - 60, H - 86, 120 * (1 - g.reloadT / tot), 6, 3);
+      ctx.fillStyle = '#ffd54f';
+      rr(W / 2 - 62, sy - 6, 124 * (1 - g.reloadT / tot), 4, 2);
       ctx.fill();
     }
   }
-  txt('Granadas: ' + g.gren + '  [G]', 268, H - 30, 13, g.gren ? '#ffb74d' : '#789', 'left');
-  if (g.wave.state === 'break' || g.wave.state === 'wait')
-    txt('[B] Tienda', W - 130, H - 156, 14, '#ffd740', 'center');
-  if (g.toastT > 0) {
-    ctx.font = 'bold 18px system-ui';
-    const tw = ctx.measureText(g.toast).width + 40;
-    ctx.fillStyle = 'rgba(0,0,0,.6)';
-    rr(W / 2 - tw / 2, H - 130, tw, 38, 6);
-    ctx.fill();
-    txt(g.toast, W / 2, H - 111, 18, '#fff', 'center');
-  }
-  // botones
-  const bs = Math.min(88, W * 0.17),
-    bx = W - bs - 14,
-    by = H - bs - 14;
-  const btn = (x, y, label, sub, on, col, fn) => {
-    ctx.globalAlpha = on ? 1 : 0.32;
-    const gr = ctx.createRadialGradient(
-      x + bs * 0.4,
-      y + bs * 0.35,
-      4,
-      x + bs / 2,
-      y + bs / 2,
-      bs / 2
-    );
-    gr.addColorStop(0, shade(col, 0.3));
-    gr.addColorStop(1, shade(col, -0.4));
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.arc(x + bs / 2, y + bs / 2, bs / 2, 0, 6.3);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    txt(label, x + bs / 2, y + bs / 2 - 6, bs > 76 ? 15 : 12, '#fff', 'center');
-    txt(sub, x + bs / 2, y + bs / 2 + 13, 11, '#fff', 'center', false);
-    ctx.globalAlpha = 1;
-    if (on) addHit(x, y, bs, bs, fn, false);
-  };
-  btn(bx, by, 'USAR', '[E]', !!(g.nearBag || g.nearPod || g.nearCam), '#3a7bd5', doUse);
-  btn(bx - bs - 8, by, 'DISPARAR', '[Espacio]', true, '#c62828', shootAuto);
-  btn(bx, by - bs - 8, 'ARMA', '[1-4]', true, '#6a5acd', cycleWep);
-  if (g.bannerT > 0) {
-    const a = Math.min(1, g.bannerT);
-    ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;
-    ctx.fillRect(0, H * 0.28, W, 110);
-    ctx.globalAlpha = a;
-    txt(g.banner, W / 2, H * 0.28 + 38, Math.min(44, W / 16), '#ff5252', 'center');
-    txt(g.bannerSub, W / 2, H * 0.28 + 82, Math.min(18, W / 32), '#fff', 'center', false);
-    ctx.globalAlpha = 1;
-  }
-  if (joy && joy.active) {
-    ctx.strokeStyle = '#fff7';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(joy.sx, joy.sy, 50, 0, 6.3);
-    ctx.stroke();
-    ctx.fillStyle = '#fff6';
-    ctx.beginPath();
-    ctx.arc(joy.sx + (joy.vx || 0) * 50, joy.sy + (joy.vy || 0) * 50, 22, 0, 6.3);
-    ctx.fill();
-  }
+  chip(
+    sx0 + bw0 + 16,
+    sy + 12,
+    'x' + g.gren + ' [G]',
+    'grenade',
+    g.gren ? '#ffb74d' : '#78909c',
+    13
+  );
+  drawToast(sy - 62);
+  // --- botones de acción
+  const r = Math.min(46, W * 0.085),
+    bx = W - r - 16,
+    by = H - r - 16,
+    st = g.wave.state;
+  actionBtn(
+    bx,
+    by,
+    r,
+    'USAR',
+    'E',
+    'touch',
+    !!(g.nearBag || g.nearPod || g.nearCam),
+    '#3a7bd5',
+    doUse
+  );
+  actionBtn(bx - r * 2 - 10, by, r, 'FUEGO', 'ESP', 'bullet', true, '#c62828', shootAuto);
+  actionBtn(bx, by - r * 2 - 10, r, 'ARMA', 'TAB', 'swap', true, '#6a5acd', cycleWep);
+  actionBtn(
+    bx - r * 2 - 10,
+    by - r * 2 - 10,
+    r,
+    'RECARGA',
+    'R',
+    'reload',
+    !!g.wep && g.wep != 'bate',
+    '#2e7d6a',
+    startReload,
+    g.reloadT > 0 ? g.reloadT / (g.reloadW === 'escopeta' ? 1.6 : 1.1) : 0
+  );
+  actionBtn(bx - r * 4 - 20, by, r, 'GRANADA', 'G', 'grenade', g.gren > 0, '#a0521e', throwGrenade);
+  if (st === 'break' || st === 'wait')
+    actionBtn(bx - r * 4 - 20, by - r * 2 - 10, r, 'TIENDA', 'B', 'bag', true, '#b8860b', openShop);
+  drawBanner(g.banner, g.bannerSub, '#ff5a4a', H * 0.26);
+  drawJoystick();
   if (g.intro > 0) drawZIntro();
 }
 function drawZEnd() {

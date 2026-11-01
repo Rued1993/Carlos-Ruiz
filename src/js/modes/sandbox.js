@@ -1131,127 +1131,93 @@ function itemIcon(k, x, y, s) {
   }
 }
 function drawSbHUD() {
-  const g = G;
-  // corazones
-  ctx.fillStyle = 'rgba(0,0,0,.5)';
-  rr(10, 10, 236, 34, 8);
-  ctx.fill();
-  for (let i = 0; i < 10; i++) {
-    const full = g.hp >= 2 * i + 2,
-      half = g.hp == 2 * i + 1;
-    ctx.font = '22px system-ui';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#3a1a1a';
-    ctx.fillText('♥', 16 + i * 22, 28);
-    ctx.fillStyle = full ? '#e53935' : half ? '#e57373' : 'rgba(0,0,0,0)';
-    if (full || half) ctx.fillText(full ? '♥' : '♥', 16 + i * 22, 28);
-    if (half) {
-      ctx.fillStyle = '#3a1a1a';
-      ctx.fillRect(16 + i * 22 + 11, 14, 12, 28);
-    }
-  }
-  // hambre
-  ctx.fillStyle = 'rgba(0,0,0,.5)';
-  rr(10, 48, 236, 28, 8);
-  ctx.fill();
-  for (let i = 0; i < 10; i++) {
-    const full = g.food >= 2 * i + 2,
-      half = g.food == 2 * i + 1;
-    ctx.globalAlpha = full ? 1 : half ? 0.7 : 0.22;
-    txt('🍗', 24 + i * 22, 63, 17, '#fff', 'center');
-  }
-  ctx.globalAlpha = 1;
-  // inventario / herramientas
-  ctx.fillStyle = 'rgba(0,0,0,.5)';
-  rr(10, 80, 236, 66, 8);
-  ctx.fill();
-  txt(
-    `Madera ${g.inv.madera}  Carbón ${g.inv.carbon}  Carne ${g.inv.carne}/${g.inv.asada}`,
-    20,
-    96,
-    13,
-    '#fff',
-    'left'
+  const g = G,
+    p = g.player;
+  // --- supervivencia (arriba a la izquierda)
+  glass(14, 14, 270, 142, 'rgba(111,224,138,.4)', 14);
+  iconRow(34, 36, 10, g.hp, 'heart', '#ff5a5a', 20, 23);
+  iconRow(34, 62, 10, g.food, 'drumstick', '#ffb74d', 19, 23);
+  chip(24, 80, 'Madera ' + g.inv.madera, 'block', '#d7a86e', 11);
+  chip(112, 80, 'Carbón ' + g.inv.carbon, 'coin', '#9aa5b1', 11);
+  chip(200, 80, g.inv.carne + '/' + g.inv.asada, 'drumstick', '#ff8a65', 11);
+  const tools = ['hacha', 'pico', 'espada'];
+  tools.forEach((tn, i) => {
+    const has = !!g.tools[tn];
+    ctx.globalAlpha = has ? 1 : 0.35;
+    icon(
+      tn === 'pico' ? 'pick' : tn === 'espada' ? 'dagger' : 'hammer',
+      36 + i * 28,
+      132,
+      18,
+      has ? '#ffd54f' : '#90a4ae'
+    );
+    ctx.globalAlpha = 1;
+  });
+  chip(
+    128,
+    122,
+    g.nearTable ? 'Mesa cerca' : 'Sin mesa',
+    'check',
+    g.nearTable ? '#6fe08a' : '#78909c',
+    11
   );
-  txt(
-    'Herramientas: ' +
-      (['hacha', 'pico', 'espada']
-        .filter(t => g.tools[t])
-        .map(t => t[0].toUpperCase() + t.slice(1))
-        .join(', ') || 'ninguna'),
-    20,
-    116,
-    12,
-    '#ffd740',
-    'left',
-    false
-  );
-  txt(
-    g.nearTable ? 'Mesa de trabajo cerca' : 'Sin mesa cerca',
-    20,
-    134,
-    12,
-    g.nearTable ? '#8fe39a' : '#9fb3c8',
-    'left',
-    false
-  );
-  // hora
+  // --- reloj (arriba al centro)
   const c = (g.sbT % CYCLE) / CYCLE,
     hr = (c * 24 + 6) % 24,
     hh = Math.floor(hr),
-    mm = Math.floor((hr % 1) * 60);
-  ctx.fillStyle = 'rgba(0,0,0,.55)';
-  rr(W / 2 - 110, 10, 220, 34, 10);
-  ctx.fill();
-  txt(
-    `${g.weather.rain > 0.3 ? '🌧' : g.dark > 0.5 ? '🌙' : '☀'} Día ${Math.floor(g.sbT / CYCLE) + 1} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
-    W / 2,
-    28,
-    17,
-    g.dark > 0.5 ? '#9fb8ff' : '#ffe082',
-    'center'
+    mm = Math.floor((hr % 1) * 60),
+    night = g.dark > 0.5;
+  glass(W / 2 - 100, 12, 200, 40, night ? 'rgba(130,160,255,.5)' : 'rgba(255,213,79,.5)', 20);
+  icon(
+    g.weather.rain > 0.3 ? 'rain' : night ? 'moon' : 'sun',
+    W / 2 - 72,
+    32,
+    22,
+    night ? '#9fb8ff' : '#ffd54f'
   );
-  // barra rápida
-  const sw = 46,
+  txt(`Día ${Math.floor(g.sbT / CYCLE) + 1}`, W / 2 - 46, 32, 14, '#cfd8dc', 'left', false);
+  txt(
+    `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+    W / 2 + 90,
+    32,
+    20,
+    night ? '#9fb8ff' : '#fff',
+    'right'
+  );
+  drawMinimapSb();
+  // --- barra rápida (abajo al centro)
+  const sw = Math.min(54, Math.floor((W - 340) / (HOTBAR.length * 1.12))),
     gap = 6,
     bw = HOTBAR.length * (sw + gap) - gap,
-    bx0 = W / 2 - bw / 2,
-    by0 = H - sw - 14;
+    hbCx = (W - 300) / 2 + 8,
+    bx0 = Math.max(10, hbCx - bw / 2),
+    by0 = H - sw - 16;
   HOTBAR.forEach((k, i) => {
     const x = bx0 + i * (sw + gap),
       sel = i == g.slot;
-    ctx.fillStyle = sel ? 'rgba(255,255,255,.28)' : 'rgba(0,0,0,.6)';
-    rr(x, by0, sw, sw, 6);
-    ctx.fill();
-    ctx.strokeStyle = sel ? '#fff' : 'rgba(255,255,255,.3)';
-    ctx.lineWidth = sel ? 3 : 1.5;
-    ctx.stroke();
+    ctx.save();
+    if (sel) ctx.translate(0, -5);
+    glass(x, by0, sw, sw, sel ? 'rgba(255,255,255,.95)' : 'rgba(140,180,240,.28)', 9);
+    if (sel) {
+      ctx.fillStyle = 'rgba(255,255,255,.16)';
+      rr(x, by0, sw, sw, 9);
+      ctx.fill();
+    }
     ctx.globalAlpha = g.inv[k] ? 1 : 0.35;
-    itemIcon(k, x + 9, by0 + 9, 36);
+    itemIcon(k, x + 9, by0 + 9, sw - 18);
     ctx.globalAlpha = 1;
-    txt(String(i + 1), x + 6, by0 + 9, 10, '#ddd', 'left');
-    if (g.inv[k]) txt(String(g.inv[k]), x + sw - 5, by0 + sw - 9, 13, '#fff', 'right');
-    addHit(
-      x,
-      by0,
-      sw,
-      sw,
-      () => {
-        g.slot = i;
-      },
-      false
-    );
+    txt(String((i + 1) % 10), x + 7, by0 + 9, 10, '#9fb3c8', 'left');
+    if (g.inv[k]) {
+      ctx.fillStyle = 'rgba(0,0,0,.65)';
+      rr(x + sw - 24, by0 + sw - 17, 22, 14, 7);
+      ctx.fill();
+      txt(String(g.inv[k]), x + sw - 13, by0 + sw - 10, 11, '#fff', 'center');
+    }
+    ctx.restore();
+    addHit(x, by0, sw, sw, () => (g.slot = i), false);
   });
-  txt(INAME[HOTBAR[g.slot]], W / 2, by0 - 14, 14, '#fff', 'center');
-  if (g.toastT > 0) {
-    ctx.font = 'bold 17px system-ui';
-    const tw = ctx.measureText(g.toast).width + 36;
-    ctx.fillStyle = 'rgba(0,0,0,.6)';
-    rr(W / 2 - tw / 2, by0 - 64, tw, 34, 6);
-    ctx.fill();
-    txt(g.toast, W / 2, by0 - 47, 17, '#fff', 'center');
-  }
+  txt(INAME[HOTBAR[g.slot]], bx0 + bw / 2, by0 - 20, 14, '#fff', 'center');
+  drawToast(by0 - 72);
   if (g.t < 25)
     txt(
       'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-0: bloque · G: comer',
@@ -1262,70 +1228,87 @@ function drawSbHUD() {
       'center',
       false
     );
-  // botones
-  const bs = Math.min(80, W * 0.15),
-    bx = W - bs - 14,
-    by = H - bs - 14;
-  const btn = (x, y, label, sub, on, col, fn) => {
-    ctx.globalAlpha = on ? 1 : 0.32;
-    const gr = ctx.createRadialGradient(
-      x + bs * 0.4,
-      y + bs * 0.35,
-      4,
-      x + bs / 2,
-      y + bs / 2,
-      bs / 2
-    );
-    gr.addColorStop(0, shade(col, 0.3));
-    gr.addColorStop(1, shade(col, -0.4));
-    ctx.fillStyle = gr;
-    ctx.beginPath();
-    ctx.arc(x + bs / 2, y + bs / 2, bs / 2, 0, 6.3);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    txt(label, x + bs / 2, y + bs / 2 - 6, bs > 70 ? 14 : 11, '#fff', 'center');
-    txt(sub, x + bs / 2, y + bs / 2 + 12, 10, '#fff', 'center', false);
-    ctx.globalAlpha = 1;
-    if (on) addHit(x, y, bs, bs, fn, false);
-  };
-  btn(bx, by, 'PONER', '[F]', true, '#2e7d32', sbPlace);
-  btn(
-    bx - bs - 8,
+  // --- botones de acción
+  const r = Math.min(44, W * 0.08),
+    bx = W - r - 16,
+    by = H - r - 16;
+  actionBtn(bx, by, r, 'PONER', 'F', 'block', true, '#2e7d32', sbPlace);
+  actionBtn(
+    bx - r * 2 - 10,
     by,
+    r,
     g.autoMine ? 'PICANDO' : 'PICAR',
-    '[clic]',
+    'CLIC',
+    'pick',
     true,
     g.autoMine ? '#e0a020' : '#a05a20',
-    () => {
-      g.autoMine = !g.autoMine;
-    }
+    () => (g.autoMine = !g.autoMine)
   );
-  btn(bx, by - bs - 8, 'USAR', '[E]', true, '#3a7bd5', sbInteract);
-  btn(bx - bs - 8, by - bs - 8, 'CRAFTEO', '[C]', true, '#6a5acd', () => {
-    scene = 'craft';
-  });
-  if (g.bannerT > 0) {
-    const a = Math.min(1, g.bannerT);
-    ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;
-    ctx.fillRect(0, H * 0.3, W, 100);
-    ctx.globalAlpha = a;
-    txt(g.banner, W / 2, H * 0.3 + 34, Math.min(44, W / 14), '#8be08b', 'center');
-    txt(g.bannerSub, W / 2, H * 0.3 + 76, Math.min(16, W / 40), '#fff', 'center', false);
-    ctx.globalAlpha = 1;
+  actionBtn(bx, by - r * 2 - 10, r, 'USAR', 'E', 'touch', true, '#3a7bd5', sbInteract);
+  actionBtn(
+    bx - r * 2 - 10,
+    by - r * 2 - 10,
+    r,
+    'CRAFTEO',
+    'C',
+    'hammer',
+    true,
+    '#6a5acd',
+    () => (scene = 'craft')
+  );
+  actionBtn(
+    bx - r * 4 - 20,
+    by,
+    r,
+    'COMER',
+    'G',
+    'drumstick',
+    g.food < 20 || g.hp < 20,
+    '#b0603a',
+    sbEat
+  );
+  drawBanner(g.banner, g.bannerSub, '#8be08b', H * 0.3);
+  drawJoystick();
+  if (p.alive === false) return;
+}
+/** Minimapa del mundo cubo: terreno a baja resolución con el jugador y la nave. */
+function drawMinimapSb() {
+  const sz = 120,
+    x0 = W - sz - 18,
+    y0 = 18,
+    p = G.player;
+  if (!G.mapCv) {
+    const c = document.createElement('canvas');
+    c.width = WW;
+    c.height = WH;
+    const x = c.getContext('2d'),
+      cols = ['#2a5fbf', '#e0d08a', '#5a9a3a', '#7d7d7d', '#7a5a3a', '#b8935a', '#6b7480'];
+    for (let ty = 0; ty < WH; ty++)
+      for (let tx = 0; tx < WW; tx++) {
+        x.fillStyle = OB[ty * WW + tx] === O_LOG ? '#2f6a2a' : cols[GR[ty * WW + tx]];
+        x.fillRect(tx, ty, 1, 1);
+      }
+    G.mapCv = c;
   }
-  if (joy && joy.active) {
-    ctx.strokeStyle = '#fff7';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(joy.sx, joy.sy, 50, 0, 6.3);
-    ctx.stroke();
-    ctx.fillStyle = '#fff6';
-    ctx.beginPath();
-    ctx.arc(joy.sx + (joy.vx || 0) * 50, joy.sy + (joy.vy || 0) * 50, 22, 0, 6.3);
-    ctx.fill();
+  glass(x0 - 6, y0 - 6, sz + 12, (sz * WH) / WW + 12, 'rgba(120,200,255,.4)', 10);
+  ctx.save();
+  rr(x0, y0, sz, (sz * WH) / WW, 6);
+  ctx.clip();
+  ctx.drawImage(G.mapCv, x0, y0, sz, (sz * WH) / WW);
+  const k = sz / (WW * TS);
+  ctx.fillStyle = '#ff5a4a';
+  ctx.beginPath();
+  ctx.arc(x0 + (SPAWN.x * TS + TS / 2) * k, y0 + SPAWN.y * TS * k, 2.4, 0, 6.3);
+  ctx.fill();
+  for (const z of G.zs) {
+    ctx.fillStyle = '#ff3a2a';
+    ctx.fillRect(x0 + z.x * k - 1.5, y0 + z.y * k - 1.5, 3, 3);
   }
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x0 + p.x * k, y0 + p.y * k, 3, 0, 6.3);
+  ctx.fill();
+  ctx.restore();
 }
 function drawCraft() {
   const g = G;

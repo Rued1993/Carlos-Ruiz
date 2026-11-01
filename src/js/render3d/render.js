@@ -193,6 +193,7 @@ function render3D() {
   else updClassic3D();
   syncEnts();
   if (G.animals) syncAnimals();
+  syncPet();
   syncBodies();
   syncParts();
   fxUpdate(R3.dt);
@@ -247,35 +248,6 @@ function try3D() {
     document.getElementById('gl').style.visibility = 'hidden';
     return false;
   }
-}
-function drawCrosshair() {
-  if (!view3d || scene !== 'play') return;
-  const locked = document.pointerLockElement === cv;
-  if (G.mode !== 'classic') {
-    ctx.strokeStyle = 'rgba(255,255,255,.85)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(W / 2, H / 2, 6, 0, 6.3);
-    ctx.moveTo(W / 2 - 14, H / 2);
-    ctx.lineTo(W / 2 - 8, H / 2);
-    ctx.moveTo(W / 2 + 8, H / 2);
-    ctx.lineTo(W / 2 + 14, H / 2);
-    ctx.moveTo(W / 2, H / 2 - 14);
-    ctx.lineTo(W / 2, H / 2 - 8);
-    ctx.moveTo(W / 2, H / 2 + 8);
-    ctx.lineTo(W / 2, H / 2 + 14);
-    ctx.stroke();
-  }
-  if (!locked && !('ontouchstart' in window))
-    txt(
-      'Haz clic para controlar la cámara con el ratón · Flechas ←→↑↓: girar cámara · WASD: moverse',
-      W / 2,
-      H - 100,
-      14,
-      '#fff',
-      'center',
-      false
-    );
 }
 
 function updRain3D(p, rain, t) {
