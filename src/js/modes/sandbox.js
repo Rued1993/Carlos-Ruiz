@@ -37,7 +37,18 @@ const OCOL = {
   8: '#8a5a2a',
   9: '#ffb020',
 };
-const HOTBAR = ['tablon', 'piedra', 'tierra', 'suelo', 'antorcha', 'mesa', 'horno', 'manzana'];
+const HOTBAR = [
+  'tablon',
+  'piedra',
+  'tierra',
+  'suelo',
+  'antorcha',
+  'mesa',
+  'horno',
+  'cama',
+  'brote',
+  'manzana',
+];
 const INAME = {
   madera: 'Madera',
   tablon: 'Tablones',
@@ -49,6 +60,8 @@ const INAME = {
   suelo: 'Suelo',
   manzana: 'Manzana',
   horno: 'Horno',
+  cama: 'Cama',
+  brote: 'Brote',
   carne: 'Carne cruda',
   asada: 'Carne asada',
 };
@@ -59,6 +72,8 @@ const ITEMOBJ = {
   antorcha: O_TORCH,
   mesa: O_TABLE,
   horno: 11,
+  cama: 12,
+  brote: 13,
 };
 const RECIPES = [
   { n: 'Tablones x4', in: { madera: 1 }, out: ['tablon', 4] },
@@ -66,6 +81,7 @@ const RECIPES = [
   { n: 'Antorchas x4', in: { madera: 1, carbon: 1 }, out: ['antorcha', 4] },
   { n: 'Mesa de trabajo', in: { tablon: 4 }, out: ['mesa', 1] },
   { n: 'Horno (cocinar carne)', in: { piedra: 8 }, out: ['horno', 1] },
+  { n: 'Cama (dormir de noche)', in: { tablon: 6 }, out: ['cama', 1] },
   { n: 'Hacha (talar más rápido)', in: { tablon: 3 }, tool: 'hacha', table: true },
   { n: 'Pico (picar piedra más rápido)', in: { tablon: 3 }, tool: 'pico', table: true },
   { n: 'Espada (más daño a zombis)', in: { tablon: 2 }, tool: 'espada', table: true },
@@ -198,6 +214,23 @@ function buildTex() {
     x.fillStyle = '#ffd060';
     x.fillRect(6, 10, 3, 2);
     frameTex(x);
+  });
+  T.o[12] = mkTex(['#c0392b', '#b03427', '#cc4030'], x => {
+    x.fillStyle = '#f2efe8';
+    x.fillRect(1, 1, 5, 14);
+    x.fillStyle = '#8a8a96';
+    x.fillRect(1, 1, 5, 1);
+    x.fillStyle = '#5a3a18';
+    x.fillRect(0, 14, 16, 2);
+    frameTex(x);
+  });
+  T.o[13] = mkTex(null, x => {
+    x.fillStyle = '#4a9a3a';
+    x.fillRect(7, 6, 2, 8);
+    x.fillStyle = '#6ac04a';
+    x.fillRect(4, 4, 3, 3);
+    x.fillRect(9, 3, 3, 3);
+    x.fillRect(6, 1, 4, 3);
   });
   T.o[9] = mkTex(null, x => {
     x.fillStyle = '#7a4a1a';
@@ -408,11 +441,15 @@ function newSandbox(cfg) {
       suelo: 0,
       manzana: 0,
       horno: 0,
+      cama: 0,
+      brote: 0,
       carne: 0,
       asada: 0,
     },
     food: 20,
     animals: [],
+    saplings: [],
+    weather: { rain: 0, target: 0, t: rnd(60, 110), thunderT: 5, lightning: 0 },
     tools: {},
     slot: 0,
     hp: 20,
@@ -493,6 +530,7 @@ function breakObj(tx, ty) {
         TREES.delete(i);
         OB[i] = 0;
         burst(px, py, 20, '#2f7a2a', 160, 0.8);
+        addItem('brote', 1 + (Math.random() < 0.5 ? 1 : 0));
         if (Math.random() < 0.5) {
           addItem('manzana', 1);
           toast('+1 Manzana', 1.2);
@@ -519,7 +557,10 @@ function breakObj(tx, ty) {
   } else if (o == O_TORCH) {
     addItem('antorcha', 1);
     g.torches = g.torches.filter(t => !(t[0] == tx && t[1] == ty));
-  } else if (o == O_CHEST) openLoot(px, py);
+  } else if (o == O_FURNACE) addItem('horno', 1);
+  else if (o == O_BED) addItem('cama', 1);
+  else if (o == O_SAPLING) addItem('brote', 1);
+  else if (o == O_CHEST) openLoot(px, py);
 }
 function openLoot(px, py) {
   const pool = [
@@ -586,7 +627,7 @@ function sbAct(dt) {
   g.mine.tick -= dt;
   if (g.mine.tick <= 0) {
     g.mine.tick = 0.22;
-    beep(180 + Math.random() * 60, 0.04, 'square', 0.04);
+    sfx.chop();
     burst(T.tx * TS + TS / 2, T.ty * TS + TS / 2, 2, OCOL[o] || '#888', 60, 0.3);
   }
   if (g.mine.t >= need) {
@@ -624,6 +665,10 @@ function sbPlace() {
       toast('No puedes poner eso ahí (usa suelo en el agua)', 1.5);
       return;
     }
+    if (k == 'brote' && GR[i] != G_GRASS) {
+      toast('Los brotes solo crecen en la hierba', 1.6);
+      return;
+    }
     const code = ITEMOBJ[k];
     if (OSOLID.has(code)) {
       if (Math.abs(p.x - cx) < TS / 2 + 14 && Math.abs(p.y + 7 - cy) < TS / 2 + 14) {
@@ -635,6 +680,7 @@ function sbPlace() {
     }
     OB[i] = code;
     if (code == O_TORCH) g.torches.push([T.tx, T.ty]);
+    if (code == O_SAPLING) g.saplings.push({ tx: T.tx, ty: T.ty, t: 0 });
   }
   g.inv[k]--;
   beep(260, 0.05, 'square', 0.06);
@@ -680,6 +726,10 @@ function sbInteract() {
       sbCook(T.tx, T.ty);
       return;
     }
+    if (OB[i] == O_BED) {
+      sbSleep(T.tx, T.ty);
+      return;
+    }
   }
   toast('Nada con lo que interactuar aquí', 1.2);
 }
@@ -713,7 +763,10 @@ function updSandbox(dt) {
   if (g.flash > 0) g.flash -= dt * 1.5;
   if (g.shake > 0) g.shake -= dt;
   if (g.bannerT > 0) g.bannerT -= dt;
-  g.dark = dayDark((g.sbT % CYCLE) / CYCLE);
+  g.dark = Math.min(
+    0.9,
+    dayDark((g.sbT % CYCLE) / CYCLE) + ((g.weather && g.weather.rain) || 0) * 0.18
+  );
   if (g.nightFlag && g.dark < 0.15) {
     g.nightFlag = false;
     mevent('night');
@@ -845,6 +898,8 @@ function updSandbox(dt) {
   for (const z of g.zs) if (z.hp <= 0 && z.hurt) mevent('zkill');
   g.zs = g.zs.filter(z => z.hp > 0 && Math.hypot(z.x - p.x, z.y - p.y) < 1300);
   updSurvival(dt);
+  growSaplings(dt);
+  updWeather(dt);
   g.regT += dt;
   if (g.regT > 6 && g.hp < 20 && g.food >= 6) {
     g.hp = Math.min(20, g.hp + 1);
@@ -854,8 +909,8 @@ function updSandbox(dt) {
     g.hp = 20;
     g.food = 20;
     g.zs = [];
-    p.x = SPAWN.x * TS + TS / 2;
-    p.y = (SPAWN.y + 3) * TS + TS / 2;
+    p.x = g.respawn ? g.respawn.x : SPAWN.x * TS + TS / 2;
+    p.y = g.respawn ? g.respawn.y : (SPAWN.y + 3) * TS + TS / 2;
     g.flash = 1;
     toast('Has muerto… reapareces en la nave', 3);
   }
@@ -1150,7 +1205,7 @@ function drawSbHUD() {
   rr(W / 2 - 110, 10, 220, 34, 10);
   ctx.fill();
   txt(
-    `${g.dark > 0.5 ? '🌙' : '☀'} Día ${Math.floor(g.sbT / CYCLE) + 1} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+    `${g.weather.rain > 0.3 ? '🌧' : g.dark > 0.5 ? '🌙' : '☀'} Día ${Math.floor(g.sbT / CYCLE) + 1} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
     W / 2,
     28,
     17,
@@ -1158,7 +1213,7 @@ function drawSbHUD() {
     'center'
   );
   // barra rápida
-  const sw = 54,
+  const sw = 46,
     gap = 6,
     bw = HOTBAR.length * (sw + gap) - gap,
     bx0 = W / 2 - bw / 2,
@@ -1199,7 +1254,7 @@ function drawSbHUD() {
   }
   if (g.t < 25)
     txt(
-      'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-8: bloque · G: comer',
+      'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-0: bloque · G: comer',
       W / 2,
       H * 0.2,
       Math.min(15, W / 50),

@@ -177,7 +177,7 @@ function updatePlayer(dt) {
           G.stepT -= dt;
           if (G.stepT <= 0) {
             G.stepT = p.sprinting ? 0.22 : 0.33;
-            beep(80 + Math.random() * 30, 0.05, 'triangle', 0.035);
+            sfx.step(p.sprinting);
           }
         }
       }

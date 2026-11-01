@@ -262,3 +262,74 @@ function drawAnimals2D() {
     ctx.fillRect(a.x + a.face * (l / 2 - 4), a.y - 4, 8 * a.face, 10);
   }
 }
+
+/* ---- cama, brotes y clima ---- */
+const O_BED = 12,
+  O_SAPLING = 13;
+OSOLID.add(O_BED);
+OHARD[O_BED] = 0.5;
+OHARD[O_SAPLING] = 0.1;
+OCOL[O_BED] = '#c0392b';
+OCOL[O_SAPLING] = '#3a8a30';
+
+/** Duerme en una cama: de noche salta al amanecer y fija el punto de reaparición. */
+function sbSleep(tx, ty) {
+  const g = G;
+  if (g.dark < 0.5) {
+    toast('Solo puedes dormir de noche', 1.8);
+    return;
+  }
+  g.respawn = { x: tx * TS + TS / 2, y: (ty + 1) * TS + TS / 2 };
+  g.sbT = Math.floor(g.sbT / CYCLE) * CYCLE + CYCLE * 0.93;
+  g.flash = 0.6;
+  g.zs = [];
+  toast('Has dormido hasta el amanecer. Reaparecerás aquí', 3);
+  beep(440, 0.5, 'sine', 0.08, 220);
+}
+/** Los brotes plantados se convierten en árboles con el tiempo (más lento de noche). */
+function growSaplings(dt) {
+  const g = G;
+  for (let k = g.saplings.length - 1; k >= 0; k--) {
+    const s = g.saplings[k],
+      i = s.ty * WW + s.tx;
+    if (OB[i] !== O_SAPLING) {
+      g.saplings.splice(k, 1);
+      continue;
+    }
+    s.t += dt * (g.dark > 0.5 ? 0.3 : 1);
+    if (s.t >= 45) {
+      OB[i] = O_LOG;
+      TREES.set(i, { x: s.tx, y: s.ty, logs: 4 });
+      burst(s.tx * TS + TS / 2, s.ty * TS + TS / 2, 14, '#3a8a30', 120, 0.8);
+      toast('¡Un brote ha crecido hasta ser un árbol!', 2);
+      g.saplings.splice(k, 1);
+    }
+  }
+}
+/** Lluvia con tormenta ocasional (relámpagos y truenos). */
+function updWeather(dt) {
+  const g = G,
+    w = g.weather;
+  w.t -= dt;
+  if (w.t <= 0) {
+    if (w.target === 0 && Math.random() < 0.4) {
+      w.target = 1;
+      w.t = rnd(40, 80);
+      toast('Empieza a llover…', 2.5);
+    } else {
+      w.target = 0;
+      w.t = rnd(60, 140);
+    }
+  }
+  w.rain += (w.target - w.rain) * Math.min(1, dt * 0.3);
+  if (w.rain > 0.6) {
+    w.thunderT -= dt;
+    if (w.thunderT <= 0) {
+      w.thunderT = rnd(8, 20);
+      w.lightning = 0.4;
+      setTimeout(() => sfx.thunder(), rnd(300, 1400));
+    }
+  }
+  w.lightning = Math.max(0, w.lightning - dt * 1.2);
+  rainSound(w.rain);
+}

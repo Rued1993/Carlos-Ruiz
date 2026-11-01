@@ -50,7 +50,7 @@ function buildSandbox3D(scene) {
     return m;
   });
   sb.o = [];
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
     const m = new THREE.InstancedMesh(
       bGeo,
       new THREE.MeshStandardMaterial({ map: glTex(TEX.o[k], true), roughness: 0.9 }),
@@ -114,6 +114,15 @@ function buildSandbox3D(scene) {
     })
   );
   scene.add(sb.crack);
+  sb.sap = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(10, 18, 10),
+    mat('#3a8a30', { roughness: 1 }),
+    800
+  );
+  sb.sap.count = 0;
+  sb.sap.frustumCulled = false;
+  scene.add(sb.sap);
+  buildRain3D(scene, sb);
   buildSky3D(scene, sb);
   buildGrass3D(scene, sb);
   sb.pOB = new Uint8Array(WW * WH);
@@ -125,11 +134,12 @@ function sbRebuild3D() {
   const sb = R3.sb,
     d = new THREE.Object3D(),
     gc = new Array(7).fill(0),
-    oc = new Array(12).fill(0);
+    oc = new Array(14).fill(0);
   let lc = 0,
     tc = 0,
     na = 0,
     nb = 0,
+    sapN = 0,
     nf = 0;
   const d2 = new THREE.Object3D(),
     tint = new THREE.Color();
@@ -190,14 +200,16 @@ function sbRebuild3D() {
         put(sb.stick, tc, cx, 13, cz);
         put(sb.flame, tc, cx, 32, cz);
         tc++;
-      } else if (((o >= 1 && o <= 8) || o === 11) && oc[o] < 3990)
+      } else if (o === 13) {
+        put(sb.sap, sapN++, cx, 9, cz);
+      } else if (((o >= 1 && o <= 8) || o === 11 || o === 12) && oc[o] < 3990)
         put(sb.o[o], oc[o]++, cx, TS / 2, cz);
     }
   sb.g.forEach((m, i) => {
     m.count = gc[i];
     m.instanceMatrix.needsUpdate = true;
   });
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
     sb.o[k].count = oc[k];
     sb.o[k].instanceMatrix.needsUpdate = true;
   }
@@ -210,6 +222,8 @@ function sbRebuild3D() {
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }
+  sb.sap.count = sapN;
+  sb.sap.instanceMatrix.needsUpdate = true;
   sb.leaf.count = lc;
   sb.leaf.instanceMatrix.needsUpdate = true;
   sb.stick.count = sb.flame.count = tc;
@@ -343,4 +357,18 @@ function buildGrass3D(scene, sb) {
   sb.tuftA = mk(blades, 4800);
   sb.tuftB = mk(blades, 4800);
   sb.flowers = mk(flower, 1400);
+}
+
+/** Franjas de lluvia que se recolocan cada frame alrededor del jugador. */
+function buildRain3D(scene, sb) {
+  const N = 900,
+    geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 6), 3));
+  sb.rainSeed = Array.from({ length: N }, () => [rnd(-480, 480), rnd(-480, 480), Math.random()]);
+  sb.rain = new THREE.LineSegments(
+    geo,
+    new THREE.LineBasicMaterial({ color: 0xaec6ff, transparent: true, opacity: 0, fog: false })
+  );
+  sb.rain.frustumCulled = false;
+  scene.add(sb.rain);
 }

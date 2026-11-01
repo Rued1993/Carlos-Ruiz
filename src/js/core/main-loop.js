@@ -4,6 +4,7 @@
 'use strict';
 
 let last = performance.now();
+let fpsAvg = 60;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -15,6 +16,8 @@ function frame(now) {
     scene == 'levels' ||
     scene == 'brief' ||
     scene == 'story' ||
+    scene == 'wardrobe' ||
+    scene == 'achv' ||
     scene == 'cut';
   const gamey =
     G &&
@@ -22,6 +25,7 @@ function frame(now) {
       scene == 'task' ||
       scene == 'sab' ||
       scene == 'craft' ||
+      scene == 'shop' ||
       scene == 'end' ||
       scene == 'mend' ||
       scene == 'pause');
@@ -30,7 +34,7 @@ function frame(now) {
   if (document.pointerLockElement && scene !== 'play') document.exitPointerLock();
   if (G && G.M && !stage) missionTick(dt);
   pollGamepad(dt);
-  musicTick(dt);
+  musicTick();
   if (stage) drawStageScene(dt);
   else {
     if (scene == 'play') {
@@ -41,7 +45,7 @@ function frame(now) {
       updatePlayer(dt);
       updateWorld(dt);
       updateTask(dt);
-    } else if (scene == 'cams' || scene == 'sab' || scene == 'craft') {
+    } else if (scene == 'cams' || scene == 'sab' || scene == 'craft' || scene == 'shop') {
       updatePlayer(dt);
       updateWorld(dt);
     } else if (scene == 'meeting') updateMeeting(dt);
@@ -61,6 +65,7 @@ function frame(now) {
       drawPauseBtn();
       if (scene == 'task') drawTask();
       if (scene == 'craft') drawCraft();
+      if (scene == 'shop') drawShop();
       if (scene == 'sab') drawSabMenu();
       if (scene == 'end') drawEnd();
       if (scene == 'mend') drawMend();
@@ -68,6 +73,9 @@ function frame(now) {
       if (G.intro > 0) cinematicBars();
     }
   }
+  fpsAvg = fpsAvg * 0.92 + (1 / Math.max(dt, 0.001)) * 0.08;
+  if (SAVE.fps) txt(Math.round(fpsAvg) + ' FPS', 10, H - 10, 12, '#7dff9a', 'left');
+  achTick(dt);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

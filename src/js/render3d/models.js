@@ -3,7 +3,7 @@
  */
 'use strict';
 
-function makeCrew(color, zombie) {
+function makeCrew(color, zombie, hat, visorIdx) {
   const g = new THREE.Group(),
     c = new THREE.Color(color),
     mats = [];
@@ -36,10 +36,10 @@ function makeCrew(color, zombie) {
             emissiveIntensity: 1.4,
           }
         : {
-            color: 0x0b2335,
+            color: VISORS[visorIdx | 0].color,
             roughness: 0.05,
             metalness: 0.7,
-            emissive: 0x0a3550,
+            emissive: VISORS[visorIdx | 0].emissive,
             emissiveIntensity: 0.5,
           }
     )
@@ -128,7 +128,24 @@ function makeCrew(color, zombie) {
   sho.position.z = 16;
   bat.visible = pis.visible = sho.visible = false;
   hold.add(bat, pis, sho);
-  g.userData = { legs, arms, body, visor, mats, hold, suit: [suit, dark], wep: { bat, pis, sho } };
+  const smg = new THREE.Mesh(
+    new THREE.BoxGeometry(5, 8, 26),
+    M({ color: 0x2a2a30, roughness: 0.4, metalness: 0.7 })
+  );
+  smg.position.z = 14;
+  smg.visible = false;
+  hold.add(smg);
+  if (hat && !zombie) g.add(makeHat(hat));
+  g.userData = {
+    legs,
+    arms,
+    body,
+    visor,
+    mats,
+    hold,
+    suit: [suit, dark],
+    wep: { bat, pis, sho, smg },
+  };
   return g;
 }
 function makeBody3D(color) {

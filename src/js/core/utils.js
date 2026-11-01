@@ -39,7 +39,7 @@ function txt(s, x, y, size = 16, color = '#fff', align = 'left', bold = true) {
 let ac, drone;
 function beep(f, d = 0.15, t = 'square', v = 0.05, slide = 0) {
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioInit()) return;
     const o = ac.createOscillator(),
       g = ac.createGain();
     o.type = t;
@@ -49,15 +49,14 @@ function beep(f, d = 0.15, t = 'square', v = 0.05, slide = 0) {
     g.gain.value = v;
     g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d);
     o.connect(g);
-    g.connect(ac.destination);
+    g.connect(A.sfx);
     o.start();
     o.stop(ac.currentTime + d);
   } catch (e) {}
 }
 function startDrone() {
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    if (drone) return;
+    if (!audioInit() || drone) return;
     drone = [48, 72.4, 96.3].map((f, i) => {
       const o = ac.createOscillator(),
         g = ac.createGain();
@@ -65,7 +64,7 @@ function startDrone() {
       o.frequency.value = f;
       g.gain.value = i ? 0.012 : 0.006;
       o.connect(g);
-      g.connect(ac.destination);
+      g.connect(A.mus);
       o.start();
       return o;
     });

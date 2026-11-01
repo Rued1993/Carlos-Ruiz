@@ -4,7 +4,22 @@
 'use strict';
 
 const SAVE = (() => {
-  const d = { story: 0, stars: {}, music: true, quality: 1, difficulty: 1, sens: 1, fov: 62 };
+  const d = {
+    story: 0,
+    stars: {},
+    music: true,
+    quality: 1,
+    difficulty: 1,
+    sens: 1,
+    fov: 62,
+    volM: 0.7,
+    volS: 1,
+    hat: 0,
+    visor: 0,
+    fps: false,
+    stats: {},
+    ach: {},
+  };
   try {
     Object.assign(d, JSON.parse(localStorage.getItem('nebula7') || '{}'));
   } catch (e) {}

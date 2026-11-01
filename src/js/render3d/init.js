@@ -39,6 +39,8 @@ function rebuild3D() {
   R3.blood.clear();
   R3.dropM = null;
   R3.animalM = null;
+  R3.grM = null;
+  R3.spitP = null;
   R3.q = null;
   const scene = new THREE.Scene();
   R3.scene = scene;

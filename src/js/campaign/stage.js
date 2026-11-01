@@ -157,8 +157,9 @@ function buildStage() {
   S.ship.add(bx(1500, 10, 12, '#f33', 0, 40, -318, { emissive: 0xff2020, emissiveIntensity: 1.2 }));
   sc.add(S.ship);
   // modelos
-  COLORS.forEach(c => {
-    const m = makeCrew(c[0], false);
+  COLORS.forEach((c, idx) => {
+    const cs = cosmeticsFor({ isP: idx === 0, id: idx }),
+      m = makeCrew(c[0], false, cs[0], cs[1]);
     m.visible = false;
     sc.add(m);
     S.models[c[1]] = m;
@@ -260,12 +261,17 @@ function renderStage(dt) {
   if (!R3.stage) buildStage();
   const S = R3.stage;
   S.t += dt;
-  const key = scene === 'cut' && CUT ? 'c' + CUT.id + CUT.i : 'home';
+  const key =
+    scene === 'cut' && CUT ? 'c' + CUT.id + CUT.i : scene === 'wardrobe' ? 'wardrobe' : 'home';
   if (S.key !== key) {
     S.key = key;
     if (scene === 'cut') {
       const pg = CUT.pages[CUT.i];
       stageSet(pg.bg, pg.cast, pg.w);
+    } else if (scene === 'wardrobe') {
+      stageSet('space', ['Rojo'], 'Rojo');
+      S.models.Rojo.position.set(0, 0, 0);
+      S.models.Rojo.rotation.set(0, 0, 0);
     } else stageHome();
   }
   if (R3.w !== W || R3.h !== H) {
@@ -277,7 +283,7 @@ function renderStage(dt) {
   S.cam.updateProjectionMatrix();
   const foc = S.focus && S.models[S.focus] && S.models[S.focus].visible ? S.models[S.focus] : null;
   let px, py, pz, tx, ty, tz;
-  if (scene === 'cut') {
+  if (scene === 'cut' || scene === 'wardrobe') {
     if (foc) {
       px = foc.position.x * 0.7 + Math.sin(S.t * 0.25) * 24;
       py = 64 + Math.sin(S.t * 0.3) * 4;
@@ -340,6 +346,7 @@ function renderStage(dt) {
       m.rotation.y = Math.sin(S.t * 0.7 + i) * 0.25;
     }
   }
+  if (scene === 'wardrobe') S.models.Rojo.rotation.y = S.t * 0.7;
   PFX.threshold = 0.9;
   postRender(S.sc, S.cam);
 }
@@ -402,5 +409,7 @@ function drawStageScene(dt) {
   else if (scene === 'brief') drawBrief();
   else if (scene === 'story') drawStory();
   else if (scene === 'cut') drawCut(dt);
+  else if (scene === 'wardrobe') drawWardrobe();
+  else if (scene === 'achv') drawAchievements();
   finishFX();
 }

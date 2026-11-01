@@ -27,7 +27,8 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 | Usar / interactuar | `E` | A |
 | Disparar · picar / atacar | clic izq. o `Espacio` | RT |
 | Recargar (zombi) · reportar (clásico) · colocar (cubo) | `R` · `R` · clic der. o `F` | X |
-| Cambiar arma · matar (impostor) · comer (cubo) | `Tab` / `1-3` · `Q` · `G` | B |
+| Cambiar arma · matar (impostor) · comer (cubo) | `Tab` / `1-4` · `Q` · `G` | B |
+| Granada · tienda (zombi) | `G` · `B` | cruceta ↓ · Y |
 | Crafteo (cubo) · ventilación (impostor) | `C` · `V` | Y |
 | Sabotaje (impostor) | `F` | cruceta ↑ |
 | Pausa y ajustes | `P` | Start |
@@ -35,12 +36,16 @@ tiempo de ejecución: canvas 2D para HUD/menús + [three.js](https://threejs.org
 Ajustes (en pausa y en el menú): calidad gráfica, dificultad, sensibilidad, campo de visión,
 música y vista 3D/2D.
 
-### Novedades de jugabilidad
+### Novedades
 
-- **Zombis:** cargadores con recarga, zombis *tanque* (lentos y resistentes) y *bomba* (explotan al
-  contacto), botín de munición y botiquines, puntuación con combo y récord.
-- **Mundo cubo:** hambre, animales (vaca, cerdo, gallina), carne cruda, horno para cocinar con
-  carbón, cielo con sol, luna, estrellas y nubes, hierba, flores y agua animada.
+- **Zombis:** cargadores con recarga, subfusil, granadas, tienda entre oleadas (daño, cargadores,
+  armadura, munición…), zombis *tanque*, *bomba* y *escupidor*, botín, puntos con combo y récord.
+- **Mundo cubo:** hambre, animales, horno y carne asada, cama (duerme de noche), brotes que crecen
+  hasta ser árboles, lluvia con tormentas, cielo con sol, luna, estrellas y nubes.
+- **Meta-juego:** armario (7 sombreros y 5 visores), 18 logros con estadísticas, reto diario y
+  contador de FPS.
+- **Audio:** motor Web Audio con reverb, efectos con estéreo según la posición y música adaptativa
+  distinta por ambiente (menú, cinemática, nave, sabotaje, zombis, día y noche). Volúmenes ajustables.
 - **Gráficos:** postprocesado con MSAA y bloom, tiras de luz en la nave, fogonazo, trazadoras,
   escombros 3D, zombis que caen, marcadores de objetivo y patada de FOV al correr.
 
@@ -55,13 +60,13 @@ src/
   manifest.json       ORDEN de carga de los módulos (única fuente de verdad)
   styles/main.css
   js/
-    core/             arranque, utilidades, voz, música, ajustes, estado, entrada, mando, bucle
+    core/             arranque, utilidades, audio (sfx), música, voz, ajustes, estado, entrada, mando, bucle
     data/             datos estáticos (mapa de la nave)
     game/             lógica del modo clásico: acciones, sabotajes, reuniones, bots, update
-    modes/            modos independientes: zombie.js, sandbox.js
-    campaign/         guardado, niveles/historia, motor de misiones, cinemáticas, escenario 3D
+    modes/            modos independientes: zombie (+extras), sandbox (+supervivencia)
+    campaign/         guardado, niveles/historia, misiones, logros, reto diario, cinemáticas, escenario 3D
     render2d/         dibujo 2D (personajes, mundo, textura del mapa)
-    render3d/         capa three.js: init, escenas, modelos, cámara, sincronización, postfx, efectos
+    render3d/         capa three.js: init, escenas, modelos, cosméticos, cámara, sincronización, postfx, efectos
     ui/               pantallas (menús, reunión, minijuegos, final, pausa, resultado)
 tests/smoke.test.js   pruebas de extremo a extremo (Playwright)
 tools/lint.js         linter con análisis entre archivos

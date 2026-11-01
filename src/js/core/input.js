@@ -31,15 +31,19 @@ addEventListener('keydown', e => {
     voiceOn = !voiceOn;
     if (!voiceOn) stopSpeech();
   } else if (scene == 'craft' && (k == 'c' || k == 'escape')) scene = 'play';
+  else if (scene == 'shop' && (k == 'b' || k == 'escape')) scene = 'play';
   else if (scene == 'play' && G.mode === 'sandbox') {
-    if (k >= '1' && k <= '8') G.slot = +k - 1;
+    if (k >= '1' && k <= '9') G.slot = +k - 1;
+    else if (k == '0') G.slot = 9;
     else if (k == 'f') sbPlace();
     else if (k == 'e') sbInteract();
     else if (k == 'c') scene = 'craft';
     else if (k == 'g') sbEat();
   } else if (scene == 'play' && G.mode === 'zombie') {
     if (k == 'e') doUse();
-    else if (k == '1' || k == '2' || k == '3') selectWep(+k - 1);
+    else if (k == '1' || k == '2' || k == '3' || k == '4') selectWep(+k - 1);
+    else if (k == 'g') throwGrenade();
+    else if (k == 'b') openShop();
     else if (k == 'tab') cycleWep();
     else if (k == 'r') startReload();
   } else if (scene == 'play') {
@@ -59,10 +63,8 @@ addEventListener('keyup', e => {
   keys[e.key.toLowerCase()] = false;
 });
 cv.addEventListener('pointerdown', e => {
-  try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === 'suspended') ac.resume();
-  } catch (_) {}
+  audioInit();
+  if (A.ctx && A.ctx.state === 'suspended') A.ctx.resume();
   mouse.x = e.clientX;
   mouse.y = e.clientY;
   mouse.down = true;

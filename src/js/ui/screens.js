@@ -4,7 +4,7 @@
 'use strict';
 
 function totalStars() {
-  return Object.values(SAVE.stars).reduce((a, b) => a + b, 0);
+  return [...LEVELS, ...CHAPTERS].reduce((n, d) => n + (SAVE.stars[d.id] || 0), 0);
 }
 function titleGlow(s, x, y, size, col) {
   ctx.save();
@@ -94,6 +94,27 @@ function drawHome() {
       13
     )
   );
+  uiBtn(30, 454, 200, 34, '🎩 Armario', '#6a3a8a', () => (scene = 'wardrobe'), 14);
+  uiBtn(
+    250,
+    454,
+    200,
+    34,
+    `🏆 Logros ${ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length}/${ACHIEVEMENTS.length}`,
+    '#8a6a1a',
+    () => (scene = 'achv'),
+    14
+  );
+  uiBtn(
+    470,
+    454,
+    200,
+    34,
+    '📅 Reto diario' + (SAVE.stars[dailyDef().id] ? ' ✔' : ''),
+    '#2a6a5a',
+    () => openBrief(dailyDef(), 'daily', 0),
+    14
+  );
   endUI();
 }
 function drawFree() {
@@ -128,7 +149,7 @@ function drawFree() {
   (gmode == 'sandbox'
     ? [
         'WASD: mover · Clic izq: picar/talar/atacar · Clic der o F: construir',
-        'E: interactuar · C: crafteo · G: comer · 1-8: elegir bloque · Shift: correr',
+        'E: interactuar · C: crafteo · G: comer · 1-0: elegir bloque · Shift: correr',
         'Mundo abierto con árboles, minas, cofres, día y noche con zombis.',
       ]
     : gmode == 'zombie'
@@ -201,7 +222,11 @@ function drawBrief() {
   beginUI(700, 520);
   panel(40, 30, 620, 450);
   txt(
-    (BRIEF.kind === 'story' ? 'CAPÍTULO ' + (BRIEF.idx + 1) : 'NIVEL ' + (BRIEF.idx + 1)) +
+    (BRIEF.kind === 'story'
+      ? 'CAPÍTULO ' + (BRIEF.idx + 1)
+      : BRIEF.kind === 'daily'
+        ? 'RETO DIARIO'
+        : 'NIVEL ' + (BRIEF.idx + 1)) +
       '  ·  ' +
       MODE_ICON[d.mode] +
       ' ' +
@@ -246,7 +271,7 @@ function drawBrief() {
     '‹ Atrás',
     '#444',
     () => {
-      scene = BRIEF.kind === 'story' ? 'story' : 'levels';
+      scene = BRIEF.kind === 'story' ? 'story' : BRIEF.kind === 'daily' ? 'menu' : 'levels';
     },
     17
   );
@@ -447,8 +472,8 @@ function drawPauseBtn() {
 function drawPause() {
   ctx.fillStyle = 'rgba(0,0,0,.62)';
   ctx.fillRect(0, 0, W, H);
-  beginUI(560, 520);
-  panel(0, 0, 560, 520);
+  beginUI(560, 640);
+  panel(0, 0, 560, 640);
   titleGlow('PAUSA', 280, 48, 36, '#fff');
   uiBtn(130, 84, 300, 44, 'Continuar', '#2e7d32', () => (scene = 'play'), 18);
   uiBtn(
@@ -461,6 +486,9 @@ function drawPause() {
     () => (G.M ? launchMission(CAMP.def) : newGame()),
     17
   );
+  const vol = v => Math.round(v * 100) + '%',
+    next = (v, steps) => steps[(steps.indexOf(v) + 1) % steps.length] ?? steps[0];
+  const VS = [0, 0.35, 0.7, 1];
   const rows = [
     [
       'Calidad: ' + ['Baja', 'Media', 'Alta'][SAVE.quality],
@@ -469,8 +497,11 @@ function drawPause() {
     ['Dificultad: ' + diff().name, () => (SAVE.difficulty = (SAVE.difficulty + 1) % 3)],
     ['Sensibilidad: ' + SAVE.sens + 'x', () => cycleSetting('sens', SENS_STEPS)],
     ['Campo de visión: ' + SAVE.fov + '°', () => cycleSetting('fov', FOV_STEPS)],
+    ['Volumen música: ' + vol(SAVE.volM), () => (SAVE.volM = next(SAVE.volM, VS))],
+    ['Volumen efectos: ' + vol(SAVE.volS), () => (SAVE.volS = next(SAVE.volS, VS))],
     ['Música: ' + (SAVE.music ? 'SÍ' : 'NO'), () => (SAVE.music = !SAVE.music)],
     ['Vista: ' + (view3d ? '3D' : '2D'), () => (view3d = !view3d)],
+    ['Contador FPS: ' + (SAVE.fps ? 'SÍ' : 'NO'), () => (SAVE.fps = !SAVE.fps)],
   ];
   rows.forEach((r, i) =>
     uiBtn(
@@ -482,6 +513,7 @@ function drawPause() {
       '#3a4a6a',
       () => {
         r[1]();
+        applyVolumes();
         saveGame();
       },
       15
@@ -490,7 +522,7 @@ function drawPause() {
   txt(
     'La dificultad afecta a zombis y sabotajes nuevos.',
     280,
-    362,
+    484,
     12,
     '#9fb3c8',
     'center',
@@ -499,7 +531,7 @@ function drawPause() {
   txt(
     'Mando: Start pausa · Shift / L3: correr · R: recargar · G: comer',
     280,
-    384,
+    506,
     12,
     '#9fb3c8',
     'center',
@@ -507,7 +539,7 @@ function drawPause() {
   );
   uiBtn(
     130,
-    420,
+    544,
     300,
     44,
     'Salir al menú',
@@ -593,7 +625,7 @@ function drawMend() {
       'Menú',
       '#444',
       () => {
-        scene = CAMP.kind === 'story' ? 'story' : 'levels';
+        scene = backScene();
       },
       18
     );
@@ -607,7 +639,7 @@ function drawMend() {
       CAMP.kind === 'story' ? 'Capítulos' : 'Niveles',
       '#444',
       () => {
-        scene = CAMP.kind === 'story' ? 'story' : 'levels';
+        scene = backScene();
       },
       18
     );

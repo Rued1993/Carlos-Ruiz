@@ -337,6 +337,194 @@ const check = (name, cond, extra = '') => {
     SAVE.quality = 1;
   });
 
+  console.log('Zombis: subfusil, tienda, granadas y escupidores');
+  const zx = await ev(() => {
+    gmode = 'zombie';
+    newGame();
+    G.intro = 0;
+    G.wave.state = 'break';
+    G.wave.t = -999;
+    G.cash = 1000;
+    const antes = G.cash;
+    SHOP.find(i => i.id === 'smg').buy(G);
+    const smg = !!G.weps.subfusil && G.wep === 'subfusil';
+    G.cash -= 250;
+    SHOP.find(i => i.id === 'dmg').buy(G);
+    const dmg = dmgMul();
+    SHOP.find(i => i.id === 'mag').buy(G);
+    const mag = magSize('subfusil');
+    SHOP.find(i => i.id === 'armor').buy(G);
+    openShop();
+    const enTienda = scene === 'shop';
+    scene = 'play';
+    G.ammo = 120;
+    G.cd = 0;
+    G.wave.state = 'wait';
+    shoot(G.player.x + 100, G.player.y);
+    const cd = G.cd;
+    const hp0 = G.hp;
+    hurtPlayer(20);
+    const armor = hp0 - G.hp; // 20 * 0.8 = 16
+    return { antes, smg, dmg, mag, enTienda, cd, armor };
+  });
+  check(
+    'se compra el subfusil y las mejoras en la tienda',
+    zx.smg && zx.dmg > 1.19 && zx.mag === 45 && zx.enTienda,
+    JSON.stringify(zx)
+  );
+  check('el subfusil dispara a ráfagas rápidas', zx.cd < 0.1);
+  check('la armadura reduce el daño recibido', zx.armor === 16, JSON.stringify(zx));
+  const gz = await ev(() => {
+    G.wave.state = 'wait';
+    G.wave.t = -999;
+    G.zs = [
+      {
+        x: G.player.x + 60,
+        y: G.player.y,
+        hp: 100,
+        max: 100,
+        sp: 0,
+        step: 0,
+        cd: 9,
+        path: [],
+        pt: 99,
+        stuck: 0,
+        face: 1,
+      },
+    ];
+    G.gren = 1;
+    throwGrenade();
+    const lanzada = G.grs.length === 1;
+    for (let i = 0; i < 40; i++) updZombie(0.05);
+    return { lanzada, zhp: G.zs[0] ? G.zs[0].hp : 0, quedan: G.grs.length };
+  });
+  check(
+    'la granada explota y daña a los zombis',
+    gz.lanzada && gz.quedan === 0 && gz.zhp < 100,
+    JSON.stringify(gz)
+  );
+  const sp = await ev(() => {
+    G.hp = 100;
+    G.wave.state = 'wait';
+    G.wave.t = -999;
+    G.zs = [
+      {
+        x: G.player.x + 200,
+        y: G.player.y,
+        hp: 60,
+        max: 60,
+        sp: 0,
+        step: 0,
+        cd: 9,
+        path: [],
+        pt: 99,
+        stuck: 0,
+        face: 1,
+        spit: true,
+        spitT: 0,
+      },
+    ];
+    for (let i = 0; i < 40; i++) updZombie(0.05);
+    return { hp: G.hp };
+  });
+  check('el escupidor lanza ácido y hiere desde lejos', sp.hp < 100, JSON.stringify(sp));
+
+  console.log('Cosméticos, logros y reto diario');
+  const cos = await ev(() => {
+    const hats = HATS.map((_, i) => makeHat(i).children.length);
+    SAVE.hat = 2;
+    SAVE.visor = 3;
+    const crew = makeCrew('#c51111', false, SAVE.hat, SAVE.visor);
+    const tieneSombrero = crew.children.length > makeCrew('#c51111', false, 0, 0).children.length;
+    SAVE.hat = 0;
+    SAVE.visor = 0;
+    return { hats, tieneSombrero, bot: cosmeticsFor({ isP: false, id: 4 }).length };
+  });
+  check(
+    'los 7 sombreros se construyen y se añaden al modelo',
+    cos.hats.slice(1).every(n => n > 0) && cos.tieneSombrero && cos.bot === 2,
+    JSON.stringify(cos)
+  );
+  const ach = await ev(() => {
+    SAVE.ach = {};
+    SAVE.stats = {};
+    mevent('zkill');
+    const primero = !!SAVE.ach.sangre;
+    mevent('zkill', 99);
+    return { primero, cien: !!SAVE.ach.exterminador, cola: ACH_Q.length };
+  });
+  check(
+    'los logros se desbloquean con las estadísticas',
+    ach.primero && ach.cien && ach.cola >= 2,
+    JSON.stringify(ach)
+  );
+  const dd = await ev(() => {
+    const a = dailyDef(),
+      b = dailyDef();
+    return {
+      igual: JSON.stringify(a) === JSON.stringify(b),
+      modo: a.mode,
+      id: a.id,
+      objetivos: a.goals.length,
+    };
+  });
+  check(
+    'el reto diario es determinista y válido',
+    dd.igual && /^D\d{8}$/.test(dd.id) && dd.objetivos >= 2,
+    JSON.stringify(dd)
+  );
+
+  console.log('Mundo cubo: cama, brotes y clima');
+  const ex = await ev(() => {
+    gmode = 'sandbox';
+    newGame();
+    G.intro = 0;
+    // brote -> árbol
+    const tx = SPAWN.x + 12,
+      ty = SPAWN.y;
+    GR[ty * WW + tx] = G_GRASS;
+    OB[ty * WW + tx] = 0;
+    OB[ty * WW + tx] = O_SAPLING;
+    G.saplings.push({ tx, ty, t: 0 });
+    growSaplings(50);
+    const arbol = OB[ty * WW + tx] === O_LOG && TREES.has(ty * WW + tx);
+    // cama
+    G.sbT = CYCLE * 0.7;
+    G.dark = 0.86;
+    sbSleep(SPAWN.x, SPAWN.y + 4);
+    const durmio = G.sbT % CYCLE > CYCLE * 0.9 && !!G.respawn;
+    // clima
+    G.weather.target = 1;
+    G.weather.t = 999;
+    for (let i = 0; i < 200; i++) updWeather(0.1);
+    return {
+      arbol,
+      durmio,
+      lluvia: G.weather.rain > 0.5,
+      receta: RECIPES.some(r => r.out && r.out[0] === 'cama'),
+    };
+  });
+  check('un brote crece hasta ser un árbol', ex.arbol, JSON.stringify(ex));
+  check('dormir en una cama salta la noche y fija el reaparecer', ex.durmio && ex.receta);
+  check('el clima puede ponerse a llover', ex.lluvia);
+  await wait(1200); // deja renderizar con lluvia
+  check(
+    'el audio se inicializa y los efectos no fallan',
+    await ev(() => {
+      audioInit();
+      try {
+        sfx.shot('pistola', 1, 1);
+        sfx.explosion();
+        sfx.step(true);
+        sfx.growl(0, 0, true);
+        musicTick();
+        return true;
+      } catch (e) {
+        return false;
+      }
+    })
+  );
+
   console.log('Fallback 2D');
   await ev(() => {
     view3d = false;

@@ -76,6 +76,8 @@ function updSandbox3D() {
   R3.scene.background.copy(sky);
   R3.scene.fog.color.copy(sky);
   const sb2 = R3.sb;
+  const rain = g.weather.rain;
+  if (rain > 0.02) sky.lerp(new THREE.Color(0x4a5560), rain * 0.65);
   sb2.sky.position.set(p.x, 0, p.y);
   sb2.sky.material.uniforms.hor.value.copy(sky);
   sb2.sky.material.uniforms.top.value
@@ -84,8 +86,8 @@ function updSandbox3D() {
     .lerp(new THREE.Color(0x6a3a60), k > 0.05 && k < 0.95 ? Math.sin(k * Math.PI) * 0.25 : 0);
   sb2.stars.position.set(p.x, 0, p.y);
   sb2.stars.material.opacity = clamp((k - 0.35) * 1.8, 0, 1);
-  R3.scene.fog.near = 380 - 220 * k;
-  R3.scene.fog.far = 1700 - 1050 * k;
+  R3.scene.fog.near = (380 - 220 * k) * (1 - rain * 0.5);
+  R3.scene.fog.far = (1700 - 1050 * k) * (1 - rain * 0.45);
   const a = Math.min(1, cyc / 0.5) * Math.PI,
     elev = Math.sin(a);
   L.sun.position.set(p.x + Math.cos(a) * 520, 260 + 520 * Math.max(0.15, elev), p.y + 220);
@@ -108,9 +110,11 @@ function updSandbox3D() {
     sb2.clouds.setMatrixAt(i, dm.matrix);
   });
   sb2.clouds.instanceMatrix.needsUpdate = true;
+  updRain3D(p, rain, t);
   sb2.g[0].material.map.offset.set(t * 0.02, t * 0.013);
   L.sun.color.set(k > 0.1 ? 0x8aa0e0 : 0xfff2d0);
-  L.sun.intensity = dark > 0.5 ? 0.28 : 1.0 * (1 - k) + 0.15;
+  L.sun.intensity = (dark > 0.5 ? 0.28 : 1.0 * (1 - k) + 0.15) * (1 - rain * 0.55);
+  L.amb.intensity += g.weather.lightning * 3;
   L.hemi.intensity = 0.5 * (1 - k) + 0.12;
   L.amb.intensity = 0.12 * (1 - k) + 0.1;
   const tl = g.torches
@@ -182,6 +186,7 @@ function render3D() {
   syncParts();
   fxUpdate(R3.dt);
   syncDrops();
+  if (G.grs) syncExtras3D();
   PFX.threshold = G.mode === 'sandbox' ? 1.5 + (1 - G.dark / 0.86) * 0.7 : 0.95;
   postRender(R3.scene, R3.camera);
 }
@@ -192,6 +197,10 @@ function try3D() {
     const g = G;
     if (g.sab) {
       ctx.fillStyle = `rgba(255,0,0,${0.05 + 0.05 * Math.sin(g.t * 6)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (g.weather && g.weather.lightning > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.55, g.weather.lightning * 1.2)})`;
       ctx.fillRect(0, 0, W, H);
     }
     if (g.flash > 0) {
@@ -253,4 +262,25 @@ function drawCrosshair() {
       'center',
       false
     );
+}
+
+function updRain3D(p, rain, t) {
+  const sb = R3.sb,
+    pa = sb.rain.geometry.attributes.position;
+  sb.rain.visible = rain > 0.03;
+  if (!sb.rain.visible) return;
+  sb.rain.material.opacity = Math.min(0.5, rain * 0.55);
+  sb.rainSeed.forEach((s, i) => {
+    const y = 520 - (((t * 780 + s[2] * 520) % 520) | 0),
+      x = p.x + s[0],
+      z = p.y + s[1],
+      k = i * 6;
+    pa.array[k] = x;
+    pa.array[k + 1] = y;
+    pa.array[k + 2] = z;
+    pa.array[k + 3] = x + 4;
+    pa.array[k + 4] = y + 26;
+    pa.array[k + 5] = z + 2;
+  });
+  pa.needsUpdate = true;
 }

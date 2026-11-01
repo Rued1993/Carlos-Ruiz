@@ -17,7 +17,8 @@ function entVisible(q) {
 function getEnt(q, zombie) {
   let r = R3.ents.get(q);
   if (!r) {
-    const g = makeCrew(zombie ? zColor(q) : q.color, zombie);
+    const cs = zombie ? [0, 0] : cosmeticsFor(q);
+    const g = makeCrew(zombie ? zColor(q) : q.color, zombie, cs[0], cs[1]);
     if (q.scale) g.scale.setScalar(q.scale);
     g.rotation.order = 'YXZ';
     R3.scene.add(g);
@@ -108,6 +109,7 @@ function syncEnts() {
       u.wep.bat.visible = w == 'bate';
       u.wep.pis.visible = w == 'pistola';
       u.wep.sho.visible = w == 'escopeta';
+      u.wep.smg.visible = w == 'subfusil';
       if (G.swing > 0) u.hold.rotation.x = -1.2 + G.swing * 6;
       else u.hold.rotation.x = 0;
     }

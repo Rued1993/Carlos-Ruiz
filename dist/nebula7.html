@@ -102,7 +102,7 @@ function txt(s, x, y, size = 16, color = '#fff', align = 'left', bold = true) {
 let ac, drone;
 function beep(f, d = 0.15, t = 'square', v = 0.05, slide = 0) {
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioInit()) return;
     const o = ac.createOscillator(),
       g = ac.createGain();
     o.type = t;
@@ -112,15 +112,14 @@ function beep(f, d = 0.15, t = 'square', v = 0.05, slide = 0) {
     g.gain.value = v;
     g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d);
     o.connect(g);
-    g.connect(ac.destination);
+    g.connect(A.sfx);
     o.start();
     o.stop(ac.currentTime + d);
   } catch (e) {}
 }
 function startDrone() {
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    if (drone) return;
+    if (!audioInit() || drone) return;
     drone = [48, 72.4, 96.3].map((f, i) => {
       const o = ac.createOscillator(),
         g = ac.createGain();
@@ -128,11 +127,254 @@ function startDrone() {
       o.frequency.value = f;
       g.gain.value = i ? 0.012 : 0.006;
       o.connect(g);
-      g.connect(ac.destination);
+      g.connect(A.mus);
       o.start();
       return o;
     });
   } catch (e) {}
+}
+
+/* ---- src/js/core/sfx.js ---- */
+/**
+ * Motor de audio (Web Audio): buses de música y efectos, compresor, reverb, sintetizador
+ * básico (tone / noise) y efectos de juego con panorama estéreo según la posición.
+ */
+'use strict';
+
+const A = { ctx: null, master: null, sfx: null, mus: null, verbIn: null, noise: null };
+
+/** Crea (una vez) el contexto de audio y la cadena de buses. */
+function audioInit() {
+  if (A.ctx) return A.ctx;
+  try {
+    const c = new (window.AudioContext || window.webkitAudioContext)();
+    A.ctx = ac = c;
+    A.master = c.createGain();
+    A.master.gain.value = 0.9;
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.ratio.value = 4;
+    A.master.connect(comp);
+    comp.connect(c.destination);
+    A.sfx = c.createGain();
+    A.mus = c.createGain();
+    A.sfx.connect(A.master);
+    A.mus.connect(A.master);
+    const len = Math.floor(c.sampleRate * 1.6),
+      buf = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+    }
+    const verb = c.createConvolver();
+    verb.buffer = buf;
+    A.verbIn = c.createGain();
+    A.verbIn.gain.value = 0.3;
+    A.verbIn.connect(verb);
+    verb.connect(A.master);
+    A.noise = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+    const nd = A.noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    applyVolumes();
+  } catch (e) {
+    A.ctx = null;
+  }
+  return A.ctx;
+}
+function applyVolumes() {
+  if (!A.ctx) return;
+  A.sfx.gain.value = SAVE.volS;
+  A.mus.gain.value = SAVE.volM;
+}
+function audioReady() {
+  const c = audioInit();
+  return c && c.state === 'running' ? c : null;
+}
+function audioRoute(g, o) {
+  const c = A.ctx;
+  let out = g;
+  if (o.pan !== undefined && c.createStereoPanner) {
+    const p = c.createStereoPanner();
+    p.pan.value = clamp(o.pan, -1, 1);
+    g.connect(p);
+    out = p;
+  }
+  out.connect(o.bus || A.sfx);
+  if (o.verb) {
+    const s = c.createGain();
+    s.gain.value = o.verb;
+    out.connect(s);
+    s.connect(A.verbIn);
+  }
+}
+/** Nota sintetizada. Opciones: type, vol, attack, slide, filter, ftype, pan, verb, bus, at. */
+function tone(freq, dur, o) {
+  o = o || {};
+  const c = audioReady();
+  if (!c) return;
+  const t = o.at || c.currentTime,
+    osc = c.createOscillator(),
+    g = c.createGain();
+  osc.type = o.type || 'sine';
+  osc.frequency.setValueAtTime(freq, t);
+  if (o.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + o.slide), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, o.vol || 0.1), t + (o.attack || 0.005));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let node = osc;
+  if (o.filter) {
+    const f = c.createBiquadFilter();
+    f.type = o.ftype || 'lowpass';
+    f.frequency.value = o.filter;
+    osc.connect(f);
+    node = f;
+  }
+  node.connect(g);
+  audioRoute(g, o);
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+/** Ráfaga de ruido filtrado. Opciones: vol, ftype, f0, f1 (barrido), q, pan, verb, bus, at. */
+function noise(dur, o) {
+  o = o || {};
+  const c = audioReady();
+  if (!c) return;
+  const t = o.at || c.currentTime,
+    src = c.createBufferSource(),
+    f = c.createBiquadFilter(),
+    g = c.createGain();
+  src.buffer = A.noise;
+  src.loop = true;
+  f.type = o.ftype || 'lowpass';
+  f.Q.value = o.q || 1;
+  f.frequency.setValueAtTime(o.f0 || 2000, t);
+  if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + dur);
+  g.gain.setValueAtTime(o.vol || 0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f);
+  f.connect(g);
+  audioRoute(g, o);
+  src.start(t, Math.random());
+  src.stop(t + dur + 0.05);
+}
+/** Panorama y volumen según la posición del sonido respecto al jugador y la cámara. */
+function spatial(x, y) {
+  const p = G && G.player;
+  if (!p || x === undefined) return { pan: 0, g: 1 };
+  const dx = x - p.x,
+    dy = y - p.y,
+    d = Math.hypot(dx, dy),
+    yaw = view3d ? CAM.yaw : -Math.PI / 2,
+    rx = -Math.sin(yaw),
+    ry = Math.cos(yaw);
+  return { pan: d > 1 ? ((dx * rx + dy * ry) / d) * 0.8 : 0, g: clamp(1.1 - d / 900, 0.05, 1) };
+}
+
+/** Efectos de juego. Todos aceptan una posición opcional (x, y) para el estéreo. */
+const sfx = {
+  shot(kind, x, y) {
+    const s = spatial(x, y),
+      v = s.g;
+    const big = kind === 'escopeta',
+      smg = kind === 'subfusil';
+    noise(big ? 0.35 : 0.18, {
+      vol: (big ? 0.55 : 0.35) * v,
+      f0: big ? 3200 : 5000,
+      f1: 300,
+      pan: s.pan,
+      verb: 0.35,
+    });
+    tone(big ? 70 : smg ? 130 : 110, big ? 0.28 : 0.14, {
+      type: 'sine',
+      vol: 0.5 * v,
+      slide: -50,
+      pan: s.pan,
+    });
+    tone(big ? 900 : 1600, 0.05, { type: 'square', vol: 0.08 * v, slide: -700, pan: s.pan });
+  },
+  explosion(x, y) {
+    const s = spatial(x, y);
+    noise(0.9, { vol: 0.7 * s.g, f0: 1800, f1: 70, pan: s.pan, verb: 0.5 });
+    tone(60, 0.7, { type: 'sine', vol: 0.7 * s.g, slide: -40, pan: s.pan, verb: 0.3 });
+  },
+  step(sprint) {
+    noise(0.07, {
+      vol: sprint ? 0.12 : 0.08,
+      ftype: 'bandpass',
+      f0: 380 + Math.random() * 160,
+      f1: 160,
+      q: 1.2,
+    });
+  },
+  hit(x, y) {
+    const s = spatial(x, y);
+    noise(0.1, { vol: 0.28 * s.g, ftype: 'bandpass', f0: 900, f1: 250, q: 2, pan: s.pan });
+    tone(160, 0.1, { type: 'triangle', vol: 0.18 * s.g, slide: -90, pan: s.pan });
+  },
+  hurt() {
+    noise(0.25, { vol: 0.35, f0: 1200, f1: 120, verb: 0.2 });
+    tone(110, 0.3, { type: 'sawtooth', vol: 0.18, slide: -60, filter: 600 });
+  },
+  growl(x, y, big) {
+    const s = spatial(x, y);
+    const f = (big ? 55 : 85) + Math.random() * 25;
+    tone(f, big ? 1.1 : 0.7, {
+      type: 'sawtooth',
+      vol: 0.2 * s.g,
+      slide: -f * 0.4,
+      filter: 420,
+      attack: 0.08,
+      pan: s.pan,
+      verb: 0.3,
+    });
+    noise(0.5, { vol: 0.08 * s.g, ftype: 'bandpass', f0: 500, f1: 250, q: 3, pan: s.pan });
+  },
+  reload() {
+    tone(260, 0.06, { type: 'square', vol: 0.1, filter: 1800 });
+    tone(180, 0.09, {
+      type: 'square',
+      vol: 0.1,
+      filter: 1400,
+      at: A.ctx && A.ctx.currentTime + 0.14,
+    });
+  },
+  pickup() {
+    tone(660, 0.12, { type: 'triangle', vol: 0.16 });
+    tone(990, 0.16, { type: 'triangle', vol: 0.14, at: A.ctx && A.ctx.currentTime + 0.08 });
+  },
+  ui() {
+    tone(520, 0.05, { type: 'triangle', vol: 0.1 });
+  },
+  thunder() {
+    noise(2.2, { vol: 0.6, f0: 500, f1: 40, verb: 0.7 });
+  },
+  chop() {
+    noise(0.09, { vol: 0.25, ftype: 'bandpass', f0: 700, f1: 300, q: 2.5 });
+    tone(140 + Math.random() * 30, 0.08, { type: 'triangle', vol: 0.18, slide: -60 });
+  },
+};
+
+// lluvia: ruido filtrado en bucle cuyo volumen sigue a la intensidad
+let rainNode = null;
+function rainSound(intensity) {
+  const c = audioReady();
+  if (!c) return;
+  if (!rainNode) {
+    const src = c.createBufferSource(),
+      f = c.createBiquadFilter(),
+      g = c.createGain();
+    src.buffer = A.noise;
+    src.loop = true;
+    f.type = 'highpass';
+    f.frequency.value = 1400;
+    g.gain.value = 0;
+    src.connect(f);
+    f.connect(g);
+    g.connect(A.sfx);
+    src.start();
+    rainNode = g;
+  }
+  rainNode.gain.setTargetAtTime(intensity * 0.12, c.currentTime, 0.4);
 }
 
 /* ---- src/js/core/voice.js ---- */
@@ -1686,7 +1928,7 @@ function updatePlayer(dt) {
           G.stepT -= dt;
           if (G.stepT <= 0) {
             G.stepT = p.sprinting ? 0.22 : 0.33;
-            beep(80 + Math.random() * 30, 0.05, 'triangle', 0.035);
+            sfx.step(p.sprinting);
           }
         }
       }
@@ -3200,21 +3442,23 @@ const WAVES = [
   { len: 70, count: 22 },
 ];
 const POD = { x: 1850, y: 250 };
-const WORDER = ['bate', 'pistola', 'escopeta'],
-  WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta' },
-  WICON = { bate: '🏏', pistola: '🔫', escopeta: '💥' };
-const MAG = { pistola: 12, escopeta: 6 };
+const WORDER = ['bate', 'pistola', 'escopeta', 'subfusil'],
+  WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta', subfusil: 'Subfusil' },
+  WICON = { bate: '🏏', pistola: '🔫', escopeta: '💥', subfusil: '⚡' };
+const MAG = { pistola: 12, escopeta: 6, subfusil: 30 };
 /** Color del zombi según su tipo. */
 function zColor(z) {
   return z.boss
     ? '#8a3030'
-    : z.tank
-      ? '#3d4a38'
-      : z.bomb
-        ? '#d07a1a'
-        : z.run
-          ? '#7a8a40'
-          : '#5f7f52';
+    : z.spit
+      ? '#7ab030'
+      : z.tank
+        ? '#3d4a38'
+        : z.bomb
+          ? '#d07a1a'
+          : z.run
+            ? '#7a8a40'
+            : '#5f7f52';
 }
 const fmtT = s =>
   String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Math.floor(s % 60)).padStart(2, '0');
@@ -3339,6 +3583,11 @@ function newZombie(cfg) {
     wave: { n: 1, state: 'wait', t: 0, left: 0, spawnT: 0, len: 50 },
   };
   G.drops = [];
+  G.up = { dmg: 0, mag: 0, armor: 0 };
+  G.cash = 0;
+  G.gren = 0;
+  G.grs = [];
+  G.spits = [];
   G.score = 0;
   G.combo = 0;
   G.comboT = 0;
@@ -3366,6 +3615,7 @@ function banner(t, s) {
 function startWave(n) {
   const w = G.wave,
     W_ = WAVES[Math.min(n, 5) - 1];
+  if (scene === 'shop') scene = 'play';
   w.state = 'run';
   w.t = 0;
   w.len = W_.len * G.zc.lenMul;
@@ -3434,6 +3684,9 @@ function spawnZ(runner) {
   } else if (n >= 4 && Math.random() < 0.14) {
     z.bomb = true;
     z.sp *= 1.15;
+  } else if (n >= 3 && Math.random() < 0.16) {
+    z.spit = true;
+    z.sp *= 0.85;
   }
   z.hp = Math.round(z.hp * diff().zhp);
   z.max = z.hp;
@@ -3525,7 +3778,7 @@ function shoot(tx, ty) {
         const a = Math.atan2(z.y - p.y, z.x - p.x),
           da = Math.abs(Math.atan2(Math.sin(a - ang), Math.cos(a - ang)));
         if (da < 1) {
-          z.hp -= 50;
+          z.hp -= Math.round(50 * dmgMul());
           z.hurt = 0.2;
           move(z, Math.cos(a) * 20, Math.sin(a) * 20);
           burst(z.x, z.y, 8, '#4a7a2a', 150);
@@ -3548,10 +3801,10 @@ function shoot(tx, ty) {
   }
   g.mags[w]--;
   if (g.mags[w] === 0 && g.ammo > 0) setTimeout(() => G && G.zc && startReload(), 180);
-  const sg = w == 'escopeta',
-    n = sg ? 5 : 1,
-    spread = sg ? 0.38 : 0.03,
-    dmg = sg ? 24 : 34;
+  const ws = WSTATS[w],
+    n = ws.n,
+    spread = ws.spread,
+    dmg = Math.round(ws.dmg * dmgMul());
   for (let i = 0; i < n; i++) {
     const a = ang + (n > 1 ? (i / (n - 1) - 0.5) * spread * 2 : rnd(-spread, spread));
     g.bullets.push({
@@ -3563,15 +3816,15 @@ function shoot(tx, ty) {
       dmg,
     });
   }
-  g.cd = sg ? 0.85 : 0.28;
+  g.cd = ws.cd;
   g.muzzle = 0.09;
-  g.shake = Math.max(g.shake, sg ? 0.25 : 0.1);
-  beep(sg ? 90 : 240, 0.12, 'sawtooth', 0.14, -150);
+  g.shake = Math.max(g.shake, w == 'escopeta' ? 0.25 : 0.08);
+  sfx.shot(w, p.x, p.y);
 }
 /** Llena el cargador la primera vez que se usa un arma, tomando de la reserva. */
 function ensureMag(w) {
   if (G.mags[w] === undefined) {
-    const t = Math.min(MAG[w], G.ammo);
+    const t = Math.min(magSize(w), G.ammo);
     G.ammo -= t;
     G.mags[w] = t;
   }
@@ -3582,11 +3835,11 @@ function startReload() {
     w = g.wep;
   if (!w || !MAG[w] || g.reloadT > 0 || scene !== 'play') return;
   ensureMag(w);
-  if (g.mags[w] >= MAG[w] || g.ammo <= 0) return;
+  if (g.mags[w] >= magSize(w) || g.ammo <= 0) return;
   g.reloadT = w === 'escopeta' ? 1.6 : 1.1;
   g.reloadW = w;
-  beep(300, 0.08, 'square', 0.06);
-  setTimeout(() => beep(420, 0.06, 'square', 0.06), g.reloadT * 600);
+  sfx.reload();
+  setTimeout(() => sfx.reload(), g.reloadT * 600);
 }
 function shootAuto() {
   const p = G.player;
@@ -3631,12 +3884,13 @@ function updZombie(dt) {
   if (g.reloadT > 0) {
     g.reloadT -= dt;
     if (g.reloadT <= 0 && g.wep === g.reloadW) {
-      const take = Math.min(MAG[g.wep] - g.mags[g.wep], g.ammo);
+      const take = Math.min(magSize(g.wep) - g.mags[g.wep], g.ammo);
       g.mags[g.wep] += take;
       g.ammo -= take;
       beep(520, 0.07, 'square', 0.06);
     }
   }
+  updExtras(dt);
   // combo
   if (g.comboT > 0) {
     g.comboT -= dt;
@@ -3654,7 +3908,7 @@ function updZombie(dt) {
         g.hp = Math.min(100, g.hp + 25);
         toast('+25 salud', 1.2);
       }
-      beep(760, 0.1, 'sine', 0.08, 300);
+      sfx.pickup();
       g.drops.splice(i, 1);
     } else if (d.t <= 0) g.drops.splice(i, 1);
   }
@@ -3675,15 +3929,12 @@ function updZombie(dt) {
     }
     if (w.t >= w.len || (w.boss && g.bossDead && w.t > 2)) {
       mevent('wave');
-      g.score += 100 * w.n;
+      addScore(100 * w.n);
       if (w.n < g.zc.waves) {
         clearZ();
         w.state = 'break';
         w.t = 0;
-        banner(
-          'OLEADA ' + w.n + ' SUPERADA',
-          'Los zombis se dispersan… busca bolsas con suministros'
-        );
+        banner('OLEADA ' + w.n + ' SUPERADA', 'Los zombis se dispersan… pulsa B para la tienda');
         beep(500, 0.5, 'sine', 0.1, 300);
       } else if (!g.zc.escape) {
         w.state = 'done';
@@ -3700,7 +3951,7 @@ function updZombie(dt) {
     }
   } else if (w.state == 'break') {
     w.t += dt;
-    if (w.t >= 9) {
+    if (w.t >= 14) {
       w.n++;
       startWave(w.n);
     }
@@ -3755,7 +4006,7 @@ function updZombie(dt) {
         z.path.push({ x: p.x, y: p.y, chase: 1 });
       }
     }
-    const t = z.path[0];
+    const t = z.spit && d < 260 && clearLine(z, p) ? null : z.path[0];
     if (t) {
       if (t.chase) {
         t.x = p.x;
@@ -3783,19 +4034,16 @@ function updZombie(dt) {
     if (z.bomb && d < 46 && p.alive) {
       z.hp = 0;
       z.selfDestruct = true;
-      if (d < 110) g.hp -= Math.round(24 * diff().zdmg);
+      if (d < 110) hurtPlayer(24 * diff().zdmg);
       for (const o of g.zs) if (o !== z && dist(o, z) < 110) o.hp -= 40;
       g.flash = 0.7;
       g.shake = 0.6;
       burst(z.x, z.y, 36, '#ff9a20', 260, 0.9);
       debris3D(z.x, 20, z.y, '#ff8a20', 10);
-      beep(70, 0.5, 'sawtooth', 0.2, -50);
+      sfx.explosion(z.x, z.y);
     } else if (d < (z.boss ? 58 : z.tank ? 40 : 32) && z.cd <= 0 && p.alive) {
       z.cd = 0.9;
-      g.hp -= Math.round((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg);
-      g.flash = 0.5;
-      g.shake = 0.3;
-      beep(90, 0.15, 'sawtooth', 0.12, -40);
+      hurtPlayer((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg);
       burst(p.x, p.y, 8, '#7a0b0b', 160);
     }
   }
@@ -3815,7 +4063,7 @@ function updZombie(dt) {
       g.kills++;
       g.combo = Math.min(8, g.combo + 1);
       g.comboT = 4;
-      g.score += Math.round(10 * (z.boss ? 20 : z.tank ? 4 : 1) * (1 + g.combo * 0.25));
+      addScore(Math.round(10 * (z.boss ? 20 : z.tank ? 4 : 1) * (1 + g.combo * 0.25)));
       if (z.boss || Math.random() < 0.22 * diff().drop)
         g.drops.push({
           x: z.x,
@@ -3836,13 +4084,14 @@ function updZombie(dt) {
         dots: Array.from({ length: 5 }, () => [rnd(-40, 40), rnd(-20, 24), rnd(2, 4)]),
       });
       if (g.blood.length > 40) g.blood.shift();
-      beep(70, 0.2, 'sawtooth', 0.1, -30);
+      sfx.hit(z.x, z.y);
     }
   g.zs = g.zs.filter(z => z.hp > 0);
   g.gt -= dt;
   if (g.gt <= 0) {
     g.gt = rnd(2.5, 5);
-    if (g.zs.some(z => dist(z, p) < 450)) beep(rnd(55, 80), 0.5, 'sawtooth', 0.08, -20);
+    const near = g.zs.find(z => dist(z, p) < 450);
+    if (near) sfx.growl(near.x, near.y, near.boss || near.tank);
   }
   if (g.hp <= 0) {
     g.hp = 0;
@@ -3912,6 +4161,7 @@ function drawZombies() {
     txt('CÁPSULA DE ESCAPE', POD.x, POD.y + 52, 14, '#9fb', 'center');
     if (g.nearPod) txt('[E] Escapar', POD.x, POD.y - 50, 16, '#ffd740', 'center');
   }
+  drawExtras2D();
   for (const d of g.drops) {
     ctx.fillStyle = d.type === 'municion' ? '#ffd740' : '#ffffff';
     rr(d.x - 10, d.y - 10, 20, 20, 4);
@@ -4023,6 +4273,8 @@ function drawZHUD() {
       g.kills +
       '  ·  Puntos: ' +
       g.score +
+      '  ·  Fondos: ' +
+      g.cash +
       (g.combo > 1 ? '  x' + (1 + g.combo * 0.25).toFixed(2) : ''),
     24,
     46,
@@ -4058,7 +4310,7 @@ function drawZHUD() {
   }
   // armas
   WORDER.forEach((k, i) => {
-    const x = W / 2 - 170 + i * 115,
+    const x = W / 2 - 230 + i * 115,
       y = H - 58,
       own = g.weps[k];
     ctx.globalAlpha = own ? 1 : 0.35;
@@ -4072,7 +4324,7 @@ function drawZHUD() {
     ctx.globalAlpha = 1;
   });
   if (g.wep && g.wep != 'bate') {
-    const mg = g.mags[g.wep] === undefined ? Math.min(MAG[g.wep], g.ammo) : g.mags[g.wep],
+    const mg = g.mags[g.wep] === undefined ? Math.min(magSize(g.wep), g.ammo) : g.mags[g.wep],
       rs = g.mags[g.wep] === undefined ? g.ammo - mg : g.ammo;
     txt(
       `${g.reloadT > 0 ? 'Recargando…' : mg + ' / ' + rs}   [R] recargar`,
@@ -4092,6 +4344,9 @@ function drawZHUD() {
       ctx.fill();
     }
   }
+  txt('Granadas: ' + g.gren + '  [G]', 268, H - 30, 13, g.gren ? '#ffb74d' : '#789', 'left');
+  if (g.wave.state === 'break' || g.wave.state === 'wait')
+    txt('[B] Tienda', W - 130, H - 156, 14, '#ffd740', 'center');
   if (g.toastT > 0) {
     ctx.font = 'bold 18px system-ui';
     const tw = ctx.measureText(g.toast).width + 40;
@@ -4130,7 +4385,7 @@ function drawZHUD() {
   };
   btn(bx, by, 'USAR', '[E]', !!(g.nearBag || g.nearPod || g.nearCam), '#3a7bd5', doUse);
   btn(bx - bs - 8, by, 'DISPARAR', '[Espacio]', true, '#c62828', shootAuto);
-  btn(bx, by - bs - 8, 'ARMA', '[1-3]', true, '#6a5acd', cycleWep);
+  btn(bx, by - bs - 8, 'ARMA', '[1-4]', true, '#6a5acd', cycleWep);
   if (g.bannerT > 0) {
     const a = Math.min(1, g.bannerT);
     ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;
@@ -4211,6 +4466,309 @@ function drawZEnd() {
   finishFX();
 }
 
+/* ---- src/js/modes/zombie-extras.js ---- */
+/**
+ * Extras del modo zombi: estadísticas de armas (incluye el subfusil), mejoras y tienda entre
+ * oleadas, granadas y zombis escupidores (proyectiles ácidos a distancia).
+ */
+'use strict';
+
+/** Daño, cadencia, dispersión y balines por disparo de cada arma de fuego. */
+const WSTATS = {
+  pistola: { dmg: 34, cd: 0.28, spread: 0.03, n: 1 },
+  escopeta: { dmg: 24, cd: 0.85, spread: 0.38, n: 5 },
+  subfusil: { dmg: 17, cd: 0.085, spread: 0.07, n: 1 },
+};
+/** Tamaño de cargador teniendo en cuenta la mejora de cargadores. */
+function magSize(w) {
+  return Math.round(MAG[w] * (1 + 0.5 * ((G.up && G.up.mag) || 0)));
+}
+/** Multiplicador de daño por mejoras. */
+function dmgMul() {
+  return 1 + 0.2 * ((G.up && G.up.dmg) || 0);
+}
+/** Daño al jugador reducido por la armadura. */
+function hurtPlayer(raw) {
+  const g = G;
+  g.hp -= Math.max(1, Math.round(raw * (1 - 0.2 * ((g.up && g.up.armor) || 0))));
+  g.flash = 0.5;
+  g.shake = 0.3;
+  sfx.hurt();
+}
+function addScore(n) {
+  G.score += n;
+  G.cash += n;
+}
+
+/* ---- granadas ---- */
+function throwGrenade() {
+  const g = G,
+    p = g.player;
+  if (!g.zc || scene !== 'play' || g.intro > 0 || !p.alive) return;
+  if (g.gren <= 0) {
+    toast('No tienes granadas (cómpralas en la tienda con B)', 1.6);
+    return;
+  }
+  g.gren--;
+  const a = view3d ? CAM.yaw : p.aim;
+  g.grs.push({ x: p.x, y: p.y, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, t: 1.5 });
+  beep(300, 0.08, 'square', 0.06);
+}
+function explodeGrenade(gr) {
+  const g = G,
+    p = g.player;
+  burst(gr.x, gr.y, 40, '#ff9a20', 280, 0.9);
+  burst(gr.x, gr.y, 16, '#444', 120, 1.1);
+  debris3D(gr.x, 16, gr.y, '#ff8a20', 14);
+  sfx.explosion(gr.x, gr.y);
+  g.shake = Math.max(g.shake, 0.5);
+  for (const z of g.zs) {
+    const d = dist(z, gr);
+    if (d < 140) {
+      z.hp -= Math.round((z.boss ? 70 : 150) * (1 - d / 220) * dmgMul());
+      z.hurt = 0.2;
+      const a = Math.atan2(z.y - gr.y, z.x - gr.x);
+      move(z, Math.cos(a) * 30, Math.sin(a) * 30);
+    }
+  }
+  if (dist(p, gr) < 90) hurtPlayer(10);
+}
+/** Granadas y proyectiles ácidos. */
+function updExtras(dt) {
+  const g = G,
+    p = g.player;
+  for (const gr of g.grs) {
+    gr.t -= dt;
+    const nx = gr.x + gr.vx * dt,
+      ny = gr.y + gr.vy * dt;
+    if (walk(nx, ny)) {
+      gr.x = nx;
+      gr.y = ny;
+    } else {
+      gr.vx *= -0.3;
+      gr.vy *= -0.3;
+    }
+    gr.vx *= 1 - 1.8 * dt;
+    gr.vy *= 1 - 1.8 * dt;
+    if (gr.t <= 0) explodeGrenade(gr);
+  }
+  g.grs = g.grs.filter(gr => gr.t > 0);
+  for (const s of g.spits) {
+    s.life -= dt;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    if (!walk(s.x, s.y)) s.life = 0;
+    else if (p.alive && dist(s, p) < 20) {
+      s.life = 0;
+      hurtPlayer(8 * diff().zdmg);
+      burst(p.x, p.y, 8, '#9acd32', 140, 0.5);
+    }
+  }
+  g.spits = g.spits.filter(s => s.life > 0);
+  // escupidores: mantienen la distancia y lanzan ácido
+  for (const z of g.zs)
+    if (z.spit) {
+      z.spitT = (z.spitT === undefined ? rnd(0.5, 1.6) : z.spitT) - dt;
+      if (z.spitT <= 0 && dist(z, p) < 380 && clearLine(z, p)) {
+        z.spitT = 2.4;
+        const a = Math.atan2(p.y - z.y, p.x - z.x);
+        g.spits.push({ x: z.x, y: z.y, vx: Math.cos(a) * 300, vy: Math.sin(a) * 300, life: 2.2 });
+        tone(300, 0.2, {
+          type: 'sawtooth',
+          vol: 0.08,
+          slide: -150,
+          filter: 900,
+          pan: spatial(z.x, z.y).pan,
+        });
+      }
+    }
+}
+function drawExtras2D() {
+  for (const gr of G.grs) {
+    ctx.fillStyle = Math.floor(gr.t * 8) % 2 ? '#e53935' : '#222';
+    ctx.beginPath();
+    ctx.arc(gr.x, gr.y, 7, 0, 6.3);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#b6ff3a';
+  for (const s of G.spits) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 6, 0, 6.3);
+    ctx.fill();
+  }
+}
+/** Sincroniza granadas y ácido con la escena 3D. */
+function syncExtras3D() {
+  if (!R3.grM) R3.grM = new Map();
+  const seen = new Set(),
+    t = performance.now() / 1000;
+  for (const gr of G.grs || []) {
+    let m = R3.grM.get(gr);
+    if (!m) {
+      m = new THREE.Mesh(
+        new THREE.SphereGeometry(6, 12, 8),
+        new THREE.MeshStandardMaterial({
+          color: 0x222222,
+          emissive: 0xff2020,
+          emissiveIntensity: 1.5,
+        })
+      );
+      R3.scene.add(m);
+      R3.grM.set(gr, m);
+    }
+    m.position.set(gr.x, 8, gr.y);
+    m.material.emissiveIntensity = Math.floor(t * 8) % 2 ? 2.5 : 0.2;
+    seen.add(gr);
+  }
+  for (const [gr, m] of R3.grM)
+    if (!seen.has(gr)) {
+      R3.scene.remove(m);
+      R3.grM.delete(gr);
+    }
+  if (!R3.spitP) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(60 * 3), 3));
+    R3.spitP = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({ color: new THREE.Color(1.2, 3, 0.4), size: 12, fog: false })
+    );
+    R3.spitP.frustumCulled = false;
+    R3.scene.add(R3.spitP);
+  }
+  const pa = R3.spitP.geometry.attributes.position;
+  let n = 0;
+  for (const s of G.spits || []) {
+    if (n >= 60) break;
+    pa.array[n * 3] = s.x;
+    pa.array[n * 3 + 1] = 32;
+    pa.array[n * 3 + 2] = s.y;
+    n++;
+  }
+  R3.spitP.geometry.setDrawRange(0, n);
+  pa.needsUpdate = true;
+}
+
+/* ---- tienda entre oleadas ---- */
+const SHOP = [
+  {
+    id: 'ammo',
+    name: 'Munición +40',
+    desc: 'Reserva para tus armas',
+    cost: () => 80,
+    ok: () => true,
+    buy: g => (g.ammo += 40),
+  },
+  {
+    id: 'heal',
+    name: 'Botiquín',
+    desc: 'Recupera toda la salud',
+    cost: () => 100,
+    ok: g => g.hp < 100,
+    buy: g => (g.hp = 100),
+  },
+  {
+    id: 'gren',
+    name: 'Granadas x2',
+    desc: 'Daño en área (tecla G)',
+    cost: () => 120,
+    ok: () => true,
+    buy: g => (g.gren += 2),
+  },
+  {
+    id: 'smg',
+    name: 'Subfusil',
+    desc: 'Arma automática de 30 balas',
+    cost: () => 250,
+    ok: g => !g.weps.subfusil,
+    buy: g => {
+      g.weps.subfusil = true;
+      g.wep = 'subfusil';
+      g.ammo += 30;
+    },
+  },
+  {
+    id: 'dmg',
+    name: 'Daño +20%',
+    desc: 'Todas las armas (máx. 3)',
+    cost: g => 200 * (g.up.dmg + 1),
+    ok: g => g.up.dmg < 3,
+    buy: g => g.up.dmg++,
+  },
+  {
+    id: 'mag',
+    name: 'Cargadores +50%',
+    desc: 'Más balas por cargador (máx. 2)',
+    cost: g => 180 * (g.up.mag + 1),
+    ok: g => g.up.mag < 2,
+    buy: g => g.up.mag++,
+  },
+  {
+    id: 'armor',
+    name: 'Armadura −20% daño',
+    desc: 'Menos daño recibido (máx. 2)',
+    cost: g => 220 * (g.up.armor + 1),
+    ok: g => g.up.armor < 2,
+    buy: g => g.up.armor++,
+  },
+];
+function openShop() {
+  if (!G || !G.zc || scene !== 'play') return;
+  const s = G.wave.state;
+  if (s !== 'break' && s !== 'wait') {
+    toast('La tienda solo abre entre oleadas', 1.6);
+    return;
+  }
+  scene = 'shop';
+}
+function drawShop() {
+  const g = G;
+  ctx.fillStyle = 'rgba(0,0,0,.6)';
+  ctx.fillRect(0, 0, W, H);
+  addHit(0, 0, W, H, () => {}, false);
+  beginUI(640, 560);
+  panel(0, 0, 640, 560, '#ffd740');
+  titleGlow('TIENDA', 320, 40, 32, '#ffd740');
+  txt(`Fondos: ${g.cash}   ·   Puntos: ${g.score}`, 320, 78, 16, '#fff', 'center');
+  SHOP.forEach((it, i) => {
+    const y = 104 + i * 58,
+      cost = it.cost(g),
+      can = it.ok(g) && g.cash >= cost;
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    rr(24, y, 592, 50, 10);
+    ctx.fill();
+    txt(it.name, 40, y + 18, 16, it.ok(g) ? '#fff' : '#6a7', 'left');
+    txt(it.desc, 40, y + 38, 12, '#9fb3c8', 'left', false);
+    if (!it.ok(g)) txt('Completo', 590, y + 25, 14, '#6fcf73', 'right');
+    else
+      uiBtn(
+        470,
+        y + 8,
+        130,
+        34,
+        `${cost} pts`,
+        can ? '#2e7d32' : '#444',
+        () => {
+          if (!can) return;
+          g.cash -= cost;
+          it.buy(g);
+          sfx.pickup();
+        },
+        15
+      );
+  });
+  txt(
+    `Mejoras → daño ${g.up.dmg}/3 · cargadores ${g.up.mag}/2 · armadura ${g.up.armor}/2 · granadas ${g.gren}`,
+    320,
+    522,
+    12,
+    '#9fb3c8',
+    'center',
+    false
+  );
+  uiBtn(220, 532, 200, 22, 'Cerrar [B]', '#8e2020', () => (scene = 'play'), 13);
+  endUI();
+}
+
 /* ---- src/js/modes/sandbox.js ---- */
 /**
  * Modo Mundo cubo (estilo Minecraft): terreno, bloques, crafteo, día/noche, zombis.
@@ -4251,7 +4809,18 @@ const OCOL = {
   8: '#8a5a2a',
   9: '#ffb020',
 };
-const HOTBAR = ['tablon', 'piedra', 'tierra', 'suelo', 'antorcha', 'mesa', 'horno', 'manzana'];
+const HOTBAR = [
+  'tablon',
+  'piedra',
+  'tierra',
+  'suelo',
+  'antorcha',
+  'mesa',
+  'horno',
+  'cama',
+  'brote',
+  'manzana',
+];
 const INAME = {
   madera: 'Madera',
   tablon: 'Tablones',
@@ -4263,6 +4832,8 @@ const INAME = {
   suelo: 'Suelo',
   manzana: 'Manzana',
   horno: 'Horno',
+  cama: 'Cama',
+  brote: 'Brote',
   carne: 'Carne cruda',
   asada: 'Carne asada',
 };
@@ -4273,6 +4844,8 @@ const ITEMOBJ = {
   antorcha: O_TORCH,
   mesa: O_TABLE,
   horno: 11,
+  cama: 12,
+  brote: 13,
 };
 const RECIPES = [
   { n: 'Tablones x4', in: { madera: 1 }, out: ['tablon', 4] },
@@ -4280,6 +4853,7 @@ const RECIPES = [
   { n: 'Antorchas x4', in: { madera: 1, carbon: 1 }, out: ['antorcha', 4] },
   { n: 'Mesa de trabajo', in: { tablon: 4 }, out: ['mesa', 1] },
   { n: 'Horno (cocinar carne)', in: { piedra: 8 }, out: ['horno', 1] },
+  { n: 'Cama (dormir de noche)', in: { tablon: 6 }, out: ['cama', 1] },
   { n: 'Hacha (talar más rápido)', in: { tablon: 3 }, tool: 'hacha', table: true },
   { n: 'Pico (picar piedra más rápido)', in: { tablon: 3 }, tool: 'pico', table: true },
   { n: 'Espada (más daño a zombis)', in: { tablon: 2 }, tool: 'espada', table: true },
@@ -4412,6 +4986,23 @@ function buildTex() {
     x.fillStyle = '#ffd060';
     x.fillRect(6, 10, 3, 2);
     frameTex(x);
+  });
+  T.o[12] = mkTex(['#c0392b', '#b03427', '#cc4030'], x => {
+    x.fillStyle = '#f2efe8';
+    x.fillRect(1, 1, 5, 14);
+    x.fillStyle = '#8a8a96';
+    x.fillRect(1, 1, 5, 1);
+    x.fillStyle = '#5a3a18';
+    x.fillRect(0, 14, 16, 2);
+    frameTex(x);
+  });
+  T.o[13] = mkTex(null, x => {
+    x.fillStyle = '#4a9a3a';
+    x.fillRect(7, 6, 2, 8);
+    x.fillStyle = '#6ac04a';
+    x.fillRect(4, 4, 3, 3);
+    x.fillRect(9, 3, 3, 3);
+    x.fillRect(6, 1, 4, 3);
   });
   T.o[9] = mkTex(null, x => {
     x.fillStyle = '#7a4a1a';
@@ -4622,11 +5213,15 @@ function newSandbox(cfg) {
       suelo: 0,
       manzana: 0,
       horno: 0,
+      cama: 0,
+      brote: 0,
       carne: 0,
       asada: 0,
     },
     food: 20,
     animals: [],
+    saplings: [],
+    weather: { rain: 0, target: 0, t: rnd(60, 110), thunderT: 5, lightning: 0 },
     tools: {},
     slot: 0,
     hp: 20,
@@ -4707,6 +5302,7 @@ function breakObj(tx, ty) {
         TREES.delete(i);
         OB[i] = 0;
         burst(px, py, 20, '#2f7a2a', 160, 0.8);
+        addItem('brote', 1 + (Math.random() < 0.5 ? 1 : 0));
         if (Math.random() < 0.5) {
           addItem('manzana', 1);
           toast('+1 Manzana', 1.2);
@@ -4733,7 +5329,10 @@ function breakObj(tx, ty) {
   } else if (o == O_TORCH) {
     addItem('antorcha', 1);
     g.torches = g.torches.filter(t => !(t[0] == tx && t[1] == ty));
-  } else if (o == O_CHEST) openLoot(px, py);
+  } else if (o == O_FURNACE) addItem('horno', 1);
+  else if (o == O_BED) addItem('cama', 1);
+  else if (o == O_SAPLING) addItem('brote', 1);
+  else if (o == O_CHEST) openLoot(px, py);
 }
 function openLoot(px, py) {
   const pool = [
@@ -4800,7 +5399,7 @@ function sbAct(dt) {
   g.mine.tick -= dt;
   if (g.mine.tick <= 0) {
     g.mine.tick = 0.22;
-    beep(180 + Math.random() * 60, 0.04, 'square', 0.04);
+    sfx.chop();
     burst(T.tx * TS + TS / 2, T.ty * TS + TS / 2, 2, OCOL[o] || '#888', 60, 0.3);
   }
   if (g.mine.t >= need) {
@@ -4838,6 +5437,10 @@ function sbPlace() {
       toast('No puedes poner eso ahí (usa suelo en el agua)', 1.5);
       return;
     }
+    if (k == 'brote' && GR[i] != G_GRASS) {
+      toast('Los brotes solo crecen en la hierba', 1.6);
+      return;
+    }
     const code = ITEMOBJ[k];
     if (OSOLID.has(code)) {
       if (Math.abs(p.x - cx) < TS / 2 + 14 && Math.abs(p.y + 7 - cy) < TS / 2 + 14) {
@@ -4849,6 +5452,7 @@ function sbPlace() {
     }
     OB[i] = code;
     if (code == O_TORCH) g.torches.push([T.tx, T.ty]);
+    if (code == O_SAPLING) g.saplings.push({ tx: T.tx, ty: T.ty, t: 0 });
   }
   g.inv[k]--;
   beep(260, 0.05, 'square', 0.06);
@@ -4894,6 +5498,10 @@ function sbInteract() {
       sbCook(T.tx, T.ty);
       return;
     }
+    if (OB[i] == O_BED) {
+      sbSleep(T.tx, T.ty);
+      return;
+    }
   }
   toast('Nada con lo que interactuar aquí', 1.2);
 }
@@ -4927,7 +5535,10 @@ function updSandbox(dt) {
   if (g.flash > 0) g.flash -= dt * 1.5;
   if (g.shake > 0) g.shake -= dt;
   if (g.bannerT > 0) g.bannerT -= dt;
-  g.dark = dayDark((g.sbT % CYCLE) / CYCLE);
+  g.dark = Math.min(
+    0.9,
+    dayDark((g.sbT % CYCLE) / CYCLE) + ((g.weather && g.weather.rain) || 0) * 0.18
+  );
   if (g.nightFlag && g.dark < 0.15) {
     g.nightFlag = false;
     mevent('night');
@@ -5059,6 +5670,8 @@ function updSandbox(dt) {
   for (const z of g.zs) if (z.hp <= 0 && z.hurt) mevent('zkill');
   g.zs = g.zs.filter(z => z.hp > 0 && Math.hypot(z.x - p.x, z.y - p.y) < 1300);
   updSurvival(dt);
+  growSaplings(dt);
+  updWeather(dt);
   g.regT += dt;
   if (g.regT > 6 && g.hp < 20 && g.food >= 6) {
     g.hp = Math.min(20, g.hp + 1);
@@ -5068,8 +5681,8 @@ function updSandbox(dt) {
     g.hp = 20;
     g.food = 20;
     g.zs = [];
-    p.x = SPAWN.x * TS + TS / 2;
-    p.y = (SPAWN.y + 3) * TS + TS / 2;
+    p.x = g.respawn ? g.respawn.x : SPAWN.x * TS + TS / 2;
+    p.y = g.respawn ? g.respawn.y : (SPAWN.y + 3) * TS + TS / 2;
     g.flash = 1;
     toast('Has muerto… reapareces en la nave', 3);
   }
@@ -5364,7 +5977,7 @@ function drawSbHUD() {
   rr(W / 2 - 110, 10, 220, 34, 10);
   ctx.fill();
   txt(
-    `${g.dark > 0.5 ? '🌙' : '☀'} Día ${Math.floor(g.sbT / CYCLE) + 1} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
+    `${g.weather.rain > 0.3 ? '🌧' : g.dark > 0.5 ? '🌙' : '☀'} Día ${Math.floor(g.sbT / CYCLE) + 1} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`,
     W / 2,
     28,
     17,
@@ -5372,7 +5985,7 @@ function drawSbHUD() {
     'center'
   );
   // barra rápida
-  const sw = 54,
+  const sw = 46,
     gap = 6,
     bw = HOTBAR.length * (sw + gap) - gap,
     bx0 = W / 2 - bw / 2,
@@ -5413,7 +6026,7 @@ function drawSbHUD() {
   }
   if (g.t < 25)
     txt(
-      'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-8: bloque · G: comer',
+      'Clic izq: picar/atacar · Clic der o F: colocar · E: interactuar · C: crafteo · 1-0: bloque · G: comer',
       W / 2,
       H * 0.2,
       Math.min(15, W / 50),
@@ -5829,6 +6442,77 @@ function drawAnimals2D() {
   }
 }
 
+/* ---- cama, brotes y clima ---- */
+const O_BED = 12,
+  O_SAPLING = 13;
+OSOLID.add(O_BED);
+OHARD[O_BED] = 0.5;
+OHARD[O_SAPLING] = 0.1;
+OCOL[O_BED] = '#c0392b';
+OCOL[O_SAPLING] = '#3a8a30';
+
+/** Duerme en una cama: de noche salta al amanecer y fija el punto de reaparición. */
+function sbSleep(tx, ty) {
+  const g = G;
+  if (g.dark < 0.5) {
+    toast('Solo puedes dormir de noche', 1.8);
+    return;
+  }
+  g.respawn = { x: tx * TS + TS / 2, y: (ty + 1) * TS + TS / 2 };
+  g.sbT = Math.floor(g.sbT / CYCLE) * CYCLE + CYCLE * 0.93;
+  g.flash = 0.6;
+  g.zs = [];
+  toast('Has dormido hasta el amanecer. Reaparecerás aquí', 3);
+  beep(440, 0.5, 'sine', 0.08, 220);
+}
+/** Los brotes plantados se convierten en árboles con el tiempo (más lento de noche). */
+function growSaplings(dt) {
+  const g = G;
+  for (let k = g.saplings.length - 1; k >= 0; k--) {
+    const s = g.saplings[k],
+      i = s.ty * WW + s.tx;
+    if (OB[i] !== O_SAPLING) {
+      g.saplings.splice(k, 1);
+      continue;
+    }
+    s.t += dt * (g.dark > 0.5 ? 0.3 : 1);
+    if (s.t >= 45) {
+      OB[i] = O_LOG;
+      TREES.set(i, { x: s.tx, y: s.ty, logs: 4 });
+      burst(s.tx * TS + TS / 2, s.ty * TS + TS / 2, 14, '#3a8a30', 120, 0.8);
+      toast('¡Un brote ha crecido hasta ser un árbol!', 2);
+      g.saplings.splice(k, 1);
+    }
+  }
+}
+/** Lluvia con tormenta ocasional (relámpagos y truenos). */
+function updWeather(dt) {
+  const g = G,
+    w = g.weather;
+  w.t -= dt;
+  if (w.t <= 0) {
+    if (w.target === 0 && Math.random() < 0.4) {
+      w.target = 1;
+      w.t = rnd(40, 80);
+      toast('Empieza a llover…', 2.5);
+    } else {
+      w.target = 0;
+      w.t = rnd(60, 140);
+    }
+  }
+  w.rain += (w.target - w.rain) * Math.min(1, dt * 0.3);
+  if (w.rain > 0.6) {
+    w.thunderT -= dt;
+    if (w.thunderT <= 0) {
+      w.thunderT = rnd(8, 20);
+      w.lightning = 0.4;
+      setTimeout(() => sfx.thunder(), rnd(300, 1400));
+    }
+  }
+  w.lightning = Math.max(0, w.lightning - dt * 1.2);
+  rainSound(w.rain);
+}
+
 /* ---- src/js/render3d/core.js ---- */
 /**
  * Capa 3D (three.js): estado, cámara orbital, materiales y helpers de geometría.
@@ -5892,13 +6576,124 @@ function glTex(c, pixel, repeat) {
   return t;
 }
 
+/* ---- src/js/render3d/cosmetics.js ---- */
+/**
+ * Cosméticos: sombreros y colores de visor del tripulante.
+ * El jugador usa su selección (SAVE.hat / SAVE.visor); los bots reciben uno fijo según su id.
+ */
+'use strict';
+
+const HATS = [
+  'Ninguno',
+  'Gorra',
+  'Corona',
+  'Antena',
+  'Orejas de gato',
+  'Gorro de fiesta',
+  'Halo',
+  'Chistera',
+];
+const VISORS = [
+  { name: 'Azul', color: 0x0b2335, emissive: 0x0a3550 },
+  { name: 'Verde', color: 0x0b2a18, emissive: 0x108a40 },
+  { name: 'Ámbar', color: 0x2a1c05, emissive: 0xc07a10 },
+  { name: 'Rosa', color: 0x2a0b1f, emissive: 0xc02a80 },
+  { name: 'Violeta', color: 0x180b2a, emissive: 0x6a2ac0 },
+];
+/** Cosmético asignado a un jugador de la partida: [sombrero, visor]. */
+function cosmeticsFor(q) {
+  if (q.isP) return [SAVE.hat | 0, SAVE.visor | 0];
+  return [
+    (q.id * 3) % HATS.length === 0 ? 0 : (q.id * 5 + 1) % HATS.length,
+    (q.id * 2) % VISORS.length,
+  ];
+}
+/** Construye el sombrero `i` sobre la cabeza (la parte superior del cuerpo está en y≈62). */
+function makeHat(i) {
+  const g = new THREE.Group(),
+    st = (col, o) =>
+      new THREE.MeshStandardMaterial(
+        Object.assign({ color: col, roughness: 0.55, metalness: 0.15 }, o || {})
+      ),
+    add = (geo, mat, x, y, z, rx, rz) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx;
+      if (rz) m.rotation.z = rz;
+      m.castShadow = true;
+      g.add(m);
+      return m;
+    };
+  g.position.y = 60;
+  if (i === 1) {
+    add(new THREE.SphereGeometry(13, 16, 10, 0, 6.283, 0, 1.45), st(0xd32f2f), 0, 0, 1);
+    add(new THREE.BoxGeometry(18, 2, 12), st(0xb71c1c), 0, 0, 12);
+  } else if (i === 2) {
+    const crown = add(
+      new THREE.CylinderGeometry(11, 9, 8, 6),
+      st(0xffc107, { metalness: 0.9, roughness: 0.25 }),
+      0,
+      4,
+      0
+    );
+    crown.castShadow = true;
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * 6.283;
+      add(
+        new THREE.ConeGeometry(3, 8, 4),
+        st(0xffd54f, { metalness: 0.9, roughness: 0.2 }),
+        Math.cos(a) * 9,
+        11,
+        Math.sin(a) * 9
+      );
+    }
+    add(
+      new THREE.SphereGeometry(2.2, 8, 6),
+      st(0xe53935, { emissive: 0xaa1010, emissiveIntensity: 1.2 }),
+      0,
+      8,
+      11
+    );
+  } else if (i === 3) {
+    add(new THREE.CylinderGeometry(0.8, 0.8, 16, 6), st(0x888888, { metalness: 0.8 }), 0, 8, 0);
+    add(
+      new THREE.SphereGeometry(3.5, 12, 8),
+      st(0xff3b3b, { emissive: 0xff2020, emissiveIntensity: 2.2 }),
+      0,
+      17,
+      0
+    );
+  } else if (i === 4) {
+    for (const s of [-1, 1])
+      add(new THREE.ConeGeometry(5, 11, 4), st(0x222222), s * 8, 8, -2, 0, -s * 0.25);
+  } else if (i === 5) {
+    add(new THREE.ConeGeometry(8, 18, 12), st(0xab47bc), 0, 9, 0, 0, 0.15);
+    add(new THREE.SphereGeometry(2.4, 8, 6), st(0xffeb3b), 0, 19, 0);
+  } else if (i === 6) {
+    const h = add(
+      new THREE.TorusGeometry(10, 1.4, 8, 24),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.6, 0.8) }),
+      0,
+      12,
+      0,
+      Math.PI / 2
+    );
+    h.castShadow = false;
+  } else if (i === 7) {
+    add(new THREE.CylinderGeometry(12, 12, 1.6, 20), st(0x1a1a1f), 0, 0, 0);
+    add(new THREE.CylinderGeometry(8, 8.5, 16, 20), st(0x1a1a1f), 0, 8, 0);
+    add(new THREE.CylinderGeometry(8.6, 8.6, 3, 20), st(0xb71c1c), 0, 3, 0);
+  }
+  return g;
+}
+
 /* ---- src/js/render3d/models.js ---- */
 /**
  * Modelos 3D procedurales del tripulante, zombi y cadáver.
  */
 'use strict';
 
-function makeCrew(color, zombie) {
+function makeCrew(color, zombie, hat, visorIdx) {
   const g = new THREE.Group(),
     c = new THREE.Color(color),
     mats = [];
@@ -5931,10 +6726,10 @@ function makeCrew(color, zombie) {
             emissiveIntensity: 1.4,
           }
         : {
-            color: 0x0b2335,
+            color: VISORS[visorIdx | 0].color,
             roughness: 0.05,
             metalness: 0.7,
-            emissive: 0x0a3550,
+            emissive: VISORS[visorIdx | 0].emissive,
             emissiveIntensity: 0.5,
           }
     )
@@ -6023,7 +6818,24 @@ function makeCrew(color, zombie) {
   sho.position.z = 16;
   bat.visible = pis.visible = sho.visible = false;
   hold.add(bat, pis, sho);
-  g.userData = { legs, arms, body, visor, mats, hold, suit: [suit, dark], wep: { bat, pis, sho } };
+  const smg = new THREE.Mesh(
+    new THREE.BoxGeometry(5, 8, 26),
+    M({ color: 0x2a2a30, roughness: 0.4, metalness: 0.7 })
+  );
+  smg.position.z = 14;
+  smg.visible = false;
+  hold.add(smg);
+  if (hat && !zombie) g.add(makeHat(hat));
+  g.userData = {
+    legs,
+    arms,
+    body,
+    visor,
+    mats,
+    hold,
+    suit: [suit, dark],
+    wep: { bat, pis, sho, smg },
+  };
   return g;
 }
 function makeBody3D(color) {
@@ -6398,6 +7210,8 @@ function rebuild3D() {
   R3.blood.clear();
   R3.dropM = null;
   R3.animalM = null;
+  R3.grM = null;
+  R3.spitP = null;
   R3.q = null;
   const scene = new THREE.Scene();
   R3.scene = scene;
@@ -6759,7 +7573,7 @@ function buildSandbox3D(scene) {
     return m;
   });
   sb.o = [];
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
     const m = new THREE.InstancedMesh(
       bGeo,
       new THREE.MeshStandardMaterial({ map: glTex(TEX.o[k], true), roughness: 0.9 }),
@@ -6823,6 +7637,15 @@ function buildSandbox3D(scene) {
     })
   );
   scene.add(sb.crack);
+  sb.sap = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(10, 18, 10),
+    mat('#3a8a30', { roughness: 1 }),
+    800
+  );
+  sb.sap.count = 0;
+  sb.sap.frustumCulled = false;
+  scene.add(sb.sap);
+  buildRain3D(scene, sb);
   buildSky3D(scene, sb);
   buildGrass3D(scene, sb);
   sb.pOB = new Uint8Array(WW * WH);
@@ -6834,11 +7657,12 @@ function sbRebuild3D() {
   const sb = R3.sb,
     d = new THREE.Object3D(),
     gc = new Array(7).fill(0),
-    oc = new Array(12).fill(0);
+    oc = new Array(14).fill(0);
   let lc = 0,
     tc = 0,
     na = 0,
     nb = 0,
+    sapN = 0,
     nf = 0;
   const d2 = new THREE.Object3D(),
     tint = new THREE.Color();
@@ -6899,14 +7723,16 @@ function sbRebuild3D() {
         put(sb.stick, tc, cx, 13, cz);
         put(sb.flame, tc, cx, 32, cz);
         tc++;
-      } else if (((o >= 1 && o <= 8) || o === 11) && oc[o] < 3990)
+      } else if (o === 13) {
+        put(sb.sap, sapN++, cx, 9, cz);
+      } else if (((o >= 1 && o <= 8) || o === 11 || o === 12) && oc[o] < 3990)
         put(sb.o[o], oc[o]++, cx, TS / 2, cz);
     }
   sb.g.forEach((m, i) => {
     m.count = gc[i];
     m.instanceMatrix.needsUpdate = true;
   });
-  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11]) {
+  for (const k of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
     sb.o[k].count = oc[k];
     sb.o[k].instanceMatrix.needsUpdate = true;
   }
@@ -6919,6 +7745,8 @@ function sbRebuild3D() {
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }
+  sb.sap.count = sapN;
+  sb.sap.instanceMatrix.needsUpdate = true;
   sb.leaf.count = lc;
   sb.leaf.instanceMatrix.needsUpdate = true;
   sb.stick.count = sb.flame.count = tc;
@@ -7054,6 +7882,20 @@ function buildGrass3D(scene, sb) {
   sb.flowers = mk(flower, 1400);
 }
 
+/** Franjas de lluvia que se recolocan cada frame alrededor del jugador. */
+function buildRain3D(scene, sb) {
+  const N = 900,
+    geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 6), 3));
+  sb.rainSeed = Array.from({ length: N }, () => [rnd(-480, 480), rnd(-480, 480), Math.random()]);
+  sb.rain = new THREE.LineSegments(
+    geo,
+    new THREE.LineBasicMaterial({ color: 0xaec6ff, transparent: true, opacity: 0, fog: false })
+  );
+  sb.rain.frustumCulled = false;
+  scene.add(sb.rain);
+}
+
 /* ---- src/js/render3d/camera.js ---- */
 /**
  * Cámara en tercera persona y punto de apuntado.
@@ -7111,7 +7953,8 @@ function entVisible(q) {
 function getEnt(q, zombie) {
   let r = R3.ents.get(q);
   if (!r) {
-    const g = makeCrew(zombie ? zColor(q) : q.color, zombie);
+    const cs = zombie ? [0, 0] : cosmeticsFor(q);
+    const g = makeCrew(zombie ? zColor(q) : q.color, zombie, cs[0], cs[1]);
     if (q.scale) g.scale.setScalar(q.scale);
     g.rotation.order = 'YXZ';
     R3.scene.add(g);
@@ -7202,6 +8045,7 @@ function syncEnts() {
       u.wep.bat.visible = w == 'bate';
       u.wep.pis.visible = w == 'pistola';
       u.wep.sho.visible = w == 'escopeta';
+      u.wep.smg.visible = w == 'subfusil';
       if (G.swing > 0) u.hold.rotation.x = -1.2 + G.swing * 6;
       else u.hold.rotation.x = 0;
     }
@@ -7403,6 +8247,8 @@ function updSandbox3D() {
   R3.scene.background.copy(sky);
   R3.scene.fog.color.copy(sky);
   const sb2 = R3.sb;
+  const rain = g.weather.rain;
+  if (rain > 0.02) sky.lerp(new THREE.Color(0x4a5560), rain * 0.65);
   sb2.sky.position.set(p.x, 0, p.y);
   sb2.sky.material.uniforms.hor.value.copy(sky);
   sb2.sky.material.uniforms.top.value
@@ -7411,8 +8257,8 @@ function updSandbox3D() {
     .lerp(new THREE.Color(0x6a3a60), k > 0.05 && k < 0.95 ? Math.sin(k * Math.PI) * 0.25 : 0);
   sb2.stars.position.set(p.x, 0, p.y);
   sb2.stars.material.opacity = clamp((k - 0.35) * 1.8, 0, 1);
-  R3.scene.fog.near = 380 - 220 * k;
-  R3.scene.fog.far = 1700 - 1050 * k;
+  R3.scene.fog.near = (380 - 220 * k) * (1 - rain * 0.5);
+  R3.scene.fog.far = (1700 - 1050 * k) * (1 - rain * 0.45);
   const a = Math.min(1, cyc / 0.5) * Math.PI,
     elev = Math.sin(a);
   L.sun.position.set(p.x + Math.cos(a) * 520, 260 + 520 * Math.max(0.15, elev), p.y + 220);
@@ -7435,9 +8281,11 @@ function updSandbox3D() {
     sb2.clouds.setMatrixAt(i, dm.matrix);
   });
   sb2.clouds.instanceMatrix.needsUpdate = true;
+  updRain3D(p, rain, t);
   sb2.g[0].material.map.offset.set(t * 0.02, t * 0.013);
   L.sun.color.set(k > 0.1 ? 0x8aa0e0 : 0xfff2d0);
-  L.sun.intensity = dark > 0.5 ? 0.28 : 1.0 * (1 - k) + 0.15;
+  L.sun.intensity = (dark > 0.5 ? 0.28 : 1.0 * (1 - k) + 0.15) * (1 - rain * 0.55);
+  L.amb.intensity += g.weather.lightning * 3;
   L.hemi.intensity = 0.5 * (1 - k) + 0.12;
   L.amb.intensity = 0.12 * (1 - k) + 0.1;
   const tl = g.torches
@@ -7509,6 +8357,7 @@ function render3D() {
   syncParts();
   fxUpdate(R3.dt);
   syncDrops();
+  if (G.grs) syncExtras3D();
   PFX.threshold = G.mode === 'sandbox' ? 1.5 + (1 - G.dark / 0.86) * 0.7 : 0.95;
   postRender(R3.scene, R3.camera);
 }
@@ -7519,6 +8368,10 @@ function try3D() {
     const g = G;
     if (g.sab) {
       ctx.fillStyle = `rgba(255,0,0,${0.05 + 0.05 * Math.sin(g.t * 6)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (g.weather && g.weather.lightning > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(0.55, g.weather.lightning * 1.2)})`;
       ctx.fillRect(0, 0, W, H);
     }
     if (g.flash > 0) {
@@ -7582,6 +8435,27 @@ function drawCrosshair() {
     );
 }
 
+function updRain3D(p, rain, t) {
+  const sb = R3.sb,
+    pa = sb.rain.geometry.attributes.position;
+  sb.rain.visible = rain > 0.03;
+  if (!sb.rain.visible) return;
+  sb.rain.material.opacity = Math.min(0.5, rain * 0.55);
+  sb.rainSeed.forEach((s, i) => {
+    const y = 520 - (((t * 780 + s[2] * 520) % 520) | 0),
+      x = p.x + s[0],
+      z = p.y + s[1],
+      k = i * 6;
+    pa.array[k] = x;
+    pa.array[k + 1] = y;
+    pa.array[k + 2] = z;
+    pa.array[k + 3] = x + 4;
+    pa.array[k + 4] = y + 26;
+    pa.array[k + 5] = z + 2;
+  });
+  pa.needsUpdate = true;
+}
+
 /* ---- src/js/campaign/data.js ---- */
 /**
  * Guardado, niveles, capítulos de la historia y guiones de las cinemáticas.
@@ -7589,7 +8463,22 @@ function drawCrosshair() {
 'use strict';
 
 const SAVE = (() => {
-  const d = { story: 0, stars: {}, music: true, quality: 1, difficulty: 1, sens: 1, fov: 62 };
+  const d = {
+    story: 0,
+    stars: {},
+    music: true,
+    quality: 1,
+    difficulty: 1,
+    sens: 1,
+    fov: 62,
+    volM: 0.7,
+    volS: 1,
+    hat: 0,
+    visor: 0,
+    fps: false,
+    stats: {},
+    ach: {},
+  };
   try {
     Object.assign(d, JSON.parse(localStorage.getItem('nebula7') || '{}'));
   } catch (e) {}
@@ -8099,6 +8988,7 @@ function launchMission(def) {
 }
 function mevent(k, n) {
   n = n || 1;
+  track(k, n);
   const M = G && G.M;
   if (!M || M.over || M.win) return;
   for (const g of M.goals)
@@ -8154,6 +9044,7 @@ function missionEnd(ok) {
     SAVE.stars[M.def.id] = Math.max(SAVE.stars[M.def.id] || 0, st);
     if (CAMP && CAMP.kind === 'story') SAVE.story = Math.max(SAVE.story, CAMP.idx + 1);
     saveGame();
+    checkCustomAch();
   }
   scene = 'mend';
   M.at = 0;
@@ -8164,7 +9055,19 @@ function startStory(i) {
   const ch = CHAPTERS[i];
   playCut(ch.intro, () => launchMission(ch));
 }
+/** Pantalla a la que se vuelve desde una misión según su origen. */
+function backScene() {
+  return CAMP && CAMP.kind === 'story'
+    ? 'story'
+    : CAMP && CAMP.kind === 'daily'
+      ? 'menu'
+      : 'levels';
+}
 function missionNext() {
+  if (CAMP.kind === 'daily') {
+    scene = 'menu';
+    return;
+  }
   if (CAMP.kind === 'story') {
     const i = CAMP.idx,
       ch = CHAPTERS[i];
@@ -8204,6 +9107,163 @@ function spawnBoss() {
     stuck: 0,
   });
   g.bossDead = false;
+}
+
+/* ---- src/js/campaign/achievements.js ---- */
+/**
+ * Estadísticas acumuladas y logros. `mevent()` alimenta `track()`, de modo que cualquier
+ * evento del juego (también en partida libre) cuenta para los logros.
+ */
+'use strict';
+
+const ACHIEVEMENTS = [
+  { id: 'sangre', name: 'Primera sangre', desc: 'Elimina a un zombi', stat: 'zkill', need: 1 },
+  {
+    id: 'exterminador',
+    name: 'Exterminador',
+    desc: 'Elimina a 100 zombis',
+    stat: 'zkill',
+    need: 100,
+  },
+  { id: 'legion', name: 'Legión', desc: 'Elimina a 500 zombis', stat: 'zkill', need: 500 },
+  { id: 'manitas', name: 'Manitas', desc: 'Completa 20 tareas', stat: 'task', need: 20 },
+  { id: 'detective', name: 'Detective', desc: 'Expulsa a 5 impostores', stat: 'ejectImp', need: 5 },
+  {
+    id: 'friafrio',
+    name: 'Sangre fría',
+    desc: 'Elimina a 10 tripulantes siendo impostor',
+    stat: 'pkill',
+    need: 10,
+  },
+  { id: 'alfa', name: 'Cazador de alfas', desc: 'Derrota al Alfa', stat: 'boss', need: 1 },
+  { id: 'escapista', name: 'Escapista', desc: 'Escapa en la cápsula', stat: 'escape', need: 1 },
+  { id: 'oleadas', name: 'Superviviente', desc: 'Supera 25 oleadas', stat: 'wave', need: 25 },
+  { id: 'lenador', name: 'Leñador', desc: 'Recoge 100 de madera', stat: 'item:madera', need: 100 },
+  { id: 'constructor', name: 'Constructor', desc: 'Coloca 200 bloques', stat: 'place', need: 200 },
+  { id: 'chef', name: 'Chef', desc: 'Cocina 10 piezas de carne', stat: 'cook', need: 10 },
+  { id: 'cazador', name: 'Cazador', desc: 'Caza 15 animales', stat: 'animal', need: 15 },
+  { id: 'noches', name: 'Noctámbulo', desc: 'Sobrevive 3 noches', stat: 'night', need: 3 },
+  { id: 'cofres', name: 'Explorador', desc: 'Abre 10 cofres', stat: 'chest', need: 10 },
+  { id: 'historia', name: 'Final de la historia', desc: 'Completa los 5 capítulos', custom: true },
+  { id: 'estrellas', name: 'Coleccionista', desc: 'Consigue 20 estrellas', custom: true },
+  { id: 'reto', name: 'Reto superado', desc: 'Completa un reto diario', custom: true },
+];
+const ACH_Q = [];
+let achShow = null,
+  statsDirty = false,
+  lastStatSave = 0;
+
+function unlockAch(a) {
+  if (SAVE.ach[a.id]) return;
+  SAVE.ach[a.id] = Date.now();
+  saveGame();
+  ACH_Q.push(a);
+  sfx.pickup();
+}
+/** Suma `n` a la estadística `k` y desbloquea los logros que lo permitan. */
+function track(k, n) {
+  SAVE.stats[k] = (SAVE.stats[k] || 0) + n;
+  statsDirty = true;
+  for (const a of ACHIEVEMENTS) if (a.stat === k && SAVE.stats[k] >= a.need) unlockAch(a);
+}
+/** Logros que dependen del progreso global (se llama al terminar una misión). */
+function checkCustomAch() {
+  const by = id => ACHIEVEMENTS.find(a => a.id === id);
+  if (SAVE.story >= CHAPTERS.length) unlockAch(by('historia'));
+  if (totalStars() >= 20) unlockAch(by('estrellas'));
+  if (CAMP && CAMP.kind === 'daily' && G.M && G.M.ok) unlockAch(by('reto'));
+}
+function achProgress(a) {
+  if (a.custom) return SAVE.ach[a.id] ? 1 : 0;
+  return Math.min(1, (SAVE.stats[a.stat] || 0) / a.need);
+}
+/** Guarda estadísticas pendientes cada pocos segundos y dibuja el aviso de logro. */
+function achTick(dt) {
+  if (statsDirty && performance.now() - lastStatSave > 8000) {
+    statsDirty = false;
+    lastStatSave = performance.now();
+    saveGame();
+  }
+  if (!achShow && ACH_Q.length) achShow = { a: ACH_Q.shift(), t: 4 };
+  if (achShow) {
+    achShow.t -= dt;
+    const k = Math.min(1, achShow.t, (4 - achShow.t) * 3),
+      w = Math.min(380, W - 24),
+      x = W / 2 - w / 2,
+      y = 14 - (1 - k) * 80;
+    ctx.fillStyle = 'rgba(20,16,4,.92)';
+    rr(x, y, w, 62, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#ffd740';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    txt('🏆 LOGRO DESBLOQUEADO', x + w / 2, y + 18, 12, '#ffd740', 'center');
+    txt(achShow.a.name + ' — ' + achShow.a.desc, x + w / 2, y + 42, 14, '#fff', 'center', false);
+    if (achShow.t <= 0) achShow = null;
+  }
+}
+
+/* ---- src/js/campaign/daily.js ---- */
+/**
+ * Reto diario: misión generada a partir de la fecha (igual para todos los jugadores ese día).
+ */
+'use strict';
+
+function dateSeed() {
+  const d = new Date();
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+function dailyDef() {
+  const seed = dateSeed(),
+    r = (k, a, b) => a + Math.floor(hash(seed, k, 11) * (b - a + 1)),
+    kind = seed % 3;
+  const id = 'D' + seed;
+  if (kind === 0)
+    return {
+      id,
+      name: 'Reto: Caza de impostores',
+      mode: 'classic',
+      cfg: { nImp: 2, role: 'crew', sabFast: true },
+      par: 420 + r(1, 0, 120),
+      limit: 840,
+      desc: 'Hoy hay dos impostores y los sabotajes no paran. Repara y vota con cabeza.',
+      goals: [
+        { k: 'fix', need: r(2, 1, 2), text: 'Repara sabotajes' },
+        { k: 'ejectImp', need: 2, text: 'Expulsa a los 2 impostores' },
+      ],
+    };
+  if (kind === 1) {
+    const kills = r(3, 18, 32);
+    return {
+      id,
+      name: 'Reto: Marea zombi',
+      mode: 'zombie',
+      cfg: { waves: 4, escape: false, weapons: ['pistola'], ammo: 70 },
+      par: 280 + r(4, 0, 80),
+      limit: 700,
+      desc: 'Empiezas con una pistola. Aguanta cuatro oleadas y llévate por delante a cuantos puedas.',
+      goals: [
+        { k: 'zkill', need: kills, text: `Elimina a ${kills} zombis` },
+        { k: 'wave', need: 4, text: 'Sobrevive 4 oleadas' },
+      ],
+    };
+  }
+  const wood = r(5, 14, 24);
+  return {
+    id,
+    name: 'Reto: Cocina de campaña',
+    mode: 'sandbox',
+    cfg: {},
+    par: 420 + r(6, 0, 120),
+    limit: 900,
+    desc: 'Consigue madera, monta un horno, caza y cocina carne antes de que acabe el tiempo.',
+    goals: [
+      { k: 'item:madera', need: wood, text: `Recoge ${wood} de madera` },
+      { k: 'craft:horno', need: 1, text: 'Fabrica un horno' },
+      { k: 'animal', need: 3, text: 'Caza 3 animales' },
+      { k: 'cook', need: 2, text: 'Cocina 2 carnes' },
+    ],
+  };
 }
 
 /* ---- src/js/campaign/cutscenes.js ---- */
@@ -8417,8 +9477,9 @@ function buildStage() {
   S.ship.add(bx(1500, 10, 12, '#f33', 0, 40, -318, { emissive: 0xff2020, emissiveIntensity: 1.2 }));
   sc.add(S.ship);
   // modelos
-  COLORS.forEach(c => {
-    const m = makeCrew(c[0], false);
+  COLORS.forEach((c, idx) => {
+    const cs = cosmeticsFor({ isP: idx === 0, id: idx }),
+      m = makeCrew(c[0], false, cs[0], cs[1]);
     m.visible = false;
     sc.add(m);
     S.models[c[1]] = m;
@@ -8520,12 +9581,17 @@ function renderStage(dt) {
   if (!R3.stage) buildStage();
   const S = R3.stage;
   S.t += dt;
-  const key = scene === 'cut' && CUT ? 'c' + CUT.id + CUT.i : 'home';
+  const key =
+    scene === 'cut' && CUT ? 'c' + CUT.id + CUT.i : scene === 'wardrobe' ? 'wardrobe' : 'home';
   if (S.key !== key) {
     S.key = key;
     if (scene === 'cut') {
       const pg = CUT.pages[CUT.i];
       stageSet(pg.bg, pg.cast, pg.w);
+    } else if (scene === 'wardrobe') {
+      stageSet('space', ['Rojo'], 'Rojo');
+      S.models.Rojo.position.set(0, 0, 0);
+      S.models.Rojo.rotation.set(0, 0, 0);
     } else stageHome();
   }
   if (R3.w !== W || R3.h !== H) {
@@ -8537,7 +9603,7 @@ function renderStage(dt) {
   S.cam.updateProjectionMatrix();
   const foc = S.focus && S.models[S.focus] && S.models[S.focus].visible ? S.models[S.focus] : null;
   let px, py, pz, tx, ty, tz;
-  if (scene === 'cut') {
+  if (scene === 'cut' || scene === 'wardrobe') {
     if (foc) {
       px = foc.position.x * 0.7 + Math.sin(S.t * 0.25) * 24;
       py = 64 + Math.sin(S.t * 0.3) * 4;
@@ -8600,6 +9666,7 @@ function renderStage(dt) {
       m.rotation.y = Math.sin(S.t * 0.7 + i) * 0.25;
     }
   }
+  if (scene === 'wardrobe') S.models.Rojo.rotation.y = S.t * 0.7;
   PFX.threshold = 0.9;
   postRender(S.sc, S.cam);
 }
@@ -8662,6 +9729,8 @@ function drawStageScene(dt) {
   else if (scene === 'brief') drawBrief();
   else if (scene === 'story') drawStory();
   else if (scene === 'cut') drawCut(dt);
+  else if (scene === 'wardrobe') drawWardrobe();
+  else if (scene === 'achv') drawAchievements();
   finishFX();
 }
 
@@ -8672,7 +9741,7 @@ function drawStageScene(dt) {
 'use strict';
 
 function totalStars() {
-  return Object.values(SAVE.stars).reduce((a, b) => a + b, 0);
+  return [...LEVELS, ...CHAPTERS].reduce((n, d) => n + (SAVE.stars[d.id] || 0), 0);
 }
 function titleGlow(s, x, y, size, col) {
   ctx.save();
@@ -8762,6 +9831,27 @@ function drawHome() {
       13
     )
   );
+  uiBtn(30, 454, 200, 34, '🎩 Armario', '#6a3a8a', () => (scene = 'wardrobe'), 14);
+  uiBtn(
+    250,
+    454,
+    200,
+    34,
+    `🏆 Logros ${ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length}/${ACHIEVEMENTS.length}`,
+    '#8a6a1a',
+    () => (scene = 'achv'),
+    14
+  );
+  uiBtn(
+    470,
+    454,
+    200,
+    34,
+    '📅 Reto diario' + (SAVE.stars[dailyDef().id] ? ' ✔' : ''),
+    '#2a6a5a',
+    () => openBrief(dailyDef(), 'daily', 0),
+    14
+  );
   endUI();
 }
 function drawFree() {
@@ -8796,7 +9886,7 @@ function drawFree() {
   (gmode == 'sandbox'
     ? [
         'WASD: mover · Clic izq: picar/talar/atacar · Clic der o F: construir',
-        'E: interactuar · C: crafteo · G: comer · 1-8: elegir bloque · Shift: correr',
+        'E: interactuar · C: crafteo · G: comer · 1-0: elegir bloque · Shift: correr',
         'Mundo abierto con árboles, minas, cofres, día y noche con zombis.',
       ]
     : gmode == 'zombie'
@@ -8869,7 +9959,11 @@ function drawBrief() {
   beginUI(700, 520);
   panel(40, 30, 620, 450);
   txt(
-    (BRIEF.kind === 'story' ? 'CAPÍTULO ' + (BRIEF.idx + 1) : 'NIVEL ' + (BRIEF.idx + 1)) +
+    (BRIEF.kind === 'story'
+      ? 'CAPÍTULO ' + (BRIEF.idx + 1)
+      : BRIEF.kind === 'daily'
+        ? 'RETO DIARIO'
+        : 'NIVEL ' + (BRIEF.idx + 1)) +
       '  ·  ' +
       MODE_ICON[d.mode] +
       ' ' +
@@ -8914,7 +10008,7 @@ function drawBrief() {
     '‹ Atrás',
     '#444',
     () => {
-      scene = BRIEF.kind === 'story' ? 'story' : 'levels';
+      scene = BRIEF.kind === 'story' ? 'story' : BRIEF.kind === 'daily' ? 'menu' : 'levels';
     },
     17
   );
@@ -9115,8 +10209,8 @@ function drawPauseBtn() {
 function drawPause() {
   ctx.fillStyle = 'rgba(0,0,0,.62)';
   ctx.fillRect(0, 0, W, H);
-  beginUI(560, 520);
-  panel(0, 0, 560, 520);
+  beginUI(560, 640);
+  panel(0, 0, 560, 640);
   titleGlow('PAUSA', 280, 48, 36, '#fff');
   uiBtn(130, 84, 300, 44, 'Continuar', '#2e7d32', () => (scene = 'play'), 18);
   uiBtn(
@@ -9129,6 +10223,9 @@ function drawPause() {
     () => (G.M ? launchMission(CAMP.def) : newGame()),
     17
   );
+  const vol = v => Math.round(v * 100) + '%',
+    next = (v, steps) => steps[(steps.indexOf(v) + 1) % steps.length] ?? steps[0];
+  const VS = [0, 0.35, 0.7, 1];
   const rows = [
     [
       'Calidad: ' + ['Baja', 'Media', 'Alta'][SAVE.quality],
@@ -9137,8 +10234,11 @@ function drawPause() {
     ['Dificultad: ' + diff().name, () => (SAVE.difficulty = (SAVE.difficulty + 1) % 3)],
     ['Sensibilidad: ' + SAVE.sens + 'x', () => cycleSetting('sens', SENS_STEPS)],
     ['Campo de visión: ' + SAVE.fov + '°', () => cycleSetting('fov', FOV_STEPS)],
+    ['Volumen música: ' + vol(SAVE.volM), () => (SAVE.volM = next(SAVE.volM, VS))],
+    ['Volumen efectos: ' + vol(SAVE.volS), () => (SAVE.volS = next(SAVE.volS, VS))],
     ['Música: ' + (SAVE.music ? 'SÍ' : 'NO'), () => (SAVE.music = !SAVE.music)],
     ['Vista: ' + (view3d ? '3D' : '2D'), () => (view3d = !view3d)],
+    ['Contador FPS: ' + (SAVE.fps ? 'SÍ' : 'NO'), () => (SAVE.fps = !SAVE.fps)],
   ];
   rows.forEach((r, i) =>
     uiBtn(
@@ -9150,6 +10250,7 @@ function drawPause() {
       '#3a4a6a',
       () => {
         r[1]();
+        applyVolumes();
         saveGame();
       },
       15
@@ -9158,7 +10259,7 @@ function drawPause() {
   txt(
     'La dificultad afecta a zombis y sabotajes nuevos.',
     280,
-    362,
+    484,
     12,
     '#9fb3c8',
     'center',
@@ -9167,7 +10268,7 @@ function drawPause() {
   txt(
     'Mando: Start pausa · Shift / L3: correr · R: recargar · G: comer',
     280,
-    384,
+    506,
     12,
     '#9fb3c8',
     'center',
@@ -9175,7 +10276,7 @@ function drawPause() {
   );
   uiBtn(
     130,
-    420,
+    544,
     300,
     44,
     'Salir al menú',
@@ -9261,7 +10362,7 @@ function drawMend() {
       'Menú',
       '#444',
       () => {
-        scene = CAMP.kind === 'story' ? 'story' : 'levels';
+        scene = backScene();
       },
       18
     );
@@ -9275,7 +10376,7 @@ function drawMend() {
       CAMP.kind === 'story' ? 'Capítulos' : 'Niveles',
       '#444',
       () => {
-        scene = CAMP.kind === 'story' ? 'story' : 'levels';
+        scene = backScene();
       },
       18
     );
@@ -9292,6 +10393,92 @@ function drawMend() {
       16
     );
   }
+  endUI();
+}
+
+/* ---- src/js/ui/extra-screens.js ---- */
+/**
+ * Pantallas extra: armario (cosméticos) y logros.
+ */
+'use strict';
+
+/** Reconstruye el modelo del jugador del escenario tras cambiar de cosmético. */
+function refreshStagePlayer() {
+  const S = R3 && R3.stage;
+  if (!S) return;
+  const old = S.models.Rojo,
+    cs = cosmeticsFor({ isP: true, id: 0 }),
+    m = makeCrew(COLORS[0][0], false, cs[0], cs[1]);
+  m.position.copy(old.position);
+  m.rotation.copy(old.rotation);
+  m.visible = old.visible;
+  S.sc.remove(old);
+  S.sc.add(m);
+  S.models.Rojo = m;
+}
+function drawWardrobe() {
+  beginUI(700, 500);
+  titleGlow('ARMARIO', 350, 52, 42, '#e57cff');
+  const row = (y, label, value, step) => {
+    txt(label, 350, y - 22, 14, '#9fb3c8', 'center');
+    uiBtn(120, y - 6, 56, 44, '‹', '#3a4a6a', () => step(-1), 24);
+    panel(190, y - 6, 320, 44, 'rgba(200,120,255,.6)');
+    txt(value, 350, y + 16, 20, '#fff', 'center');
+    uiBtn(524, y - 6, 56, 44, '›', '#3a4a6a', () => step(1), 24);
+  };
+  row(372, 'SOMBRERO', HATS[SAVE.hat | 0], d => {
+    SAVE.hat = (SAVE.hat + d + HATS.length) % HATS.length;
+    saveGame();
+    refreshStagePlayer();
+    sfx.ui();
+  });
+  row(436, 'VISOR', VISORS[SAVE.visor | 0].name, d => {
+    SAVE.visor = (SAVE.visor + d + VISORS.length) % VISORS.length;
+    saveGame();
+    refreshStagePlayer();
+    sfx.ui();
+  });
+  uiBtn(24, 460, 120, 30, '‹ Volver', '#444', () => (scene = 'menu'), 14);
+  endUI();
+}
+function drawAchievements() {
+  beginUI(760, 560);
+  titleGlow('LOGROS', 380, 40, 36, '#ffd740');
+  const done = ACHIEVEMENTS.filter(a => SAVE.ach[a.id]).length;
+  txt(`${done} / ${ACHIEVEMENTS.length} desbloqueados`, 380, 74, 14, '#9fb3c8', 'center');
+  ACHIEVEMENTS.forEach((a, i) => {
+    const x = 24 + (i % 2) * 368,
+      y = 96 + Math.floor(i / 2) * 48,
+      ok = !!SAVE.ach[a.id],
+      pr = achProgress(a);
+    ctx.fillStyle = ok ? 'rgba(60,50,10,.85)' : 'rgba(14,22,40,.85)';
+    rr(x, y, 356, 42, 8);
+    ctx.fill();
+    ctx.strokeStyle = ok ? '#ffd740' : 'rgba(120,150,200,.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    txt((ok ? '🏆 ' : '🔒 ') + a.name, x + 10, y + 14, 14, ok ? '#ffe082' : '#9fb3c8', 'left');
+    txt(a.desc, x + 10, y + 31, 11, '#8aa0bc', 'left', false);
+    if (!ok && !a.custom) {
+      ctx.fillStyle = 'rgba(255,255,255,.12)';
+      rr(x + 250, y + 28, 96, 6, 3);
+      ctx.fill();
+      ctx.fillStyle = '#4fc3f7';
+      rr(x + 250, y + 28, 96 * pr, 6, 3);
+      ctx.fill();
+    }
+  });
+  const s = SAVE.stats;
+  txt(
+    `Zombis: ${s.zkill || 0}  ·  Tareas: ${s.task || 0}  ·  Bloques: ${s.place || 0}  ·  Animales: ${s.animal || 0}  ·  Oleadas: ${s.wave || 0}`,
+    380,
+    520,
+    12,
+    '#9fb3c8',
+    'center',
+    false
+  );
+  uiBtn(30, 524, 110, 30, '‹ Volver', '#444', () => (scene = 'menu'), 14);
   endUI();
 }
 
@@ -9393,34 +10580,235 @@ function drawObjectiveMarkers() {
 
 /* ---- src/js/core/music.js ---- */
 /**
- * Música procedural de ambiente.
+ * Música procedural adaptativa. Un secuenciador con "lookahead" programa notas en el reloj
+ * de Web Audio; cada ambiente define su tempo y cómo suena cada paso.
  */
 'use strict';
 
-let mT = 0,
-  mS = 0;
-function musicTick(dt) {
-  if (!SAVE.music || !ac || ac.state !== 'running') return;
-  mT -= dt;
-  if (mT > 0) return;
-  const calm =
-      scene === 'menu' ||
-      scene === 'free' ||
-      scene === 'levels' ||
-      scene === 'brief' ||
-      scene === 'story',
-    cut = scene === 'cut';
-  if (calm || cut) {
-    const sc = [220, 261.6, 329.6, 392, 329.6, 261.6, 246.9, 293.7],
-      n = sc[mS % 8] * (cut ? 0.5 : 1);
-    beep(n, 0.9, 'sine', 0.02);
-    if (mS % 4 == 0) beep(n / 2, 1.8, 'triangle', 0.022);
-    mS++;
-    mT = cut ? 0.95 : 0.55;
-  } else if (G && G.mode === 'zombie' && G.zs && G.zs.length > 0 && scene === 'play') {
-    beep(55 + (mS++ % 2) * 7, 0.25, 'sine', 0.045);
-    mT = 0.6;
-  } else mT = 1;
+const NOTE = n => 440 * Math.pow(2, (n - 69) / 12); // número MIDI -> Hz
+const MUSIC = { mood: null, step: 0, next: 0 };
+
+/** Ambientes: [duración del paso en s, función(paso, instante)] */
+const MOODS = {
+  menu: [
+    0.3,
+    (s, t) => {
+      const prog = [
+          [57, 60, 64],
+          [53, 57, 60],
+          [48, 52, 55],
+          [55, 59, 62],
+        ], // Am F C G
+        chord = prog[Math.floor(s / 16) % 4],
+        arp = [0, 1, 2, 1, 2, 1, 0, 2];
+      if (s % 16 === 0)
+        chord.forEach(n =>
+          tone(NOTE(n), 4.6, {
+            type: 'triangle',
+            vol: 0.05,
+            attack: 0.6,
+            filter: 900,
+            at: t,
+            bus: A.mus,
+            verb: 0.5,
+          })
+        );
+      if (s % 2 === 0)
+        tone(NOTE(chord[arp[(s / 2) % 8]] + 12), 0.9, {
+          type: 'sine',
+          vol: 0.07,
+          at: t,
+          bus: A.mus,
+          verb: 0.6,
+        });
+      if (s % 8 === 0) tone(NOTE(chord[0] - 12), 2, { type: 'sine', vol: 0.12, at: t, bus: A.mus });
+    },
+  ],
+  cut: [
+    1.2,
+    (s, t) => {
+      const root = [45, 41, 43, 40][Math.floor(s / 6) % 4];
+      if (s % 6 === 0) {
+        tone(NOTE(root), 8, {
+          type: 'sawtooth',
+          vol: 0.04,
+          attack: 1.5,
+          filter: 420,
+          at: t,
+          bus: A.mus,
+          verb: 0.6,
+        });
+        tone(NOTE(root + 7), 8, {
+          type: 'triangle',
+          vol: 0.05,
+          attack: 2,
+          at: t,
+          bus: A.mus,
+          verb: 0.6,
+        });
+      }
+      if (s % 5 === 2)
+        tone(NOTE(root + 24 + [0, 3, 7, 10][s % 4]), 2.4, {
+          type: 'sine',
+          vol: 0.05,
+          at: t,
+          bus: A.mus,
+          verb: 0.8,
+        });
+    },
+  ],
+  classic: [
+    0.5,
+    (s, t) => {
+      if (s % 8 === 0 || s % 8 === 1.5)
+        tone(46, 0.35, { type: 'sine', vol: 0.22, slide: -14, at: t, bus: A.mus });
+      if (s % 8 === 1) tone(46, 0.3, { type: 'sine', vol: 0.15, slide: -14, at: t, bus: A.mus });
+      if (s % 16 === 4)
+        tone(NOTE(81 + [0, 3, -2, 5][((s / 16) % 4) | 0]), 1.8, {
+          type: 'sine',
+          vol: 0.03,
+          at: t,
+          bus: A.mus,
+          verb: 0.9,
+        });
+      if (s % 32 === 0)
+        tone(NOTE(33), 12, {
+          type: 'sawtooth',
+          vol: 0.025,
+          attack: 3,
+          filter: 260,
+          at: t,
+          bus: A.mus,
+        });
+    },
+  ],
+  sab: [
+    0.25,
+    (s, t) => {
+      if (s % 2 === 0)
+        tone(NOTE(33 + (s % 8 === 0 ? 0 : 12)), 0.22, {
+          type: 'sawtooth',
+          vol: 0.1,
+          filter: 500,
+          at: t,
+          bus: A.mus,
+        });
+      if (s % 8 === 4) noise(0.15, { vol: 0.05, ftype: 'highpass', f0: 6000, at: t, bus: A.mus });
+    },
+  ],
+  zombie_calm: [
+    0.6,
+    (s, t) => {
+      if (s % 8 === 0)
+        tone(NOTE(40), 4.5, {
+          type: 'sawtooth',
+          vol: 0.04,
+          attack: 1.2,
+          filter: 300,
+          at: t,
+          bus: A.mus,
+          verb: 0.5,
+        });
+      if (s % 8 === 4)
+        tone(NOTE(52 + [0, 3, 7][((s / 8) % 3) | 0]), 2.2, {
+          type: 'triangle',
+          vol: 0.05,
+          at: t,
+          bus: A.mus,
+          verb: 0.7,
+        });
+    },
+  ],
+  zombie: [
+    0.15,
+    (s, t) => {
+      const bar = Math.floor(s / 16) % 4,
+        bass = [40, 40, 43, 38][bar],
+        z = G && G.zs ? G.zs.length : 0;
+      if (s % 8 === 0 || s % 16 === 10)
+        tone(52, 0.22, { type: 'sine', vol: 0.42, slide: -30, at: t, bus: A.mus });
+      if (s % 2 === 1) noise(0.04, { vol: 0.05, ftype: 'highpass', f0: 7000, at: t, bus: A.mus });
+      if (s % 4 === 0 || s % 4 === 3)
+        tone(NOTE(bass), 0.16, { type: 'sawtooth', vol: 0.08, filter: 420, at: t, bus: A.mus });
+      if (z >= 5 && s % 16 === 8)
+        noise(0.16, { vol: 0.18, ftype: 'bandpass', f0: 1800, q: 0.8, at: t, bus: A.mus });
+      if (z >= 8 && s % 8 === 6)
+        tone(NOTE(bass + 24 + [0, 3, 5, 7][s % 4]), 0.3, {
+          type: 'square',
+          vol: 0.03,
+          filter: 1400,
+          at: t,
+          bus: A.mus,
+          verb: 0.3,
+        });
+    },
+  ],
+  sand_day: [
+    0.55,
+    (s, t) => {
+      const pent = [60, 62, 64, 67, 69, 72];
+      if (s % 4 === 0)
+        tone(NOTE(48 + [0, 5, 7, 5][((s / 4) % 4) | 0]), 2.2, {
+          type: 'triangle',
+          vol: 0.06,
+          attack: 0.3,
+          at: t,
+          bus: A.mus,
+          verb: 0.5,
+        });
+      if (Math.sin(s * 12.9898) > 0.1)
+        tone(NOTE(pent[Math.abs((s * 7) % 6)]), 1.6, {
+          type: 'sine',
+          vol: 0.06,
+          at: t,
+          bus: A.mus,
+          verb: 0.7,
+        });
+    },
+  ],
+  sand_night: [
+    0.8,
+    (s, t) => {
+      if (s % 6 === 0) tone(NOTE(33), 5, { type: 'sine', vol: 0.12, attack: 1, at: t, bus: A.mus });
+      if (s % 6 === 3)
+        tone(NOTE(57 + [0, 1, 3][((s / 6) % 3) | 0]), 3, {
+          type: 'triangle',
+          vol: 0.04,
+          attack: 0.8,
+          at: t,
+          bus: A.mus,
+          verb: 0.9,
+        });
+    },
+  ],
+};
+function currentMood() {
+  if (scene === 'cut') return 'cut';
+  if (['menu', 'free', 'levels', 'brief', 'story', 'wardrobe', 'achv'].includes(scene))
+    return 'menu';
+  if (!G || !['play', 'task', 'sab', 'craft', 'cams', 'pause', 'shop'].includes(scene)) return null;
+  if (G.mode === 'zombie') return G.wave && G.wave.state === 'run' ? 'zombie' : 'zombie_calm';
+  if (G.mode === 'sandbox') return G.dark > 0.5 ? 'sand_night' : 'sand_day';
+  return G.sab ? 'sab' : 'classic';
+}
+function musicTick() {
+  if (!SAVE.music) return;
+  const c = audioReady();
+  if (!c) return;
+  const mood = currentMood();
+  if (mood !== MUSIC.mood) {
+    MUSIC.mood = mood;
+    MUSIC.step = 0;
+    MUSIC.next = c.currentTime + 0.1;
+  }
+  if (!mood) return;
+  const [dur, fn] = MOODS[mood];
+  let guard = 0;
+  while (MUSIC.next < c.currentTime + 0.25 && guard++ < 16) {
+    fn(MUSIC.step++, MUSIC.next);
+    MUSIC.next += dur;
+  }
+  if (MUSIC.next < c.currentTime) MUSIC.next = c.currentTime + 0.05;
 }
 
 /* ---- src/js/core/main-loop.js ---- */
@@ -9430,6 +10818,7 @@ function musicTick(dt) {
 'use strict';
 
 let last = performance.now();
+let fpsAvg = 60;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -9441,6 +10830,8 @@ function frame(now) {
     scene == 'levels' ||
     scene == 'brief' ||
     scene == 'story' ||
+    scene == 'wardrobe' ||
+    scene == 'achv' ||
     scene == 'cut';
   const gamey =
     G &&
@@ -9448,6 +10839,7 @@ function frame(now) {
       scene == 'task' ||
       scene == 'sab' ||
       scene == 'craft' ||
+      scene == 'shop' ||
       scene == 'end' ||
       scene == 'mend' ||
       scene == 'pause');
@@ -9456,7 +10848,7 @@ function frame(now) {
   if (document.pointerLockElement && scene !== 'play') document.exitPointerLock();
   if (G && G.M && !stage) missionTick(dt);
   pollGamepad(dt);
-  musicTick(dt);
+  musicTick();
   if (stage) drawStageScene(dt);
   else {
     if (scene == 'play') {
@@ -9467,7 +10859,7 @@ function frame(now) {
       updatePlayer(dt);
       updateWorld(dt);
       updateTask(dt);
-    } else if (scene == 'cams' || scene == 'sab' || scene == 'craft') {
+    } else if (scene == 'cams' || scene == 'sab' || scene == 'craft' || scene == 'shop') {
       updatePlayer(dt);
       updateWorld(dt);
     } else if (scene == 'meeting') updateMeeting(dt);
@@ -9487,6 +10879,7 @@ function frame(now) {
       drawPauseBtn();
       if (scene == 'task') drawTask();
       if (scene == 'craft') drawCraft();
+      if (scene == 'shop') drawShop();
       if (scene == 'sab') drawSabMenu();
       if (scene == 'end') drawEnd();
       if (scene == 'mend') drawMend();
@@ -9494,6 +10887,9 @@ function frame(now) {
       if (G.intro > 0) cinematicBars();
     }
   }
+  fpsAvg = fpsAvg * 0.92 + (1 / Math.max(dt, 0.001)) * 0.08;
+  if (SAVE.fps) txt(Math.round(fpsAvg) + ' FPS', 10, H - 10, 12, '#7dff9a', 'left');
+  achTick(dt);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -9532,15 +10928,19 @@ addEventListener('keydown', e => {
     voiceOn = !voiceOn;
     if (!voiceOn) stopSpeech();
   } else if (scene == 'craft' && (k == 'c' || k == 'escape')) scene = 'play';
+  else if (scene == 'shop' && (k == 'b' || k == 'escape')) scene = 'play';
   else if (scene == 'play' && G.mode === 'sandbox') {
-    if (k >= '1' && k <= '8') G.slot = +k - 1;
+    if (k >= '1' && k <= '9') G.slot = +k - 1;
+    else if (k == '0') G.slot = 9;
     else if (k == 'f') sbPlace();
     else if (k == 'e') sbInteract();
     else if (k == 'c') scene = 'craft';
     else if (k == 'g') sbEat();
   } else if (scene == 'play' && G.mode === 'zombie') {
     if (k == 'e') doUse();
-    else if (k == '1' || k == '2' || k == '3') selectWep(+k - 1);
+    else if (k == '1' || k == '2' || k == '3' || k == '4') selectWep(+k - 1);
+    else if (k == 'g') throwGrenade();
+    else if (k == 'b') openShop();
     else if (k == 'tab') cycleWep();
     else if (k == 'r') startReload();
   } else if (scene == 'play') {
@@ -9560,10 +10960,8 @@ addEventListener('keyup', e => {
   keys[e.key.toLowerCase()] = false;
 });
 cv.addEventListener('pointerdown', e => {
-  try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    if (ac.state === 'suspended') ac.resume();
-  } catch (_) {}
+  audioInit();
+  if (A.ctx && A.ctx.state === 'suspended') A.ctx.resume();
   mouse.x = e.clientX;
   mouse.y = e.clientY;
   mouse.down = true;
@@ -9710,7 +11108,10 @@ function pollGamepad(dt) {
   press(0, () => (mode === 'sandbox' ? sbInteract() : doUse()));
   press(2, () => (mode === 'zombie' ? startReload() : mode === 'sandbox' ? sbPlace() : doReport()));
   press(1, () => (mode === 'zombie' ? cycleWep() : mode === 'sandbox' ? sbEat() : doKill()));
-  press(3, () => (mode === 'sandbox' ? (scene = 'craft') : toggleVent()));
+  press(3, () =>
+    mode === 'sandbox' ? (scene = 'craft') : mode === 'zombie' ? openShop() : toggleVent()
+  );
+  press(13, () => mode === 'zombie' && throwGrenade());
   press(6, () => mode === 'sandbox' && sbPlace());
   press(4, () =>
     mode === 'sandbox' ? (G.slot = (G.slot + HOTBAR.length - 1) % HOTBAR.length) : cycleWep()

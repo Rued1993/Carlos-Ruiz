@@ -25,21 +25,23 @@ const WAVES = [
   { len: 70, count: 22 },
 ];
 const POD = { x: 1850, y: 250 };
-const WORDER = ['bate', 'pistola', 'escopeta'],
-  WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta' },
-  WICON = { bate: '🏏', pistola: '🔫', escopeta: '💥' };
-const MAG = { pistola: 12, escopeta: 6 };
+const WORDER = ['bate', 'pistola', 'escopeta', 'subfusil'],
+  WNAME = { bate: 'Bate', pistola: 'Pistola', escopeta: 'Escopeta', subfusil: 'Subfusil' },
+  WICON = { bate: '🏏', pistola: '🔫', escopeta: '💥', subfusil: '⚡' };
+const MAG = { pistola: 12, escopeta: 6, subfusil: 30 };
 /** Color del zombi según su tipo. */
 function zColor(z) {
   return z.boss
     ? '#8a3030'
-    : z.tank
-      ? '#3d4a38'
-      : z.bomb
-        ? '#d07a1a'
-        : z.run
-          ? '#7a8a40'
-          : '#5f7f52';
+    : z.spit
+      ? '#7ab030'
+      : z.tank
+        ? '#3d4a38'
+        : z.bomb
+          ? '#d07a1a'
+          : z.run
+            ? '#7a8a40'
+            : '#5f7f52';
 }
 const fmtT = s =>
   String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Math.floor(s % 60)).padStart(2, '0');
@@ -164,6 +166,11 @@ function newZombie(cfg) {
     wave: { n: 1, state: 'wait', t: 0, left: 0, spawnT: 0, len: 50 },
   };
   G.drops = [];
+  G.up = { dmg: 0, mag: 0, armor: 0 };
+  G.cash = 0;
+  G.gren = 0;
+  G.grs = [];
+  G.spits = [];
   G.score = 0;
   G.combo = 0;
   G.comboT = 0;
@@ -191,6 +198,7 @@ function banner(t, s) {
 function startWave(n) {
   const w = G.wave,
     W_ = WAVES[Math.min(n, 5) - 1];
+  if (scene === 'shop') scene = 'play';
   w.state = 'run';
   w.t = 0;
   w.len = W_.len * G.zc.lenMul;
@@ -259,6 +267,9 @@ function spawnZ(runner) {
   } else if (n >= 4 && Math.random() < 0.14) {
     z.bomb = true;
     z.sp *= 1.15;
+  } else if (n >= 3 && Math.random() < 0.16) {
+    z.spit = true;
+    z.sp *= 0.85;
   }
   z.hp = Math.round(z.hp * diff().zhp);
   z.max = z.hp;
@@ -350,7 +361,7 @@ function shoot(tx, ty) {
         const a = Math.atan2(z.y - p.y, z.x - p.x),
           da = Math.abs(Math.atan2(Math.sin(a - ang), Math.cos(a - ang)));
         if (da < 1) {
-          z.hp -= 50;
+          z.hp -= Math.round(50 * dmgMul());
           z.hurt = 0.2;
           move(z, Math.cos(a) * 20, Math.sin(a) * 20);
           burst(z.x, z.y, 8, '#4a7a2a', 150);
@@ -373,10 +384,10 @@ function shoot(tx, ty) {
   }
   g.mags[w]--;
   if (g.mags[w] === 0 && g.ammo > 0) setTimeout(() => G && G.zc && startReload(), 180);
-  const sg = w == 'escopeta',
-    n = sg ? 5 : 1,
-    spread = sg ? 0.38 : 0.03,
-    dmg = sg ? 24 : 34;
+  const ws = WSTATS[w],
+    n = ws.n,
+    spread = ws.spread,
+    dmg = Math.round(ws.dmg * dmgMul());
   for (let i = 0; i < n; i++) {
     const a = ang + (n > 1 ? (i / (n - 1) - 0.5) * spread * 2 : rnd(-spread, spread));
     g.bullets.push({
@@ -388,15 +399,15 @@ function shoot(tx, ty) {
       dmg,
     });
   }
-  g.cd = sg ? 0.85 : 0.28;
+  g.cd = ws.cd;
   g.muzzle = 0.09;
-  g.shake = Math.max(g.shake, sg ? 0.25 : 0.1);
-  beep(sg ? 90 : 240, 0.12, 'sawtooth', 0.14, -150);
+  g.shake = Math.max(g.shake, w == 'escopeta' ? 0.25 : 0.08);
+  sfx.shot(w, p.x, p.y);
 }
 /** Llena el cargador la primera vez que se usa un arma, tomando de la reserva. */
 function ensureMag(w) {
   if (G.mags[w] === undefined) {
-    const t = Math.min(MAG[w], G.ammo);
+    const t = Math.min(magSize(w), G.ammo);
     G.ammo -= t;
     G.mags[w] = t;
   }
@@ -407,11 +418,11 @@ function startReload() {
     w = g.wep;
   if (!w || !MAG[w] || g.reloadT > 0 || scene !== 'play') return;
   ensureMag(w);
-  if (g.mags[w] >= MAG[w] || g.ammo <= 0) return;
+  if (g.mags[w] >= magSize(w) || g.ammo <= 0) return;
   g.reloadT = w === 'escopeta' ? 1.6 : 1.1;
   g.reloadW = w;
-  beep(300, 0.08, 'square', 0.06);
-  setTimeout(() => beep(420, 0.06, 'square', 0.06), g.reloadT * 600);
+  sfx.reload();
+  setTimeout(() => sfx.reload(), g.reloadT * 600);
 }
 function shootAuto() {
   const p = G.player;
@@ -456,12 +467,13 @@ function updZombie(dt) {
   if (g.reloadT > 0) {
     g.reloadT -= dt;
     if (g.reloadT <= 0 && g.wep === g.reloadW) {
-      const take = Math.min(MAG[g.wep] - g.mags[g.wep], g.ammo);
+      const take = Math.min(magSize(g.wep) - g.mags[g.wep], g.ammo);
       g.mags[g.wep] += take;
       g.ammo -= take;
       beep(520, 0.07, 'square', 0.06);
     }
   }
+  updExtras(dt);
   // combo
   if (g.comboT > 0) {
     g.comboT -= dt;
@@ -479,7 +491,7 @@ function updZombie(dt) {
         g.hp = Math.min(100, g.hp + 25);
         toast('+25 salud', 1.2);
       }
-      beep(760, 0.1, 'sine', 0.08, 300);
+      sfx.pickup();
       g.drops.splice(i, 1);
     } else if (d.t <= 0) g.drops.splice(i, 1);
   }
@@ -500,15 +512,12 @@ function updZombie(dt) {
     }
     if (w.t >= w.len || (w.boss && g.bossDead && w.t > 2)) {
       mevent('wave');
-      g.score += 100 * w.n;
+      addScore(100 * w.n);
       if (w.n < g.zc.waves) {
         clearZ();
         w.state = 'break';
         w.t = 0;
-        banner(
-          'OLEADA ' + w.n + ' SUPERADA',
-          'Los zombis se dispersan… busca bolsas con suministros'
-        );
+        banner('OLEADA ' + w.n + ' SUPERADA', 'Los zombis se dispersan… pulsa B para la tienda');
         beep(500, 0.5, 'sine', 0.1, 300);
       } else if (!g.zc.escape) {
         w.state = 'done';
@@ -525,7 +534,7 @@ function updZombie(dt) {
     }
   } else if (w.state == 'break') {
     w.t += dt;
-    if (w.t >= 9) {
+    if (w.t >= 14) {
       w.n++;
       startWave(w.n);
     }
@@ -580,7 +589,7 @@ function updZombie(dt) {
         z.path.push({ x: p.x, y: p.y, chase: 1 });
       }
     }
-    const t = z.path[0];
+    const t = z.spit && d < 260 && clearLine(z, p) ? null : z.path[0];
     if (t) {
       if (t.chase) {
         t.x = p.x;
@@ -608,19 +617,16 @@ function updZombie(dt) {
     if (z.bomb && d < 46 && p.alive) {
       z.hp = 0;
       z.selfDestruct = true;
-      if (d < 110) g.hp -= Math.round(24 * diff().zdmg);
+      if (d < 110) hurtPlayer(24 * diff().zdmg);
       for (const o of g.zs) if (o !== z && dist(o, z) < 110) o.hp -= 40;
       g.flash = 0.7;
       g.shake = 0.6;
       burst(z.x, z.y, 36, '#ff9a20', 260, 0.9);
       debris3D(z.x, 20, z.y, '#ff8a20', 10);
-      beep(70, 0.5, 'sawtooth', 0.2, -50);
+      sfx.explosion(z.x, z.y);
     } else if (d < (z.boss ? 58 : z.tank ? 40 : 32) && z.cd <= 0 && p.alive) {
       z.cd = 0.9;
-      g.hp -= Math.round((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg);
-      g.flash = 0.5;
-      g.shake = 0.3;
-      beep(90, 0.15, 'sawtooth', 0.12, -40);
+      hurtPlayer((z.boss ? 18 : z.tank ? 14 : 7 + g.wave.n * 2) * diff().zdmg);
       burst(p.x, p.y, 8, '#7a0b0b', 160);
     }
   }
@@ -640,7 +646,7 @@ function updZombie(dt) {
       g.kills++;
       g.combo = Math.min(8, g.combo + 1);
       g.comboT = 4;
-      g.score += Math.round(10 * (z.boss ? 20 : z.tank ? 4 : 1) * (1 + g.combo * 0.25));
+      addScore(Math.round(10 * (z.boss ? 20 : z.tank ? 4 : 1) * (1 + g.combo * 0.25)));
       if (z.boss || Math.random() < 0.22 * diff().drop)
         g.drops.push({
           x: z.x,
@@ -661,13 +667,14 @@ function updZombie(dt) {
         dots: Array.from({ length: 5 }, () => [rnd(-40, 40), rnd(-20, 24), rnd(2, 4)]),
       });
       if (g.blood.length > 40) g.blood.shift();
-      beep(70, 0.2, 'sawtooth', 0.1, -30);
+      sfx.hit(z.x, z.y);
     }
   g.zs = g.zs.filter(z => z.hp > 0);
   g.gt -= dt;
   if (g.gt <= 0) {
     g.gt = rnd(2.5, 5);
-    if (g.zs.some(z => dist(z, p) < 450)) beep(rnd(55, 80), 0.5, 'sawtooth', 0.08, -20);
+    const near = g.zs.find(z => dist(z, p) < 450);
+    if (near) sfx.growl(near.x, near.y, near.boss || near.tank);
   }
   if (g.hp <= 0) {
     g.hp = 0;
@@ -737,6 +744,7 @@ function drawZombies() {
     txt('CÁPSULA DE ESCAPE', POD.x, POD.y + 52, 14, '#9fb', 'center');
     if (g.nearPod) txt('[E] Escapar', POD.x, POD.y - 50, 16, '#ffd740', 'center');
   }
+  drawExtras2D();
   for (const d of g.drops) {
     ctx.fillStyle = d.type === 'municion' ? '#ffd740' : '#ffffff';
     rr(d.x - 10, d.y - 10, 20, 20, 4);
@@ -848,6 +856,8 @@ function drawZHUD() {
       g.kills +
       '  ·  Puntos: ' +
       g.score +
+      '  ·  Fondos: ' +
+      g.cash +
       (g.combo > 1 ? '  x' + (1 + g.combo * 0.25).toFixed(2) : ''),
     24,
     46,
@@ -883,7 +893,7 @@ function drawZHUD() {
   }
   // armas
   WORDER.forEach((k, i) => {
-    const x = W / 2 - 170 + i * 115,
+    const x = W / 2 - 230 + i * 115,
       y = H - 58,
       own = g.weps[k];
     ctx.globalAlpha = own ? 1 : 0.35;
@@ -897,7 +907,7 @@ function drawZHUD() {
     ctx.globalAlpha = 1;
   });
   if (g.wep && g.wep != 'bate') {
-    const mg = g.mags[g.wep] === undefined ? Math.min(MAG[g.wep], g.ammo) : g.mags[g.wep],
+    const mg = g.mags[g.wep] === undefined ? Math.min(magSize(g.wep), g.ammo) : g.mags[g.wep],
       rs = g.mags[g.wep] === undefined ? g.ammo - mg : g.ammo;
     txt(
       `${g.reloadT > 0 ? 'Recargando…' : mg + ' / ' + rs}   [R] recargar`,
@@ -917,6 +927,9 @@ function drawZHUD() {
       ctx.fill();
     }
   }
+  txt('Granadas: ' + g.gren + '  [G]', 268, H - 30, 13, g.gren ? '#ffb74d' : '#789', 'left');
+  if (g.wave.state === 'break' || g.wave.state === 'wait')
+    txt('[B] Tienda', W - 130, H - 156, 14, '#ffd740', 'center');
   if (g.toastT > 0) {
     ctx.font = 'bold 18px system-ui';
     const tw = ctx.measureText(g.toast).width + 40;
@@ -955,7 +968,7 @@ function drawZHUD() {
   };
   btn(bx, by, 'USAR', '[E]', !!(g.nearBag || g.nearPod || g.nearCam), '#3a7bd5', doUse);
   btn(bx - bs - 8, by, 'DISPARAR', '[Espacio]', true, '#c62828', shootAuto);
-  btn(bx, by - bs - 8, 'ARMA', '[1-3]', true, '#6a5acd', cycleWep);
+  btn(bx, by - bs - 8, 'ARMA', '[1-4]', true, '#6a5acd', cycleWep);
   if (g.bannerT > 0) {
     const a = Math.min(1, g.bannerT);
     ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;

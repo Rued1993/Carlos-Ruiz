@@ -30,6 +30,7 @@ function launchMission(def) {
 }
 function mevent(k, n) {
   n = n || 1;
+  track(k, n);
   const M = G && G.M;
   if (!M || M.over || M.win) return;
   for (const g of M.goals)
@@ -85,6 +86,7 @@ function missionEnd(ok) {
     SAVE.stars[M.def.id] = Math.max(SAVE.stars[M.def.id] || 0, st);
     if (CAMP && CAMP.kind === 'story') SAVE.story = Math.max(SAVE.story, CAMP.idx + 1);
     saveGame();
+    checkCustomAch();
   }
   scene = 'mend';
   M.at = 0;
@@ -95,7 +97,19 @@ function startStory(i) {
   const ch = CHAPTERS[i];
   playCut(ch.intro, () => launchMission(ch));
 }
+/** Pantalla a la que se vuelve desde una misión según su origen. */
+function backScene() {
+  return CAMP && CAMP.kind === 'story'
+    ? 'story'
+    : CAMP && CAMP.kind === 'daily'
+      ? 'menu'
+      : 'levels';
+}
 function missionNext() {
+  if (CAMP.kind === 'daily') {
+    scene = 'menu';
+    return;
+  }
   if (CAMP.kind === 'story') {
     const i = CAMP.idx,
       ch = CHAPTERS[i];

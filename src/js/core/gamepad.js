@@ -44,7 +44,10 @@ function pollGamepad(dt) {
   press(0, () => (mode === 'sandbox' ? sbInteract() : doUse()));
   press(2, () => (mode === 'zombie' ? startReload() : mode === 'sandbox' ? sbPlace() : doReport()));
   press(1, () => (mode === 'zombie' ? cycleWep() : mode === 'sandbox' ? sbEat() : doKill()));
-  press(3, () => (mode === 'sandbox' ? (scene = 'craft') : toggleVent()));
+  press(3, () =>
+    mode === 'sandbox' ? (scene = 'craft') : mode === 'zombie' ? openShop() : toggleVent()
+  );
+  press(13, () => mode === 'zombie' && throwGrenade());
   press(6, () => mode === 'sandbox' && sbPlace());
   press(4, () =>
     mode === 'sandbox' ? (G.slot = (G.slot + HOTBAR.length - 1) % HOTBAR.length) : cycleWep()
