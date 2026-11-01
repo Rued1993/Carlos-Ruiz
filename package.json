@@ -1,0 +1,19 @@
+{
+  "name": "nebula7-el-cubo",
+  "version": "1.0.0",
+  "description": "Nébula-7: El Cubo — juego de impostores, zombis y cubos en 3D (canvas + three.js)",
+  "private": true,
+  "scripts": {
+    "build": "python3 build.py",
+    "format": "prettier --write \"src/js/**/*.js\" \"tests/**/*.js\"",
+    "lint": "node tools/lint.js",
+    "test": "npm run build && node tests/smoke.test.js",
+    "check": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "playwright": "^1.45.0",
+    "prettier": "^3.3.0"
+  }
+}
