@@ -1191,8 +1191,11 @@ const buzz = (ms) => { if (touchMode && navigator.vibrate) try { navigator.vibra
 function fitPanels() {
   document.querySelectorAll('.screen:not(#overlay)').forEach((sc) => {
     const p = sc.firstElementChild; if (!p || sc.classList.contains('hidden')) return;
-    p.style.zoom = ''; const w = p.scrollWidth, h = p.scrollHeight, k = Math.min(1, (innerWidth - 12) / w, (innerHeight - 12) / h);
-    if (k < 0.999) p.style.zoom = Math.max(0.5, k).toFixed(3);
+    p.style.zoom = ''; p.style.maxHeight = '';
+    const w = p.scrollWidth, h = p.scrollHeight, list = h > innerHeight * 1.5; // listas largas (jefes, misiones…): no se encogen por alto, hacen scroll
+    const k = Math.max(0.5, Math.min(1, (innerWidth - 12) / w, list ? 1 : (innerHeight - 12) / h));
+    if (k < 0.999) p.style.zoom = k.toFixed(3);
+    p.style.maxHeight = Math.floor((innerHeight - 12) / k) + 'px'; // el panel nunca supera la pantalla: el resto se recorre con scroll
   });
 }
 new MutationObserver(() => requestAnimationFrame(fitPanels)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
