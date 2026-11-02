@@ -155,8 +155,28 @@
       #chatLog { position: fixed; left: 8px; bottom: 150px; width: min(420px, 60vw); display: flex; flex-direction: column; gap: 2px; pointer-events: none; z-index: 4; }
     #chatLog div { background: rgba(0,0,0,.45); color: #fff; font-size: 13px; padding: 2px 6px; text-shadow: 1px 1px #000; transition: opacity 1s; }
     #chatLog div b { color: #9fd6ff; } #chatLog div.sys { color: #ffe27a; }
+  
+    /* ---------- Autoajuste a cualquier pantalla ---------- */
+    #overlay { overflow-y: auto; overflow-x: hidden; justify-content: flex-start; box-sizing: border-box; padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #overlay > div { margin: auto 0; max-width: 100%; }  /* centrado vertical que, si no cabe, deja hacer scroll */
+    #overlay .btn { width: min(340px, 88vw); }
+    .newbox input { width: min(200px, 42vw); }
+    #splash { right: -10px; }
+    .screen:not(#overlay) .panel { max-width: 98vw; max-height: 96vh; max-height: 96dvh; overflow: auto; touch-action: pan-y; overscroll-behavior: contain; }
+    @media (max-height: 560px) {
+      #logo { margin-bottom: 8px; } #logo h1 { font-size: clamp(28px, 7vh, 44px) !important; letter-spacing: 2px; } #logo small { font-size: 12px; letter-spacing: 8px; }
+      #menu, #pause, #death { gap: 6px; } .btn { padding: 8px 16px; font-size: 14px; } #overlay p { font-size: 12px; } #keys { display: none; }
+      #worldList { max-height: 120px; } .newbox input { padding: 6px 10px; }
+    }
+    @media (max-height: 560px) and (min-aspect-ratio: 13/10) { /* móvil en horizontal: menú de pausa en dos columnas */
+      #pause { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: min(720px, 96vw); }
+      #pause #logo { width: 100%; margin-bottom: 0; } #pause .btn, #pause .row { width: min(330px, 46vw); }
+    }
+    @media (max-width: 480px) { #logo small { letter-spacing: 6px; }  #logo { margin-bottom: 26px; } .wcard { grid-template-columns: 64px 1fr; } .wcard img { width: 64px; height: 36px; } .wb { grid-column: 1 / -1; } }
+    @media (max-width: 900px), (max-height: 560px) { #splash { position: static; transform: none; animation: none; margin-top: 2px; font-size: 13px; } }
+    body.touch #keys { display: none; }
   </style>
-  <script type="module" crossorigin src="./assets/index-BKHl4_4y.js"></script>
+  <script type="module" crossorigin src="./assets/index-DcfdMRQX.js"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -249,7 +269,7 @@
 
   <div id="overlay" class="screen">
     <div id="menu">
-      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡16 jefes y 2 dimensiones!</div></div>
+      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡19 jefes, 3 dimensiones y multijugador!</div></div>
       <p id="msg">Cargando…</p>
       <div id="menuBody" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
         <div id="worldsBox" class="hidden"><h3>Tus mundos guardados</h3><div id="worldList"></div></div>
@@ -303,7 +323,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v1.6</div>
+    <div id="ver">Minecraft Web v1.7</div>
   </div>
 </body>
 </html>

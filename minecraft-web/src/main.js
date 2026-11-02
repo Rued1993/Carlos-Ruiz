@@ -1133,16 +1133,27 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 // ---------- Controles táctiles y mejoras para móvil ----------
 let touchMode = settings.touch === 'on' || (settings.touch !== 'off' && COARSE), touchMove = null, touchSprint = false, touchAuto = false, touchUI = null, wakeLock = null, fsTries = 0, lowFpsT = 0;
 const buzz = (ms) => { if (touchMode && navigator.vibrate) try { navigator.vibrate(ms); } catch {} };
+// Escala los paneles (inventario, misiones, comercio…) para que quepan siempre en la pantalla
+function fitPanels() {
+  document.querySelectorAll('.screen:not(#overlay)').forEach((sc) => {
+    const p = sc.firstElementChild; if (!p || sc.classList.contains('hidden')) return;
+    p.style.zoom = ''; const w = p.scrollWidth, h = p.scrollHeight, k = Math.min(1, (innerWidth - 12) / w, (innerHeight - 12) / h);
+    if (k < 0.999) p.style.zoom = Math.max(0.5, k).toFixed(3);
+  });
+}
+new MutationObserver(() => requestAnimationFrame(fitPanels)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+addEventListener('orientationchange', () => setTimeout(() => { applyTouchMode(); fitPanels(); }, 250));
 function applyTouchMode() {
   document.body.classList.toggle('touch', touchMode);
-  document.documentElement.style.setProperty('--hs', Math.max(0.62, Math.min(1, (innerWidth - 330) / 480)));
+  document.documentElement.style.setProperty('--hs', Math.max(0.55, Math.min(1, (innerWidth - 330) / 480, (innerHeight + 120) / 520)));
+  fitPanels();
   const b = $('bTouch'); if (b) b.textContent = '🖐 Controles táctiles: ' + ({ auto: 'Auto', on: 'Sí', off: 'No' })[settings.touch];
 }
 async function keepAwake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !wakeLock && state !== 'menu') { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch {} }
 function enterFullscreen() {
   const el = document.documentElement;
   if (document.fullscreenElement || matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches) return;
-  try { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (r && r.then) r.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch {} }).catch(() => {}); } catch {}
+  try { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (r && r.then) r.catch(() => {}); } catch {}
 }
 addEventListener('pointerup', (e) => { if (touchMode && e.pointerType === 'touch' && fsTries < 2 && !document.fullscreenElement) { fsTries++; enterFullscreen(); } });
 addEventListener('touchstart', () => { if (!touchMode && settings.touch === 'auto') { touchMode = true; applyTouchMode(); } }, { passive: true, once: true });
