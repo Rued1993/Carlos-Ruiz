@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 
 export const DAY_LENGTH = 600; // segundos por día completo
+const GREY = new THREE.Color(0x70767f), FLASH = new THREE.Color(0xdde6ff);
 const DAY = new THREE.Color(0x87ceeb), NIGHT = new THREE.Color(0x070b1c), DUSK = new THREE.Color(0xff8a50);
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -33,7 +34,7 @@ export class Sky {
   constructor(scene, camera, materials) {
     this.scene = scene; this.camera = camera; this.materials = materials;
     this.time = 0.08; // 0 = amanecer, 0.25 mediodía, 0.5 atardecer, 0.75 medianoche
-    this.daylight = 1;
+    this.daylight = 1; this.wet = 0; this.flash = 0; this.cloudX = 0; this.cloudZ = 0;
     this.root = new THREE.Group(); scene.add(this.root);
 
     const sunTex = squareTex((x) => { x.fillStyle = '#fff6b0'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#ffe14a'; x.fillRect(2, 2, 12, 12); x.fillStyle = '#fffbe0'; x.fillRect(5, 5, 6, 6); });
@@ -57,6 +58,11 @@ export class Sky {
     this.cloudMat = new THREE.MeshBasicMaterial({ map: this.cloudTex, transparent: true, fog: false, depthWrite: false, side: THREE.DoubleSide });
     this.clouds = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), this.cloudMat);
     this.clouds.rotation.x = -Math.PI / 2; scene.add(this.clouds);
+    // Segunda capa más baja que aparece con mal tiempo
+    this.cloudMat2 = new THREE.MeshBasicMaterial({ map: this.cloudTex.clone(), transparent: true, fog: false, depthWrite: false, side: THREE.DoubleSide });
+    this.cloudMat2.map.needsUpdate = true;
+    this.clouds2 = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), this.cloudMat2);
+    this.clouds2.rotation.x = -Math.PI / 2; scene.add(this.clouds2);
 
     this.ambient = new THREE.AmbientLight(0xffffff, 1);
     this.sunLight = new THREE.DirectionalLight(0xffffff, 0.6); this.sunLight.position.set(0.5, 1, 0.3);
@@ -64,26 +70,31 @@ export class Sky {
     this.sky = new THREE.Color(); this.tint = new THREE.Color();
   }
 
-  update(dt, playerPos, fogRadius, underwater) {
+  update(dt, playerPos, fogRadius, underwater, wind = { x: 0, z: 0, s: 0.12 }) {
     this.time = (this.time + dt / DAY_LENGTH) % 1;
     const a = this.time * Math.PI * 2;
     const sinA = Math.sin(a), cosA = Math.cos(a);
-    this.daylight = smooth(-0.12, 0.25, sinA);
+    const raw = smooth(-0.12, 0.25, sinA), wet = this.wet, flash = this.flash;
+    this.daylight = raw * (1 - 0.55 * wet);
 
     this.sky.copy(NIGHT).lerp(DAY, this.daylight);
     const dusk = Math.max(0, 1 - Math.abs(sinA) * 4.5) * 0.7;
-    this.sky.lerp(DUSK, dusk);
+    this.sky.lerp(DUSK, dusk * (1 - wet));
+    if (wet > 0) this.sky.lerp(GREY.clone().multiplyScalar(0.12 + 0.88 * raw), wet * 0.8);
+    if (flash > 0) this.sky.lerp(FLASH, flash * 0.7);
     if (underwater) this.sky.set(0x1a3a7a).multiplyScalar(0.4 + this.daylight * 0.6);
     this.scene.background = this.sky;
     this.scene.fog.color.copy(this.sky);
     this.scene.fog.near = underwater ? 0.5 : fogRadius * 0.6;
-    this.scene.fog.far = underwater ? 18 : fogRadius * 1.0;
+    this.scene.fog.far = underwater ? 18 : fogRadius * (1 - 0.3 * wet);
+    if (!underwater) this.scene.fog.near = fogRadius * (0.6 - 0.25 * wet);
 
     // Los materiales de bloques multiplican el color de vértice por el brillo del día
     const b = 0.2 + 0.8 * this.daylight;
     this.tint.setRGB(b * (0.85 + 0.15 * this.daylight), b * (0.88 + 0.12 * this.daylight), 0.3 + 0.7 * b);
+    this.tint.addScalar(flash * 0.65);
     this.materials.tint.value.copy(this.tint);
-    this.ambient.intensity = 0.35 + 0.65 * this.daylight;
+    this.ambient.intensity = 0.35 + 0.65 * this.daylight + flash * 0.8;
     this.sunLight.intensity = 0.15 + 0.5 * this.daylight;
 
     this.root.position.copy(this.camera.position);
@@ -92,13 +103,21 @@ export class Sky {
     this.moon.position.set(-cosA * R, -sinA * R, 30);
     this.sun.lookAt(this.camera.position); this.moon.lookAt(this.camera.position);
     this.stars.rotation.z = a;
-    this.starMat.opacity = Math.max(0, 1 - this.daylight * 1.6) * (underwater ? 0 : 1);
+    this.starMat.opacity = Math.max(0, 1 - this.daylight * 1.6) * (underwater ? 0 : 1) * (1 - wet);
+    this.sun.material.opacity = this.moon.material.opacity = 1 - wet * 0.95;
 
-    this.clouds.position.set(playerPos.x, 92, playerPos.z);
+    const sp = 1.2 + wind.s * 10;
+    this.cloudX += wind.x / (wind.s || 1) * sp * dt; this.cloudZ += wind.z / (wind.s || 1) * sp * dt;
     const size = 64 * 12; // cada píxel de la textura = 12 bloques
-    this.clouds.material.map.repeat.set(900 / size, 900 / size);
-    this.clouds.material.map.offset.set((playerPos.x + this.time * DAY_LENGTH * 1.2) / size, -playerPos.z / size);
-    this.cloudMat.color.setScalar(0.3 + 0.7 * this.daylight);
+    const shade = (0.3 + 0.7 * raw) * (1 - 0.5 * wet);
+    for (const [m, mat, y, mul] of [[this.clouds, this.cloudMat, 92, 1], [this.clouds2, this.cloudMat2, 86, 0.7]]) {
+      m.position.set(playerPos.x, y, playerPos.z);
+      mat.map.repeat.set(900 / size, 900 / size);
+      mat.map.offset.set((playerPos.x + this.cloudX * mul) / size + (mul < 1 ? 0.37 : 0), -(playerPos.z + this.cloudZ * mul) / size);
+      mat.color.setScalar(shade * (mul < 1 ? 0.8 : 1));
+    }
     this.cloudMat.opacity = 0.9;
+    this.cloudMat2.opacity = Math.min(0.95, wet * 1.1);
+    this.clouds2.visible = wet > 0.05;
   }
 }

@@ -295,8 +295,8 @@ export class World {
     if (!data) return;
     const x0 = cx * CS, z0 = cz * CS;
     const lists = [
-      { pos: [], nor: [], uv: [], col: [], bl: [], ind: [] }, // opaco
-      { pos: [], nor: [], uv: [], col: [], bl: [], ind: [] }, // transparente
+      { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], ind: [] }, // opaco
+      { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], ind: [] }, // transparente
     ];
     const get = (wx, wy, wz) => {
       const lx = wx - x0, lz = wz - z0;
@@ -356,7 +356,7 @@ export class World {
                 L.pos.push(lx + 7 / 16 + c.p[0] * 2 / 16, y + c.p[1] * 10 / 16, lz + 7 / 16 + c.p[2] * 2 / 16);
                 L.nor.push(f.dir[0], f.dir[1], f.dir[2]);
                 L.uv.push(u0 + (u1 - u0) * c.uv[0], 6 / 16 + (10 / 16) * c.uv[1]);
-                L.col.push(0.8, 0.8, 0.8); L.bl.push(1);
+                L.col.push(0.8, 0.8, 0.8); L.bl.push(1); L.sw.push(0);
               }
               L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
             }
@@ -402,6 +402,7 @@ export class World {
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
               L.col.push(v, v, v);
               L.bl.push(f.shade * AO[ao[ci]] * bg[ci]);
+              L.sw.push(id === B.LEAVES ? 1 : 0);
             }
             if (ao[0] + ao[3] > ao[1] + ao[2]) L.ind.push(n, n + 1, n + 3, n, n + 3, n + 2);
             else L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
@@ -419,6 +420,7 @@ export class World {
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(L.uv, 2));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(L.col, 3));
       geo.setAttribute('blight', new THREE.Float32BufferAttribute(L.bl, 1));
+      geo.setAttribute('sway', new THREE.Float32BufferAttribute(L.sw, 1));
       geo.setIndex(L.ind);
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);

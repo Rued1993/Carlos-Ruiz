@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createAtlas, tileColor } from './atlas.js';
 import { initIcons, iconTexture, tileURL } from './icons.js';
 import { PlayerModel } from './playermodel.js';
+import { Weather, WEATHER_NAMES } from './weather.js';
 import { World, terrainHeight, biomeAt, SEA, CH } from './world.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -27,11 +28,13 @@ initIcons(atlasCanvas);
 document.documentElement.style.setProperty('--dirt', `url(${tileURL('dirt')})`);
 // Color final del vértice = luz de cielo * tinte del día + luz cálida de antorchas (que no se atenúa de noche)
 const tint = { value: new THREE.Color(1, 1, 1) };
+const gameU = { uTime: { value: 0 }, uWind: { value: 0.12 } };
 function patchChunkMaterial(m) {
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTint = tint;
+    sh.uniforms.uTint = tint; sh.uniforms.uTime = gameU.uTime; sh.uniforms.uWind = gameU.uWind;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float blight;\nuniform vec3 uTint;')
+      .replace('#include <common>', '#include <common>\nattribute float blight;\nattribute float sway;\nuniform vec3 uTint;\nuniform float uTime;\nuniform float uWind;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvec4 wp = modelMatrix * vec4(position, 1.0);\nfloat sw = sway * uWind;\ntransformed.x += sin(uTime * 1.7 + wp.x * 0.9 + wp.z * 0.6 + wp.y * 0.5) * 0.075 * sw;\ntransformed.z += cos(uTime * 1.3 + wp.z * 0.8 + wp.x * 0.4) * 0.075 * sw;\ntransformed.y += sin(uTime * 2.1 + wp.x * 0.7 + wp.z * 0.7) * 0.03 * sw;')
       .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_COLOR\nvColor = color * uTint + vec3(1.0, 0.8, 0.5) * blight;\n#endif');
   };
   m.customProgramCacheKey = () => 'chunk-light';
@@ -66,7 +69,7 @@ handIcon.renderOrder = handArm.renderOrder = 999;
 let state = 'menu'; // menu | loading | play | inv | pause | dead
 let mode = 'survival', radius = settings.radius, camMode = settings.cam | 0;
 const furnaces = new Map(); // "x,y,z" -> {slots:[entrada,combustible,salida], burn, burnMax, cook}
-let model, furnRenderT = 0;
+let model, furnRenderT = 0, weather;
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1;
 const mouse = { left: false, right: false };
 const mining = { key: '', progress: 0 };
@@ -303,7 +306,7 @@ function onDeath() {
 async function saveGame() {
   if (!world) return;
   const meta = { v: 1, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
-    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()] };
+    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON() };
   const entries = [...world.unsaved].filter((k) => world.chunks.has(k)).map((k) => [k, new Uint8Array(world.chunks.get(k))]);
   const ok = await save.saveAll(meta, entries);
   if (ok) world.unsaved.clear();
@@ -322,6 +325,11 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   player.mode = mode;
   if (!model) model = new PlayerModel(scene);
   sky = new Sky(scene, camera, materials);
+  weather = new Weather(scene, {
+    world: () => world, sky: () => sky, sound: (n, v) => audio.play(n, v),
+    burst: (x, y, z) => { particles.burst(x, y, z, [1, 1, 0.8], 24, 6); particles.burst(x, y, z, [0.3, 0.3, 0.35], 14, 4); },
+    hurtPlayer: (n) => player.damage(n), strikeMobs: (x, z) => { for (const m of [...mobs.list]) if (Math.hypot(m.pos.x - x, m.pos.z - z) < 3.5) mobs.damage(m, 12, x, z); },
+  });
   drops = new Drops(scene, world);
   particles = new Particles(scene, world);
   mobs = new MobManager(scene, world, {
@@ -339,7 +347,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
 
   let cx, cz;
   if (meta) {
-    inv.load(meta.inv); (meta.furnaces || []).forEach(([k, f]) => furnaces.set(k, f)); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
+    weather.load(meta.weather); inv.load(meta.inv); (meta.furnaces || []).forEach(([k, f]) => furnaces.set(k, f)); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
     player.yaw = meta.yaw; player.pitch = meta.pitch; player.spawn.fromArray(meta.spawn);
     player.pos.fromArray(meta.pos); cx = Math.floor(meta.pos[0]); cz = Math.floor(meta.pos[2]);
   } else { [cx, cz] = findSpawnColumn(seed); player.pos.set(cx + 0.5, 70, cz + 0.5); }
@@ -357,7 +365,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode };
+  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; } };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -385,6 +393,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 9) { inv.selected = n; syncSelect(); } return; }
   switch (e.code) {
     case 'KeyE': openInventory(2); return;
+    case 'KeyT': if (!e.repeat) { const st = weather.cycle(); ui.toast('Clima: ' + WEATHER_NAMES[st]); } return;
     case 'KeyV': case 'F5': e.preventDefault(); if (!e.repeat) setCamMode((camMode + 1) % 3); return;
     case 'KeyF': if (mode === 'creative' && !e.repeat) { player.flying = !player.flying; player.vel.y = 0; ui.toast(player.flying ? 'Vuelo activado' : 'Vuelo desactivado'); } return;
     case 'KeyG': if (!e.repeat) { mode = mode === 'creative' ? 'survival' : 'creative'; player.mode = mode; if (mode === 'survival') player.flying = false; ui.renderStats(); ui.toast('Modo ' + (mode === 'creative' ? 'creativo' : 'supervivencia')); } return;
@@ -438,7 +447,14 @@ function frame(now) {
     model.update(dt, player, swing);
     applyCamera();
     tickFurnaces(dt);
-    sky.update(dt, camera.position, radius * 16, player.headUnder);
+    const cx = Math.floor(player.pos.x), cz = Math.floor(player.pos.z);
+    const snowing = biomeAt(cx, cz, seed) === 'snow';
+    weather.update(dt, player, camera, snowing, player.headUnder);
+    const exposed = world.skyLit(cx, Math.floor(player.pos.y + 1.6), cz);
+    player.wind.x = weather.wind.x * 1.4 * exposed * (weather.state === 'clear' ? 0 : 1); player.wind.z = weather.wind.z * 1.4 * exposed * (weather.state === 'clear' ? 0 : 1);
+    gameU.uTime.value += dt; gameU.uWind.value = 0.25 + weather.wind.s * 2.2;
+    audio.setAmbient(weather.intensity * (0.25 + 0.75 * exposed) * (player.headUnder ? 0.2 : 1), weather.wind.s * (0.3 + 0.7 * exposed) * (weather.state === 'clear' ? 0.25 : 1), weather.t * 0.4);
+    sky.update(dt, camera.position, radius * 16, player.headUnder, weather.wind);
     world.update(player.pos.x, player.pos.z, radius, 2);
     mobs.update(dt, player, mode, sky.daylight, radius);
     drops.update(dt, player, inv, () => { sound('pop'); ui.renderHotbar(); });
@@ -454,7 +470,7 @@ function frame(now) {
       hudT = 0.2; ui.renderStats();
       const h = ((sky.time * 24 + 6) % 24), hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
       $('info').textContent = `${fps} FPS · ${mode === 'creative' ? 'Creativo' : 'Supervivencia'}\nXYZ ${player.pos.x.toFixed(1)} ${player.pos.y.toFixed(1)} ${player.pos.z.toFixed(1)}\n` +
-        `Bioma: ${biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z), seed)} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nMobs: ${mobs.list.length}${player.flying ? ' · [VUELO]' : ''}`;
+        `Bioma: ${biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z), seed)} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nMobs: ${mobs.list.length} · Clima: ${WEATHER_NAMES[weather.state]}${snowing ? ' (nieve)' : ''} · Viento ${(weather.wind.s * 20).toFixed(0)} km/h${player.flying ? ' · [VUELO]' : ''}`;
       $('cam').textContent = '📷 ' + CAM_NAMES[camMode] + '  [V]';
     }
     saveT += dt; if (saveT > 20) { saveT = 0; saveGame(); }

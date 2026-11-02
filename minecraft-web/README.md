@@ -21,6 +21,7 @@ npm run build    # versión de producción en dist/
 - **Horno y antorchas:** el horno funde mena de hierro/oro, cobble, arena, troncos y cocina la carne (usa carbón o madera como combustible); las antorchas dan luz cálida real que se propaga y no se apaga de noche.
 - **Cámaras:** primera persona, tercera persona por detrás y por delante (tecla **V**), con modelo de jugador animado.
 - **Interfaz:** menú rediseñado, HUD con corazones/comida/burbujas en pixel-art, ajustes de render, campo de visión, sensibilidad y volumen (se guardan).
+- **Clima:** lluvia y tormentas aleatorias (nieve en el bioma nevado) con rayos y trueno, viento que mece las hojas y empuja al jugador, cielo oscuro y sonido de lluvia/viento. Tecla **T** para cambiar el clima.
 - **Creativo:** bloques infinitos, rotura instantánea, vuelo y paleta con todos los bloques e ítems.
 - **Guardado automático** en el navegador (IndexedDB) y sonido procedural.
 
@@ -34,6 +35,7 @@ npm run build    # versión de producción en dist/
 | Colocar / comer / abrir mesa | Clic derecho |
 | Elegir ranura | 1-9 o rueda |
 | Inventario | E |
+| Cambiar clima (despejado/lluvia/tormenta) | T |
 | Cambiar cámara (1ª / 3ª detrás / 3ª delante) | V |
 | Tirar ítem | Q (supervivencia) |
 | Volar | F (creativo; Espacio sube, Q baja) |

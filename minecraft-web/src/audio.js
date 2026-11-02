@@ -34,7 +34,30 @@ function tone(type, f0, f1, dur, gain) {
   const g = ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g); g.connect(master); o.start(t); o.stop(t + dur);
 }
-export function play(name) {
+let amb = null;
+function ensureAmbient() {
+  if (amb || !init()) return amb;
+  const mk = (type, freq, q) => {
+    const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain(); g.gain.value = 0;
+    s.connect(f); f.connect(g); g.connect(master); s.start(0, Math.random() * 0.5);
+    return { f, g };
+  };
+  amb = { rain: mk('highpass', 1800, 0.3), rainLow: mk('lowpass', 5000, 0.3), wind: mk('bandpass', 420, 0.9) };
+  return amb;
+}
+// rain / wind en 0..1; phase mueve el timbre del viento
+export function setAmbient(rain, wind, phase = 0) {
+  if (!ctx || ctx.state !== 'running') return;
+  const a = ensureAmbient(); if (!a) return;
+  const t = ctx.currentTime;
+  a.rain.g.gain.setTargetAtTime(rain * 0.16, t, 0.3);
+  a.rainLow.g.gain.setTargetAtTime(rain * 0.12, t, 0.3);
+  a.wind.g.gain.setTargetAtTime(wind * 0.5, t, 0.4);
+  a.wind.f.frequency.setTargetAtTime(300 + 380 * (0.5 + 0.5 * Math.sin(phase)) + wind * 200, t, 0.3);
+}
+export function play(name, vol = 1) {
   if (!ctx) return;
   switch (name) {
     case 'break': noise(0.16, 1400, 1, 0.9, 0.4); break;
@@ -51,6 +74,7 @@ export function play(name) {
     case 'die': tone('sawtooth', 300, 40, 0.8, 0.3); break;
     case 'oink': tone('sawtooth', 220, 150, 0.15, 0.12); break;
     case 'moo': tone('sawtooth', 130, 100, 0.5, 0.12); break;
+    case 'thunder': noise(3.2, 380, 0.7, 1.6 * vol, 0.12); setTimeout(() => noise(1.6, 220, 0.8, 0.9 * vol, 0.2), 450); tone('sine', 60, 25, 2, 0.5 * vol); break;
     case 'groan': tone('sawtooth', 110, 70, 0.6, 0.14); break;
   }
 }

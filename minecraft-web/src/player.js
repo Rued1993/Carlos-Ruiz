@@ -20,6 +20,7 @@ export class Player {
     this.stepDist = 0;
     this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null };
     this.spawn = new THREE.Vector3();
+    this.wind = { x: 0, z: 0 };
   }
 
   collides(px, py, pz) {
@@ -75,7 +76,7 @@ export class Player {
     let dx = -sin * fwd + cos * strafe, dz = -cos * fwd - sin * strafe;
     const len = Math.hypot(dx, dz);
     if (len > 0) { dx /= len; dz /= len; }
-    this.vel.x = dx * speed; this.vel.z = dz * speed;
+    this.vel.x = dx * speed + (this.inWater ? 0 : this.wind.x); this.vel.z = dz * speed + (this.inWater ? 0 : this.wind.z);
 
     if (this.flying) {
       this.vel.y = ((k.has('Space') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0)) * speed;
