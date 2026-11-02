@@ -14,6 +14,7 @@ import { Quests, QUESTS } from './quests.js';
 import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from './world.js';
 import { Ambient } from './ambient.js';
 import { ChunkPool } from './chunkpool.js';
+import { Net } from './net.js';
 import { Gamepads, PAD_ACTIONS, BTN_NAMES, defaultPadConfig } from './gamepad.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -453,7 +454,7 @@ function openPanel(id) {
   if (state !== 'play') return;
   state = 'panel'; panelId = id; player.keys.clear(); mouse.left = mouse.right = false;
   document.exitPointerLock(); $(id).classList.remove('hidden');
-  if (id === 'summon') renderSummon(); else if (id === 'trade') renderTrade(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
+  if (id === 'chatp') { $('chatIn').value = ''; setTimeout(() => $('chatIn').focus(), 30); } else if (id === 'summon') renderSummon(); else if (id === 'trade') renderTrade(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
 }
 function closePanel(relock) {
   if (!panelId) return;
@@ -539,10 +540,62 @@ function updateTracker() {
 
 // ===================================================================== DIMENSIONES Y PORTALES
 let kind = 'normal', ob = { count: 0 }, chunkPool = null;
+// ---------- Multijugador ----------
+let mp = null; // { net, edits:{dim: Map}, remotes: Map, posT }
+const mpKey = (x, z) => (Math.floor(x / 16) + 32768) * 65536 + (Math.floor(z / 16) + 32768);
+function mpStoreEdits(list) {
+  mp.edits = {};
+  for (const [d, x, y, z, id] of list) { const m = mp.edits[d] || (mp.edits[d] = new Map()), k = mpKey(x, z); let c = m.get(k); if (!c) m.set(k, (c = new Map())); c.set((y * 16 + (z - Math.floor(z / 16) * 16)) * 16 + (x - Math.floor(x / 16) * 16), id); }
+}
+function chatLine(html, cls = '') {
+  const el = document.createElement('div'); if (cls) el.className = cls; el.innerHTML = html; const box = $('chatLog'); box.appendChild(el);
+  while (box.children.length > 8) box.firstChild.remove();
+  setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.remove(), 1000); }, 12000);
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function nameTag(name) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 48; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(0, 0, 256, 48); x.fillStyle = '#fff'; x.font = 'bold 28px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(name, 128, 26);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false })); sp.scale.set(1.6, 0.3, 1); sp.position.y = 2.2; sp.renderOrder = 999; return sp;
+}
+function mpAddRemote(id, name, color) {
+  if (!mp || mp.remotes.has(id)) return;
+  const col = new THREE.Color().setHSL((color || 0) / 360, 0.65, 0.45), m = new PlayerModel(scene, { shirt: col.getHex() });
+  m.group.visible = true; m.group.add(nameTag(name));
+  mp.remotes.set(id, { id, name, model: m, target: new THREE.Vector3(), pos: new THREE.Vector3(), yaw: 0, pitch: 0, dim: 'overworld', vel: new THREE.Vector3(), fake: { pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0, onGround: true, inWater: false, flying: false }, init: false });
+}
+function mpRemoveRemote(id) { const r = mp && mp.remotes.get(id); if (!r) return; scene.remove(r.model.group); mp.remotes.delete(id); }
+function mpSetup() { // enlaza los mensajes del servidor con el juego (se llama al empezar la partida)
+  const net = mp.net;
+  net.on('players', (m) => { for (const q of m.list) { const r = mp.remotes.get(q.id); if (!r) continue; r.target.set(q.p[0], q.p[1], q.p[2]); r.yaw = q.yaw; r.pitch = q.pitch; r.dim = q.dim; r.model.setHeld(q.held || 0); if (!r.init) { r.pos.copy(r.target); r.init = true; } } });
+  net.on('join', (m) => mpAddRemote(m.id, m.name, m.color));
+  net.on('leave', (m) => mpRemoveRemote(m.id));
+  net.on('edit', (m) => { const w = dims[m.dim]; if (w) { w.silent = true; w.setBlock(m.x, m.y, m.z, m.id); w.silent = false; } else { mp.edits[m.dim] = mp.edits[m.dim] || new Map(); const k = mpKey(m.x, m.z); let c = mp.edits[m.dim].get(k); if (!c) mp.edits[m.dim].set(k, (c = new Map())); c.set((m.y * 16 + (m.z - Math.floor(m.z / 16) * 16)) * 16 + (m.x - Math.floor(m.x / 16) * 16), m.id); } });
+  net.on('chat', (m) => { chatLine('<b>' + esc(m.name) + '</b>: ' + esc(m.text)); });
+  net.on('sys', (m) => chatLine(esc(m.text), 'sys'));
+  net.on('time', (m) => { if (sky && Math.abs(sky.time - m.time) > 0.01) sky.time = m.time; });
+  net.on('close', () => { if (mp) { chatLine('Conexión perdida con el servidor', 'sys'); ui && ui.toast('Conexión perdida: vuelve al menú'); } });
+}
+function mpUpdate(dt) {
+  if (!mp) return;
+  mp.posT -= dt;
+  if (mp.posT <= 0) { mp.posT = 0.1; const h = inv.held(); mp.net.send({ t: 'pos', p: [player.pos.x, player.pos.y, player.pos.z], yaw: player.yaw, pitch: player.pitch, dim, held: h ? h.id : 0 }); }
+  for (const r of mp.remotes.values()) {
+    const vis = r.dim === dim && r.init; r.model.group.visible = vis; if (!vis) continue;
+    const prev = r.pos.clone(); r.pos.lerp(r.target, Math.min(1, dt * 10));
+    r.fake.vel.set((r.pos.x - prev.x) / Math.max(dt, 1e-3), 0, (r.pos.z - prev.z) / Math.max(dt, 1e-3));
+    r.fake.pos.copy(r.pos); r.fake.yaw = r.yaw; r.fake.pitch = r.pitch; r.fake.onGround = Math.abs(r.target.y - r.pos.y) < 0.2;
+    r.model.update(dt, r.fake, 0);
+  }
+}
+function sendChat(text) { if (mp && text.trim()) mp.net.send({ t: 'chat', text: text.trim() }); }
 function makeWorld(name, saved) {
+  const mpEdits = mp ? (mp.edits[name] || (mp.edits[name] = new Map())) : null;
   const g = new THREE.Group(); g.visible = false; scene.add(g);
   const w = new World(g, materials, name === 'overworld' ? seed : name === 'nether' ? seed + 500 : seed + 900, saved || new Map(), name);
   w.group = g; w.kind = kind;
+  if (mp) { w.edits = mpEdits; w.onEdit = (x, y, z, id) => mp.net.send({ t: 'edit', dim: name, x, y, z, id }); }
   if (!chunkPool && typeof Worker !== 'undefined' && !/[?&]noworker/.test(location.search)) { try { chunkPool = new ChunkPool(); } catch { chunkPool = null; } }
   if (chunkPool) w.useWorkers(chunkPool);
   return w;
@@ -906,13 +959,17 @@ function captureThumb() {
 }
 async function saveWithFeedback() {
   thumbReq = true; await new Promise((r) => setTimeout(r, 120));
+  if (mp) { ui.toast('Multijugador: el servidor guarda el mundo'); return true; }
   const ok = await saveGame();
   ui.toast(ok ? '💾 Partida guardada' : '⚠ No se pudo guardar');
   return ok;
 }
 
 // ---------- Arranque de partida ----------
-async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played, nether, end, kind: kd }) {
+async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played, nether, end, kind: kd, net, welcome }) {
+  if (mp) { mp.net.close(); for (const r of mp.remotes.values()) scene.remove(r.model.group); }
+  mp = net ? { net, edits: {}, remotes: new Map(), posT: 0 } : null;
+  if (mp) mpStoreEdits(welcome.edits);
   state = 'loading'; mode = md; seed = sd;
   kind = kd || (meta && meta.kind) || 'normal'; ob = { count: (meta && meta.ob && meta.ob.count) || 0 };
   $('ob').classList.toggle('hidden', kind !== 'oneblock');
@@ -1009,7 +1066,8 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, openChest, rollLoot, get xp() { return [xpLevel, xpPts]; } };
+  window.__game = { get mp() { return mp; }, get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, openChest, rollLoot, get xp() { return [xpLevel, xpPts]; } };
+  if (mp) { mpSetup(); for (const p of welcome.players) mpAddRemote(p.id, p.name, p.color); sky.time = welcome.time; chatLine('Conectado · ' + (welcome.players.length + 1) + ' jugador(es). Enter = chat', 'sys'); }
   state = 'play'; showOverlay(null);
   safeLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play' && !padActive) { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -1030,6 +1088,7 @@ document.addEventListener('keydown', (e) => {
   if (e.isTrusted) padActive = false;
   audio.unlock();
   if (state === 'panel') {
+    if (panelId === 'chatp' && e.code === 'Enter') { e.preventDefault(); sendChat($('chatIn').value); closePanel(true); return; }
     if (e.code === 'Escape') closePanel(false);
     else if ((e.code === 'KeyB' && panelId === 'summon') || (e.code === 'KeyM' && panelId === 'quests')) closePanel(true);
     else if (e.code === 'KeyP' && panelId === 'padcfg') closePanel(false);
@@ -1046,6 +1105,7 @@ document.addEventListener('keydown', (e) => {
     case 'KeyE': openInventory(2); return;
     case 'KeyB': openPanel('summon'); return;
     case 'KeyP': openPanel('padcfg'); return;
+    case 'Enter': if (mp) { e.preventDefault(); openPanel('chatp'); } return;
     case 'KeyM': openPanel('quests'); return;
     case 'F3': e.preventDefault(); $('info').classList.toggle('hidden'); return;
     case 'KeyT': if (!e.repeat) { const st = weather.cycle(); ui.toast('Clima: ' + WEATHER_NAMES[st]); } return;
@@ -1240,6 +1300,7 @@ function frame(now) {
     { const hd = inv.held(); player.canGlide = !!(hd && hd.id === I.ELYTRA); player.armorPts = inv.armorPoints(); model.setArmor(inv.armor); updateFx(dt); }
     player.update(dt);
     model.update(dt, player, swing);
+    mpUpdate(dt);
     applyCamera();
     tickFurnaces(dt);
     const cx = Math.floor(player.pos.x), cz = Math.floor(player.pos.z);
@@ -1321,6 +1382,20 @@ requestAnimationFrame(frame);
   $('bSurvival').onclick = () => fresh('survival');
   $('bCreative').onclick = () => fresh('creative');
   $('bOneBlock').onclick = () => fresh('survival', 'oneblock');
+  try { $('mpUrl').value = localStorage.getItem('mcweb-mpurl') || ''; $('mpName').value = localStorage.getItem('mcweb-mpname') || ''; } catch {}
+  $('bMulti').onclick = async () => {
+    audio.unlock();
+    let url = $('mpUrl').value.trim(); if (!url) { $('msg').textContent = 'Escribe la dirección del servidor'; return; }
+    if (!/^wss?:\/\//.test(url)) url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + url;
+    const name = $('mpName').value.trim() || 'Jugador' + Math.floor(Math.random() * 900 + 100);
+    try { localStorage.setItem('mcweb-mpurl', $('mpUrl').value.trim()); localStorage.setItem('mcweb-mpname', $('mpName').value.trim()); } catch {}
+    $('msg').textContent = 'Conectando…';
+    const net = new Net();
+    try {
+      const welcome = await net.connect(url, name);
+      startGame({ id: null, name: 'Multijugador', seed: welcome.seed, mode: welcome.mode, saved: new Map(), meta: null, net, welcome });
+    } catch (e) { $('msg').textContent = '⚠ ' + e.message + (location.protocol === 'https:' && url.startsWith('ws://') ? ' (esta página es https: usa wss:// o abre el juego en http://)' : ''); }
+  };
   $('worldList').addEventListener('click', async (e) => {
     const btn = e.target.closest('button'), card = e.target.closest('.wcard'); if (!btn || !card) return;
     const id = card.dataset.id, w = list.find((x) => x.id === id);

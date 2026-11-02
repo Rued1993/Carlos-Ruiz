@@ -566,6 +566,8 @@ export class World {
   }
 
   computeTops(k, data) {
+    const ed = this.edits && this.edits.get(k); // multijugador: reaplica las ediciones del servidor al crear el chunk
+    if (ed) for (const [i, id] of ed) data[i] = id;
     let hi = 0;
     for (let i = data.length - 1; i >= 0; i--) if (data[i]) { hi = Math.floor(i / (CS * CS)); break; }
     if (!this.hi) this.hi = new Map();
@@ -648,9 +650,11 @@ export class World {
     const cx = Math.floor(x / CS), cz = Math.floor(z / CS);
     const k = ckey(cx, cz);
     const c = this.chunks.get(k);
-    if (!c) return false;
+    if (!c) { if (this.edits && this.silent) { let m = this.edits.get(k); if (!m) this.edits.set(k, (m = new Map())); m.set(this.idx(x - cx * CS, y, z - cz * CS), id); } return false; }
     const lx = x - cx * CS, lz = z - cz * CS;
     const ii = this.idx(lx, y, lz), old = c[ii];
+    if (this.edits) { let m = this.edits.get(k); if (!m) this.edits.set(k, (m = new Map())); m.set(ii, id); }
+    if (this.onEdit && !this.silent) this.onEdit(x, y, z, id);
     c[ii] = id;
     if (id && y > this.hi.get(k)) this.hi.set(k, y);
     this.modified.add(k); this.unsaved.add(k);

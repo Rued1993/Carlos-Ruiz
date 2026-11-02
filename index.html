@@ -145,8 +145,11 @@
       #ob { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); color: #fff; padding: 5px 14px; font-size: 13px; text-align: center; z-index: 5; pointer-events: none; min-width: 220px; border: 2px solid #222; }
     #ob.hidden { display: none; }
     #ob .obbar { height: 6px; background: #333; margin-top: 4px; } #ob .obbar i { display: block; height: 100%; width: 0; background: #7be04a; }
+      #chatLog { position: fixed; left: 8px; bottom: 150px; width: min(420px, 60vw); display: flex; flex-direction: column; gap: 2px; pointer-events: none; z-index: 4; }
+    #chatLog div { background: rgba(0,0,0,.45); color: #fff; font-size: 13px; padding: 2px 6px; text-shadow: 1px 1px #000; transition: opacity 1s; }
+    #chatLog div b { color: #9fd6ff; } #chatLog div.sys { color: #ffe27a; }
   </style>
-  <script type="module" crossorigin src="./assets/index-u7iZMphI.js"></script>
+  <script type="module" crossorigin src="./assets/index-DBnECnC5.js"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -159,6 +162,8 @@
   <div id="breakbar" class="hidden"><i></i></div>
   <div id="air"></div>
   <div id="ob" class="hidden"><b id="obPhase"></b> <span id="obCount"></span><div class="obbar"><i id="obFill"></i></div></div>
+  <div id="chatLog"></div>
+  <div id="chatp" class="screen hidden"><div class="panel" style="width:min(560px,94vw)"><h3>💬 Chat</h3><input id="chatIn" maxlength="200" placeholder="Escribe y pulsa Enter (Esc para cancelar)" style="font-size:16px;padding:6px" /></div></div>
   <div id="hud">
     <div id="bars"><div id="hearts"></div><div id="food"></div></div>
     <div id="xp"><div id="xpFill"></div><span id="xpLvl">0</span></div>
@@ -248,6 +253,12 @@
         <button class="btn primary" id="bSurvival">Nuevo mundo · Supervivencia</button>
         <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
         <button class="btn" id="bOneBlock" style="background:#6b8f3a;color:#fff">⬛ Nuevo mundo · One Block (supervivencia)</button>
+        <div class="newbox" style="flex-direction:column;gap:6px;border-top:2px solid #555;padding-top:8px">
+          <b style="color:#fff">🌐 Multijugador</b>
+          <input id="mpUrl" placeholder="Servidor (ej. ws://192.168.1.5:8080)" maxlength="120" />
+          <input id="mpName" placeholder="Tu nombre" maxlength="16" />
+          <button class="btn" id="bMulti" style="background:#3a6fb0;color:#fff">Conectar al servidor</button>
+        </div>
         <button class="btn" id="bImport">⬆ Importar partida (.mcw)</button>
         <input type="file" id="fImport" accept=".mcw,application/octet-stream" class="hidden" />
       <div id="keys">
@@ -282,7 +293,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v1.2</div>
+    <div id="ver">Minecraft Web v1.3</div>
   </div>
 </body>
 </html>

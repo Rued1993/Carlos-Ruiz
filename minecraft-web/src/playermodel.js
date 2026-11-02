@@ -14,8 +14,8 @@ function limb(w, h, d, mats, x, y, z) {
 }
 
 export class PlayerModel {
-  constructor(scene) {
-    const skin = '#e0ac8c', hair = '#3a2412', shirt = 0x2aa5b8, pants = 0x3a3f9c, shoe = 0x555560;
+  constructor(scene, opts = {}) {
+    const skin = '#e0ac8c', hair = '#3a2412', shirt = opts.shirt !== undefined ? opts.shirt : 0x2aa5b8, pants = 0x3a3f9c, shoe = 0x555560;
     const face = tex((x) => {
       x.fillStyle = skin; x.fillRect(0, 0, 8, 8);
       x.fillStyle = hair; x.fillRect(0, 0, 8, 2); x.fillRect(0, 2, 1, 2); x.fillRect(7, 2, 1, 2);
