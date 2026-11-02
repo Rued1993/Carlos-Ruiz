@@ -7,7 +7,9 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server/server.js"
+    "server": "node server/server.js",
+    "build:clean": "vite build --mode clean --outDir dist-clean",
+    "dev:clean": "vite --mode clean --host"
   },
   "dependencies": {
     "three": "^0.170.0",

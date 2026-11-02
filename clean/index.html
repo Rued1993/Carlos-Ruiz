@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2b2b2b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="VoxelLands" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>VoxelLands</title>
+  <style>
+    :root { --font: "Courier New", ui-monospace, Menlo, Consolas, monospace; --stone: #7d7d7d; --stone-d: #4a4a4a; --stone-l: #b4b4b4; }
+    html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: pan-x pan-y; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; background: #000; font-family: var(--font); font-weight: bold; user-select: none; -webkit-user-select: none; }
+    canvas#game { display: block; width: 100%; height: 100%; }
+    .hidden { display: none !important; }
+    img { image-rendering: pixelated; }
+
+    /* ---------- HUD ---------- */
+    #crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); pointer-events: none; }
+    #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; mix-blend-mode: difference; }
+    #crosshair::before { left: 10px; top: 1px; width: 2px; height: 20px; }
+    #crosshair::after { left: 1px; top: 10px; width: 20px; height: 2px; }
+    #vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px rgba(220,0,0,0); transition: box-shadow .6s; }
+    #vignette.hurt { box-shadow: inset 0 0 180px 70px rgba(220,0,0,.75); transition: none; }
+    #water { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(30,80,190,.25), rgba(10,40,130,.55)); }
+    #hud { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
+    #bars { display: flex; justify-content: space-between; width: 100%; min-height: 20px; }
+    #hearts, #food, #air { display: flex; gap: 0; }
+    #food { flex-direction: row-reverse; }
+    #air { position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%); flex-direction: row-reverse; }
+    .hs { width: 20px; height: 20px; filter: drop-shadow(1px 1px 0 rgba(0,0,0,.6)); }
+    #hearts.low .hs { animation: shake .25s infinite alternate; }
+    @keyframes shake { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+    #hotbar { display: flex; gap: 0; padding: 3px; background: rgba(20,20,20,.55); border: 2px solid #111; box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); pointer-events: auto; }
+    .slot { width: 46px; height: 46px; border: 3px solid #2d2d2d; border-right-color: #c9c9c9; border-bottom-color: #c9c9c9; background: #8b8b8b; position: relative; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+    #hotbar .slot { background: rgba(70,70,70,.7); border: 2px solid #1b1b1b; margin: 0 1px; }
+    #hotbar .slot.active { border: 3px solid #fff; background: rgba(130,130,130,.75); transform: scale(1.12); z-index: 2; box-shadow: 0 0 8px rgba(255,255,255,.55); }
+    .slot.ench img { filter: drop-shadow(0 0 3px #c080ff); }
+    .slot.ench::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(190,120,255,.4) 50%, transparent 70%); background-size: 220% 100%; animation: glint 2.2s linear infinite; pointer-events: none; }
+    @keyframes glint { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+    .slot img { width: 32px; height: 32px; pointer-events: none; }
+    .slot img.flat { width: 36px; height: 36px; }
+    .slot .n { position: absolute; right: 2px; bottom: 0; font-size: 14px; color: #fff; text-shadow: 2px 2px 0 #3b3b3b; pointer-events: none; }
+    .slot .k { position: absolute; left: 3px; top: 0; font-size: 10px; color: #ddd; text-shadow: 1px 1px #000; pointer-events: none; }
+    .slot .dur { position: absolute; left: 5px; right: 5px; bottom: 3px; height: 3px; background: #111; pointer-events: none; }
+    .slot .dur i { display: block; height: 100%; }
+    #info { position: fixed; left: 8px; top: 8px; color: #fff; font: bold 12px var(--font); text-shadow: 1px 1px #000; white-space: pre; pointer-events: none; background: rgba(0,0,0,.25); padding: 4px 6px; }
+    #cam { position: fixed; right: 10px; top: 8px; color: #fff; font-size: 12px; text-shadow: 1px 1px #000; pointer-events: none; background: rgba(0,0,0,.25); padding: 4px 6px; }
+    #toast { position: fixed; left: 50%; bottom: 144px; transform: translateX(-50%); color: #fff; font-size: 18px; text-shadow: 2px 2px 0 #222; pointer-events: none; transition: opacity .6s; white-space: nowrap; }
+    #bossbar { position: fixed; left: 50%; top: 34px; transform: translateX(-50%); width: min(520px, 80vw); text-align: center; color: #fff; text-shadow: 2px 2px 0 #000; pointer-events: none; }
+    #bossName { font-size: 15px; letter-spacing: 3px; margin-bottom: 3px; } #bossName small { color: #c070ff; letter-spacing: 1px; margin-left: 8px; }
+    #bossbar .bb { height: 12px; background: #1a1020; border: 2px solid #000; box-shadow: 0 0 12px rgba(160,60,255,.7); }
+    #bossbar i { display: block; height: 100%; width: 100%; background: linear-gradient(#d06aff, #7a2ab0); transition: width .15s; }
+    /* ---------- HUD extra ---------- */
+    #minimap { position: fixed; right: 12px; top: 12px; width: 128px; height: 128px; image-rendering: pixelated; border: 3px solid #111; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.35), 0 4px 14px rgba(0,0,0,.6); background: #223; pointer-events: none; }
+    #mmN { position: fixed; right: 68px; top: 14px; color: #fff; font-size: 11px; text-shadow: 1px 1px #000; pointer-events: none; }
+    #mmInfo { position: fixed; right: 8px; top: 148px; width: 136px; text-align: center; color: #fff; font-size: 11px; text-shadow: 1px 1px #000; pointer-events: none; line-height: 1.35; background: rgba(0,0,0,.28); padding: 3px 0; }
+    #tracker { position: fixed; right: 8px; top: 214px; width: 190px; color: #fff; font-size: 11px; text-shadow: 1px 1px #000; pointer-events: none; }
+    #tracker .qt { background: rgba(0,0,0,.34); border-left: 3px solid #6fb04a; padding: 3px 6px; margin-bottom: 4px; } #tracker .qt b { color: #ffe84a; display: block; }
+    #tracker .qb { height: 4px; background: #222; margin-top: 2px; } #tracker .qb i { display: block; height: 100%; background: #6fb04a; }
+    #xp { position: relative; width: 100%; height: 11px; background: rgba(0,0,0,.65); border: 1px solid #000; box-sizing: border-box; pointer-events: none; }
+    #xpFill { height: 100%; width: 0; background: linear-gradient(#b8f060, #5aa820); box-shadow: 0 0 6px rgba(150,240,60,.7); }
+    #xpLvl { position: absolute; left: 50%; top: -3px; transform: translateX(-50%); color: #d8ff90; font-size: 12px; line-height: 14px; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; }
+    #effects { position: fixed; left: 10px; top: 60px; color: #fff; font-size: 12px; text-shadow: 1px 1px #000; pointer-events: none; display: flex; flex-direction: column; gap: 3px; }
+    #effects span { background: rgba(0,0,0,.4); padding: 2px 8px; border-left: 3px solid #a0f; }
+    #darkness { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 20%, rgba(0,0,0,.95) 95%); opacity: 0; transition: opacity .3s; }
+    #portalfx { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(150,60,255,.35), rgba(80,10,160,.85)); mix-blend-mode: screen; }
+    #travel { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #3a1060, #08020f); color: #fff; font-size: 26px; letter-spacing: 3px; text-shadow: 2px 2px 0 #000; }
+    .padgrid { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.3fr); gap: 14px; }
+    @media (max-width: 800px) { .padgrid { grid-template-columns: 1fr; } }
+    #padStatus { font-size: 13px; padding: 4px 8px; background: #8b8b8b; border: 2px solid #1b1b1b; color: #222; }
+    #padStatus.ok { background: #7ea86a; } #padStatus.bad { background: #c88a8a; }
+    #padMap { display: flex; flex-direction: column; gap: 3px; max-height: 52vh; overflow: auto; padding-right: 4px; }
+    .prow { display: grid; grid-template-columns: 1fr 112px 92px; gap: 6px; align-items: center; font-size: 12px; background: #9a9a9a; padding: 3px 6px; border: 2px solid #1b1b1b; color: #222; }
+    .prow b { text-align: center; background: #222; color: #ffe84a; padding: 2px 4px; font-size: 11px; }
+    .prow button { padding: 3px 6px; font: bold 11px var(--font); cursor: pointer; background: #6a6a6a; color: #fff; border: 2px solid #111; border-top-color: #bbb; border-left-color: #bbb; }
+    .prow button.listen { background: #c84040; }
+    #padTest { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
+    #padTest .chip { font-size: 10px; padding: 2px 5px; background: #555; color: #bbb; border: 1px solid #111; } #padTest .chip.on { background: #ffe84a; color: #111; }
+    #padTest .axis { width: 100%; height: 7px; background: #333; position: relative; } #padTest .axis i { position: absolute; top: 0; bottom: 0; width: 8px; background: #6fb04a; }
+    #padcursor { position: fixed; z-index: 99; width: 22px; height: 26px; pointer-events: none; transform: translate(-3px, -2px); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 26'%3E%3Cpath d='M2 2 L2 21 L7 16 L11 24 L14 22.5 L10 15 L17 15 Z' fill='white' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat; filter: drop-shadow(0 2px 2px rgba(0,0,0,.6)); }
+    .padhover { outline: 3px solid #ffe84a !important; outline-offset: -2px; }
+    .panel.wide { width: min(860px, 94vw); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+    .card { background: #8b8b8b; border: 3px solid #1b1b1b; border-top-color: #eee; border-left-color: #eee; padding: 8px 10px; color: #222; display: flex; flex-direction: column; gap: 4px; }
+    .card h4 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .card p { margin: 0; font-size: 11px; color: #2a2a2a; line-height: 1.35; flex: 1; }
+    .card .tag { font-size: 10px; background: #222; color: #fff; padding: 1px 6px; }
+    .card .btn { width: auto; padding: 6px 10px; font-size: 13px; }
+    .mobs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mobs .btn { width: auto; padding: 6px 12px; font-size: 12px; }
+    .q { display: grid; grid-template-columns: 22px 1fr auto; gap: 6px; align-items: center; background: #8b8b8b; border: 2px solid #1b1b1b; padding: 5px 8px; margin-bottom: 4px; color: #222; font-size: 12px; }
+    .q.done { background: #7ea86a; } .q .ck { font-size: 16px; text-align: center; } .q b { display: block; font-size: 13px; }
+    .q .bar { height: 5px; background: #333; margin-top: 3px; } .q .bar i { display: block; height: 100%; background: #6fb04a; }
+    .q .rw { font-size: 11px; color: #3a2a00; text-align: right; }
+    #questList { max-height: 62vh; overflow: auto; padding-right: 4px; }
+    .grp { font-size: 12px; letter-spacing: 2px; margin: 8px 0 4px; color: #333; border-bottom: 2px solid #777; }
+    #bossbar { top: 22px; }
+    #breakbar { position: fixed; left: 50%; top: 56%; width: 64px; height: 5px; background: rgba(0,0,0,.55); border: 1px solid #000; transform: translateX(-50%); }
+    #breakbar i { display: block; height: 100%; background: #fff; width: 0; }
+
+    /* ---------- Pantallas ---------- */
+    .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #fff; z-index: 10; }
+    .panel { background: #c6c6c6; border: 3px solid #1b1b1b; padding: 14px; color: #3a3a3a; box-shadow: inset 3px 3px 0 #fff, inset -3px -3px 0 #8b8b8b, 0 10px 40px rgba(0,0,0,.6); display: flex; flex-direction: column; gap: 8px; max-height: 94vh; overflow: auto; }
+    .panel h3 { margin: 0; font-size: 14px; letter-spacing: 1px; }
+    .grid { display: grid; gap: 0; }
+    .panel .slot:hover { background: #a8a8a8; }
+    #craftArea, #furnaceArea { display: flex; align-items: center; gap: 14px; }
+    #craftArea .arrow { font-size: 26px; }
+    #furnaceArea .col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    #fFlameBox { width: 16px; height: 18px; background: #555; position: relative; border: 2px solid #222; }
+    #fFlame { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#ffd23c, #ff7a18); }
+    #fArrowBox { width: 70px; height: 16px; background: #555; border: 2px solid #222; position: relative; }
+    #fArrow { position: absolute; left: 0; top: 0; bottom: 0; background: #fff; width: 0; }
+    #palette { display: grid; grid-template-columns: repeat(9, 46px); gap: 0; max-height: 160px; overflow: auto; }
+    #cursorItem { position: fixed; pointer-events: none; z-index: 20; width: 36px; height: 36px; transform: translate(-50%, -50%); }
+    #cursorItem img { width: 36px; height: 36px; }
+    #cursorItem .n { position: absolute; right: 0; bottom: 0; color: #fff; font-size: 14px; text-shadow: 2px 2px 0 #3b3b3b; }
+
+    /* ---------- Menú ---------- */
+    #overlay { z-index: 30; flex-direction: column; text-align: center; background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.75)), var(--dirt) center / 96px 96px; image-rendering: pixelated; }
+    #overlay.ingame { background: rgba(0,0,0,.6); }
+    #menu, #pause, #death { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #logo { position: relative; margin-bottom: 34px; }
+    #logo h1 { margin: 0; font-size: clamp(34px, 8vw, 74px); letter-spacing: 4px; color: #c8c8c8; text-shadow: 0 1px 0 #8e8e8e, 0 2px 0 #7a7a7a, 0 3px 0 #666, 0 4px 0 #555, 0 5px 0 #444, 0 6px 0 #333, 0 8px 12px rgba(0,0,0,.8); -webkit-text-stroke: 2px #2b2b2b; }
+    #logo small { display: block; font-size: clamp(14px, 3vw, 26px); letter-spacing: 12px; color: #6fb04a; text-shadow: 2px 2px 0 #1f3a10; margin-top: -4px; }
+    #splash { position: absolute; right: -70px; bottom: -6px; color: #ffe84a; font-size: 18px; text-shadow: 2px 2px 0 #3a3200; transform: rotate(-14deg); animation: pulse 1s infinite alternate ease-in-out; white-space: nowrap; }
+    @keyframes pulse { from { transform: rotate(-14deg) scale(1); } to { transform: rotate(-14deg) scale(1.12); } }
+    #overlay p { margin: 2px; color: #d6d6d6; max-width: 700px; font-size: 13px; text-shadow: 1px 1px #000; line-height: 1.5; }
+    .btn { background: linear-gradient(#8d8d8d, #6f6f6f 50%, #5f5f5f); color: #fff; border: 3px solid #111; border-top-color: #cfcfcf; border-left-color: #cfcfcf; border-bottom-color: #3d3d3d; border-right-color: #3d3d3d; padding: 11px 24px; width: 340px; max-width: 86vw; font: bold 16px var(--font); cursor: pointer; text-shadow: 2px 2px 0 #333; }
+    .btn:hover { background: linear-gradient(#a1b3ee, #7f92d8 50%, #6c7fc4); border-top-color: #e8eeff; border-left-color: #e8eeff; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: linear-gradient(#6fb04a, #4f8a30 50%, #3f7525); }
+    .btn.primary:hover { background: linear-gradient(#8ad05c, #62a63d 50%, #4f8a30); }
+    .row { display: flex; align-items: center; gap: 10px; justify-content: space-between; width: 340px; max-width: 86vw; font-size: 14px; text-shadow: 1px 1px #000; }
+    .row input[type=range] { flex: 1; accent-color: #6fb04a; }
+    .row b { min-width: 34px; text-align: right; }
+    #msg { color: #ffe84a !important; font-size: 15px !important; }
+    #keys { display: grid; grid-template-columns: auto auto; gap: 2px 18px; text-align: left; font-size: 12px; background: rgba(0,0,0,.35); padding: 10px 16px; border: 2px solid #222; margin-top: 8px; }
+    #keys kbd { background: #ddd; color: #222; padding: 0 5px; border-bottom: 2px solid #777; border-radius: 2px; font: bold 11px var(--font); }
+    .newbox { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .newbox input { background: #1b1b1b; color: #fff; border: 2px solid #777; padding: 9px 12px; font: bold 14px var(--font); width: 200px; }
+    #worldsBox { width: min(640px, 92vw); background: rgba(0,0,0,.45); border: 2px solid #222; padding: 8px 10px; }
+    #worldsBox h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 2px; color: #ffe84a; text-align: left; }
+    #worldList { max-height: 210px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+    .wcard { display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; align-items: center; background: #3a3a3a; border: 2px solid #111; border-top-color: #777; border-left-color: #777; padding: 5px; text-align: left; }
+    .wcard img { width: 96px; height: 54px; object-fit: cover; background: #111; image-rendering: auto; }
+    .wcard b { display: block; font-size: 14px; } .wcard small { color: #bbb; font-size: 11px; }
+    .wb { display: flex; gap: 4px; } .wb button { background: #6a6a6a; color: #fff; border: 2px solid #111; border-top-color: #bbb; border-left-color: #bbb; padding: 6px 9px; font: bold 12px var(--font); cursor: pointer; }
+    .wb button:hover { background: #8a9ad8; } .wb button.play { background: #4f8a30; }
+    #ver { position: fixed; left: 8px; bottom: 6px; font-size: 11px; color: #aaa; text-shadow: 1px 1px #000; }
+      #ob { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); color: #fff; padding: 5px 14px; font-size: 13px; text-align: center; z-index: 5; pointer-events: none; min-width: 220px; border: 2px solid #222; }
+    #ob.hidden { display: none; }
+    #ob .obbar { height: 6px; background: #333; margin-top: 4px; } #ob .obbar i { display: block; height: 100%; width: 0; background: #7be04a; }
+      #chatLog { position: fixed; left: 8px; bottom: 150px; width: min(420px, 60vw); display: flex; flex-direction: column; gap: 2px; pointer-events: none; z-index: 4; }
+    #chatLog div { background: rgba(0,0,0,.45); color: #fff; font-size: 13px; padding: 2px 6px; text-shadow: 1px 1px #000; transition: opacity 1s; }
+    #chatLog div b { color: #9fd6ff; } #chatLog div.sys { color: #ffe27a; }
+  
+    /* ---------- Autoajuste a cualquier pantalla ---------- */
+    #overlay { overflow-y: auto; overflow-x: hidden; justify-content: flex-start; box-sizing: border-box; padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #overlay > div { margin: auto 0; max-width: 100%; }  /* centrado vertical que, si no cabe, deja hacer scroll */
+    #overlay .btn { width: min(340px, 88vw); }
+    .newbox input { width: min(200px, 42vw); }
+    #splash { right: -10px; }
+    .screen:not(#overlay) .panel { box-sizing: border-box; max-width: 98vw; max-height: 96vh; max-height: 96dvh; overflow: auto; touch-action: pan-y; overscroll-behavior: contain; }
+    @media (max-height: 560px) {
+      #logo { margin-bottom: 8px; } #logo h1 { font-size: clamp(28px, 7vh, 44px) !important; letter-spacing: 2px; } #logo small { font-size: 12px; letter-spacing: 8px; }
+      #menu, #pause, #death { gap: 6px; } .btn { padding: 8px 16px; font-size: 14px; } #overlay p { font-size: 12px; } #keys { display: none; }
+      #worldList { max-height: 120px; } .newbox input { padding: 6px 10px; }
+    }
+    @media (max-height: 560px) and (min-aspect-ratio: 13/10) { /* móvil en horizontal: menú de pausa en dos columnas */
+      #pause { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: min(720px, 96vw); }
+      #pause #logo { width: 100%; margin-bottom: 0; } #pause .btn, #pause .row { width: min(330px, 46vw); }
+    }
+    @media (max-width: 480px) { #logo small { letter-spacing: 6px; }  #logo { margin-bottom: 26px; } .wcard { grid-template-columns: 64px 1fr; } .wcard img { width: 64px; height: 36px; } .wb { grid-column: 1 / -1; } }
+    @media (max-width: 900px), (max-height: 560px) { #splash { position: static; transform: none; animation: none; margin-top: 2px; font-size: 13px; } }
+    body.touch #keys { display: none; }
+  </style>
+  <script type="module" crossorigin src="./assets/index-CcCfUDd-.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="darkness"></div>
+  <div id="portalfx"></div>
+  <div id="travel" class="hidden"><b id="travelTxt">Viajando…</b></div>
+  <div id="water" class="hidden"></div>
+  <div id="vignette"></div>
+  <div id="crosshair"></div>
+  <div id="breakbar" class="hidden"><i></i></div>
+  <div id="air"></div>
+  <div id="ob" class="hidden"><b id="obPhase"></b> <span id="obCount"></span><div class="obbar"><i id="obFill"></i></div></div>
+  <div id="chatLog"></div>
+  <div id="chatp" class="screen hidden"><div class="panel" style="width:min(560px,94vw)"><h3>💬 Chat</h3><div style="display:flex;gap:6px"><input id="chatIn" maxlength="200" placeholder="Escribe y pulsa Enviar" style="font-size:16px;padding:6px;flex:1" /><button class="btn" id="chatSend" style="width:auto;padding:6px 14px">Enviar</button></div></div></div>
+  <div id="hud">
+    <div id="bars"><div id="hearts"></div><div id="food"></div></div>
+    <div id="xp"><div id="xpFill"></div><span id="xpLvl">0</span></div>
+    <div id="hotbar"></div>
+  </div>
+  <canvas id="minimap" width="128" height="128"></canvas><div id="mmN">N</div>
+  <div id="mmInfo"></div>
+  <div id="tracker"></div>
+  <div id="effects"></div>
+  <div id="info" class="hidden"></div>
+  <div id="cam" class="hidden"></div>
+  <div id="bossbar" class="hidden"><div id="bossName">TORMENTA WITHER <small id="bossPhase">Fase 1</small></div><div class="bb"><i id="bossFill"></i></div></div>
+  <div id="toast"></div>
+
+  <div id="inv" class="screen hidden">
+    <div class="panel">
+      <h3 id="invTitle">Inventario <button class="btn" id="touchRight" style="width:auto;padding:4px 10px;font-size:12px;margin-left:8px">☝ Tocar: todo</button></h3>
+      <div id="craftArea"><div id="craftGrid" class="grid"></div><span class="arrow">➜</span><div id="craftOut"></div></div>
+      <div id="furnaceArea" class="hidden">
+        <div class="col"><div id="fIn"></div><div id="fFlameBox"><div id="fFlame"></div></div><div id="fFuel"></div></div>
+        <div id="fArrowBox"><div id="fArrow"></div></div>
+        <div id="fOut"></div>
+      </div>
+      <div id="paletteWrap" class="hidden"><h3>Bloques e ítems (clic para coger; soltar aquí para borrar)</h3><div id="palette"></div></div>
+      <div id="armorRow" style="display:flex;align-items:center;gap:10px"><span style="font-size:12px">Armadura</span><div id="armorSlots" class="grid" style="grid-template-columns: repeat(4, 46px)"></div><b id="armorPts" style="font-size:12px"></b></div>
+      <div id="invMain" class="grid" style="grid-template-columns: repeat(9, 46px)"></div>
+      <div id="invHot" class="grid" style="grid-template-columns: repeat(9, 46px)"></div>
+    </div>
+  </div>
+  <div id="summon" class="screen hidden">
+    <div class="panel wide">
+      <h3>⚔ Invocación inmediata — jefes</h3>
+      <div id="bossCards" class="cards"></div>
+      <h3>Mobs</h3>
+      <div id="mobBtns" class="mobs"></div>
+      <h3>Viajar entre dimensiones</h3>
+      <div id="dimBtns" class="mobs"><button class="btn" data-dim="overworld">🌍 Overworld</button><button class="btn" data-dim="nether">🔥 Nether</button><button class="btn" data-dim="end">🌌 El End</button></div>
+      <div style="display:flex;gap:8px;justify-content:space-between;align-items:center"><button class="btn" id="bDespawn" style="width:auto">Descartar jefe actual</button><small>B o Esc para cerrar</small></div>
+    </div>
+  </div>
+  <div id="quests" class="screen hidden">
+    <div class="panel wide">
+      <h3 id="questTitle">Misiones</h3>
+      <div id="questList"></div>
+      <small>M o Esc para cerrar</small>
+    </div>
+  </div>
+  <div id="trade" class="screen hidden">
+    <div class="panel wide">
+      <h3>🧑‍🌾 Aldeano — Comercio <span id="tradeInfo" style="font-weight:normal;font-size:11px"></span></h3>
+      <div id="tradeList" class="cards"></div>
+      <div style="font-size:11px">Pulsa Esc para cerrar. Necesitas los materiales en el inventario.</div>
+    </div>
+  </div>
+  <div id="brew" class="screen hidden">
+    <div class="panel wide">
+      <h3>⚗ Soporte de pociones <span style="font-weight:normal;font-size:11px">— 1 verruga del Nether + 1 ingrediente + hasta 3 botellas de cristal (3 cristales en V)</span></h3>
+      <div id="brewList" class="cards"></div>
+      <div style="font-size:11px">Esc o ✕ para cerrar. La verruga sale de la arena de almas y de las fortalezas; el polvo de blaze, de los blazes; la crema de magma, de los cubos de magma.</div>
+    </div>
+  </div>
+  <div id="ench" class="screen hidden">
+    <div class="panel wide">
+      <h3>✨ Mesa de encantamientos <span id="enchInfo" style="font-weight:normal;font-size:11px"></span></h3>
+      <div id="enchItem" style="font-size:13px"></div>
+      <div id="enchList" class="cards"></div>
+      <div style="font-size:11px">Sostén en la mano una herramienta, espada o armadura. Cuesta niveles de experiencia y lapislázuli (mena de lapislázuli bajo tierra).</div>
+    </div>
+  </div>
+  <div id="padcfg" class="screen hidden">
+    <div class="panel wide">
+      <h3>🎮 Configuración del mando (PS4 / DualShock 4 / DualSense)</h3>
+      <div id="padStatus"></div>
+      <div class="padgrid">
+        <div id="padOpts">
+          <div class="row"><span>Sensib. horizontal</span><input id="pLookX" type="range" min="1" max="8" step="0.1" /><b id="vLookX"></b></div>
+          <div class="row"><span>Sensib. vertical</span><input id="pLookY" type="range" min="1" max="8" step="0.1" /><b id="vLookY"></b></div>
+          <div class="row"><span>Zona muerta</span><input id="pDead" type="range" min="0.05" max="0.4" step="0.01" /><b id="vDead"></b></div>
+          <div class="row"><span>Curva (aceleración)</span><input id="pCurve" type="range" min="1" max="3" step="0.1" /><b id="vCurve"></b></div>
+          <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" id="pInvert" style="width:auto;flex:1">Invertir Y: no</button><button class="btn" id="pRumble" style="width:auto;flex:1">Vibración: sí</button></div>
+          <button class="btn" id="pReset" style="width:auto;margin-top:6px">Restablecer valores</button>
+          <div id="padTest"></div>
+        </div>
+        <div id="padMap"></div>
+      </div>
+      <small>Sticks: izquierdo = mover · derecho = mirar. Conecta el mando (USB o Bluetooth) y pulsa un botón. Esc / ◯ para cerrar.</small>
+    </div>
+  </div>
+  <div id="padcursor" class="hidden"></div>
+  <div id="cursorItem" class="hidden"></div>
+
+  <div id="overlay" class="screen">
+    <div id="menu">
+      <div id="logo"><h1>VOXELLANDS</h1><small>W E B</small><div id="splash">¡19 jefes, 3 dimensiones y multijugador!</div></div>
+      <p id="msg">Cargando…</p>
+      <div id="menuBody" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <div id="worldsBox" class="hidden"><h3>Tus mundos guardados</h3><div id="worldList"></div></div>
+        <div class="newbox">
+          <input id="wName" placeholder="Nombre del mundo" maxlength="28" />
+          <input id="wSeed" placeholder="Semilla (opcional)" maxlength="20" />
+        </div>
+        <button class="btn primary" id="bSurvival">Nuevo mundo · Supervivencia</button>
+        <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+        <button class="btn" id="bOneBlock" style="background:#6b8f3a;color:#fff">⬛ Nuevo mundo · One Block (supervivencia)</button>
+        <div class="newbox" style="flex-direction:column;gap:6px;border-top:2px solid #555;padding-top:8px">
+          <b style="color:#fff">🌐 Multijugador</b>
+          <input id="mpUrl" placeholder="Servidor (ej. ws://192.168.1.5:8080)" maxlength="120" />
+          <input id="mpName" placeholder="Tu nombre" maxlength="16" />
+          <button class="btn" id="bMulti" style="background:#3a6fb0;color:#fff">Conectar al servidor</button>
+        </div>
+        <button class="btn hidden" id="bInstall" style="background:#7b4fc9;color:#fff">📲 Instalar como app</button>
+        <button class="btn" id="bImport">⬆ Importar partida (.mcw)</button>
+        <input type="file" id="fImport" accept=".mcw,application/octet-stream" class="hidden" />
+      <div id="keys">
+        <span><kbd>WASD</kbd> mover</span><span><kbd>Espacio</kbd> saltar / nadar</span>
+        <span><kbd>Shift</kbd> correr</span><span><kbd>E</kbd> inventario</span>
+        <span><kbd>Clic izq.</kbd> romper / atacar</span><span><kbd>Clic der.</kbd> colocar / usar</span>
+        <span><kbd>V</kbd> cámara 1ª / 3ª persona</span><span><kbd>1-9</kbd> / rueda: ranura</span>
+        <span><kbd>F</kbd> volar (creativo)</span><span><kbd>G</kbd> cambiar modo</span>
+        <span><kbd>B</kbd> invocar jefes y mobs</span><span><kbd>M</kbd> misiones</span>
+        <span><kbd>T</kbd> cambiar clima</span><span><kbd>F3</kbd> datos de depuración</span>
+        <span><kbd>P</kbd> configurar mando 🎮</span><span>Mando PS4: stick izq. mover, der. mirar, <kbd>R2</kbd> romper, <kbd>L2</kbd> usar</span>
+      </div>
+      </div>
+    </div>
+    <div id="pause" class="hidden">
+      <div id="logo"><h1 style="font-size:40px">PAUSA</h1></div>
+      <button class="btn primary" id="bResume">Reanudar</button>
+      <button class="btn" id="bCam">Cámara: Primera persona</button>
+      <button class="btn" id="bQuality">Gráficos: Alto</button>
+      <button class="btn" id="bTouch">🖐 Controles táctiles: Auto</button>
+      <button class="btn" id="bFull">⛶ Pantalla completa</button>
+      <button class="btn" id="bPPad">🎮 Mando (PS4)</button>
+      <button class="btn" id="bPSummon">⚔ Invocar jefes (B)</button>
+      <button class="btn" id="bPQuests">📜 Misiones (M)</button>
+      <div class="row"><span>Render</span><input id="rRadius" type="range" min="3" max="16" step="1" value="8" /><b id="vRadius">6</b></div>
+      <div class="row"><span>Campo visión</span><input id="rFov" type="range" min="60" max="110" step="1" value="75" /><b id="vFov">75</b></div>
+      <div class="row"><span>Sensibilidad</span><input id="rSens" type="range" min="0.3" max="2.5" step="0.1" value="1" /><b id="vSens">1.0</b></div>
+      <div class="row"><span>Volumen</span><input id="rVol" type="range" min="0" max="1" step="0.05" value="0.5" /><b id="vVol">50</b></div>
+      <button class="btn primary" id="bSaveNow">💾 Guardar partida</button>
+      <button class="btn" id="bExport">⬇ Exportar partida (.mcw)</button>
+      <button class="btn" id="bSave">Guardar y salir al menú</button>
+    </div>
+    <div id="death" class="hidden">
+      <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
+      <button class="btn primary" id="bRespawn">Reaparecer</button>
+    </div>
+    <div id="ver">VoxelLands v2.0</div>
+  </div>
+</body>
+</html>

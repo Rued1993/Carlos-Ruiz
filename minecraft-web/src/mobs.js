@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { moveBody } from './entities.js';
 import { B, I, OPAQUE, LIQUID } from './blocks.js';
 import { CH } from './world.js';
+import { CLEAN, clean } from './flavor.js';
 
 const lam = (c, map) => new THREE.MeshLambertMaterial(map ? { color: c, map } : { color: c });
 function limb(group, w, h, d, color, x, y, z) { // pivote arriba
@@ -93,12 +94,12 @@ export const MOB_TYPES = {
   enderman: {
     hw: 0.3, h: 2.9, hp: 40, speed: 5, hostile: false, name: 'Enderman', xp: 8, enderman: true,
     build(g, o) {
-      const c = 0x120a18;
+      const c = CLEAN ? 0x1b2a4e : 0x120a18;
       o.legs = [limb(g, 0.18, 1.5, 0.18, c, -0.12, 1.5, 0), limb(g, 0.18, 1.5, 0.18, c, 0.12, 1.5, 0)];
       part(g, 0.5, 0.95, 0.26, c, 0, 1.98, 0);
       o.arms = [limb(g, 0.13, 1.35, 0.13, c, -0.34, 2.45, 0), limb(g, 0.13, 1.35, 0.13, c, 0.34, 2.45, 0)];
       o.head = part(g, 0.5, 0.42, 0.5, c, 0, 2.7, 0);
-      for (const x of [-0.13, 0.13]) part(g, 0.14, 0.05, 0.03, 0xe070ff, x, 2.72, 0.26);
+      for (const x of [-0.13, 0.13]) part(g, 0.14, 0.05, 0.03, CLEAN ? 0x40e0ff : 0xe070ff, x, 2.72, 0.26);
     },
     drops: () => (Math.random() < 0.65 ? [[I.PEARL, 1]] : []),
   },
@@ -348,12 +349,12 @@ export const MOB_TYPES = {
   creeper: {
     hw: 0.3, h: 1.7, hp: 20, speed: 2.3, hostile: true, name: 'Creeper', creeper: true,
     build(g, o) {
-      const green = 0x4ea84e;
+      const green = CLEAN ? 0xc9792b : 0x4ea84e;
       o.legs = [[-0.14, 0.28], [0.14, 0.28], [-0.14, -0.28], [0.14, -0.28]].map(([x, z]) => limb(g, 0.26, 0.45, 0.26, 0x3e8e3e, x, 0.45, z * 0.5));
       o.body = part(g, 0.5, 0.85, 0.3, green, 0, 0.88, 0);
       const face = faceTexture((x) => {
-        x.fillStyle = '#4ea84e'; x.fillRect(0, 0, 8, 8);
-        x.fillStyle = '#0c1a0c'; x.fillRect(1, 2, 2, 2); x.fillRect(5, 2, 2, 2); x.fillRect(3, 4, 2, 2); x.fillRect(2, 5, 1, 2); x.fillRect(5, 5, 1, 2);
+        x.fillStyle = CLEAN ? '#c9792b' : '#4ea84e'; x.fillRect(0, 0, 8, 8);
+        x.fillStyle = CLEAN ? '#2a1204' : '#0c1a0c'; x.fillRect(1, 2, 2, 2); x.fillRect(5, 2, 2, 2); x.fillRect(3, 4, 2, 2); x.fillRect(2, 5, 1, 2); x.fillRect(5, 5, 1, 2);
       });
       const side = lam(green);
       const mats = [side, side, side, side, lam(0xffffff, face), side];
@@ -364,9 +365,14 @@ export const MOB_TYPES = {
 };
 
 const AMONG_COLORS = [0xc51111, 0x132ed1, 0x117f2d, 0xed54ba, 0xef7d0e, 0xf5f557, 0x3f474e, 0xd6e0f0, 0x6b2fbb, 0x71491e, 0x38fedc, 0x50ef39];
-const HOSTILE_NIGHT = ['zombie', 'zombie', 'zombie', 'creeper', 'creeper', 'skeleton', 'skeleton', 'skeleton', 'spider', 'spider', 'enderman', 'impostor', 'impostor', 'saibaman', 'saibaman', 'bart'];
-const CROSSOVER_PASSIVE = ['crewmate', 'crewmate', 'crewmate', 'homer', 'marge', 'lisa', 'maggie', 'flanders'];
-const HOSTILE_CAVE = ['zombie', 'zombie', 'creeper', 'skeleton', 'skeleton', 'spider'];
+// Edición limpia: sin crossovers de otras franquicias
+const CROSS_MOBS = ['crewmate', 'impostor', 'homer', 'bart', 'marge', 'lisa', 'maggie', 'flanders', 'saibaman', 'dog'];
+if (CLEAN) for (const k of CROSS_MOBS) delete MOB_TYPES[k];
+for (const m of Object.values(MOB_TYPES)) m.name = clean(m.name);
+const have = (a) => a.filter((t) => MOB_TYPES[t]);
+const HOSTILE_NIGHT = have(['zombie', 'zombie', 'zombie', 'creeper', 'creeper', 'skeleton', 'skeleton', 'skeleton', 'spider', 'spider', 'enderman', 'impostor', 'impostor', 'saibaman', 'saibaman', 'bart']);
+const CROSSOVER_PASSIVE = have(['crewmate', 'crewmate', 'crewmate', 'homer', 'marge', 'lisa', 'maggie', 'flanders']);
+const HOSTILE_CAVE = have(['zombie', 'zombie', 'creeper', 'skeleton', 'skeleton', 'spider']);
 
 export class Mob {
   constructor(type, x, y, z, scene) {
@@ -692,7 +698,7 @@ export class MobManager {
       const [x, z] = pickColumn(16, 40); const top = w.topY(x, z);
       if (top > 0) {
         const id = w.getBlock(x, top, z);
-        if ((id === B.GRASS || id === B.SNOW) && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z)) this.add(Math.random() < 0.28 ? CROSSOVER_PASSIVE[Math.floor(Math.random() * CROSSOVER_PASSIVE.length)] : ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)], x + 0.5, top + 1, z + 0.5);
+        if ((id === B.GRASS || id === B.SNOW) && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z)) this.add(Math.random() < (CROSSOVER_PASSIVE.length ? 0.28 : 0) ? CROSSOVER_PASSIVE[Math.floor(Math.random() * CROSSOVER_PASSIVE.length)] : ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)], x + 0.5, top + 1, z + 0.5);
       }
     }
     if (mode !== 'survival' || hostile >= 8) return;

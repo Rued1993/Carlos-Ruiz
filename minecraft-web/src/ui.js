@@ -1,5 +1,6 @@
 // Interfaz: barra rápida, estadísticas, inventario, crafteo y paleta creativa.
 import { iconURL, hudSprites } from './icons.js';
+import { clean } from './flavor.js';
 import { info, BLOCKS, ITEMS, toolOf, maxStack, matchRecipe, isFlat, SMELT_TIME, enchText } from './blocks.js';
 const durOf = (item) => toolOf(item) || (ITEMS[item.id] && ITEMS[item.id].armor ? { dur: ITEMS[item.id].armor.dur } : null);
 
@@ -41,6 +42,7 @@ export class UI {
   }
 
   toast(text) {
+    text = clean(text);
     const t = $('toast'); t.textContent = text; t.style.opacity = 1; clearTimeout(this.toastT);
     this.toastT = setTimeout(() => (t.style.opacity = 0), 1600);
   }

@@ -1,4 +1,5 @@
 // Bloques, ítems, herramientas y recetas.
+import { clean } from './flavor.js';
 export const AIR = 0;
 
 export const B = {
@@ -339,3 +340,6 @@ export function dropOf(blockId, slot) {
     default: return [blockId, 1];
   }
 }
+
+// Edición limpia: nombres sin marcas ajenas
+for (const d of [...Object.values(BLOCKS), ...Object.values(ITEMS)]) d.name = clean(d.name);

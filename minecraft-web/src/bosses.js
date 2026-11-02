@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { rayBox } from './mobs.js';
 import { moveBody } from './entities.js';
 import { B } from './blocks.js';
+import { CLEAN, clean } from './flavor.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -13,6 +14,7 @@ class BossBase {
   constructor(scene, hooks, pos, cfg) {
     this.scene = scene; this.h = hooks; this.pos = pos.clone();
     Object.assign(this, cfg); // name, type, maxHp, hitbox {hx, hy, hz, oy}
+    this.name = clean(this.name);
     this.hp = this.maxHp; this.phase = 1; this.t = 0; this.yaw = 0; this.flash = 0; this.dead = false;
     this.scale = cfg.scale || 1;
     this.root = new THREE.Group(); this.body = new THREE.Group(); this.root.add(this.body);
@@ -1159,4 +1161,6 @@ Object.assign(BOSS_INFO, {
   burns: { name: 'Sr. Burns', color: '#60e030', hp: 260, desc: 'Suelta perros, lanza barriles radiactivos que envenenan, se protege con un escudo y activa ondas nucleares.', icon: '☢', make: (s, h, p) => new MrBurns(s, h, p), ground: true, dist: 18 },
   impostor: { name: 'Impostor Supremo', color: '#ff3030', hp: 340, desc: 'Embiste con el cuchillo, se teletransporta por los conductos, apaga las luces y llama a más impostores. «¡SUS!»', icon: '🔴', make: (s, h, p) => new ImpostorBoss(s, h, p), ground: true, dist: 16 },
 });
-export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking', 'colossus', 'creepertitan', 'blazeking', 'piglinking', 'endertitan', 'voidlord', 'goku', 'burns', 'impostor'];
+if (CLEAN) for (const k of ['goku', 'burns', 'impostor']) delete BOSS_INFO[k]; // sin crossovers
+for (const i of Object.values(BOSS_INFO)) { i.name = clean(i.name); i.desc = clean(i.desc); }
+export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking', 'colossus', 'creepertitan', 'blazeking', 'piglinking', 'endertitan', 'voidlord', 'goku', 'burns', 'impostor'].filter((t) => BOSS_INFO[t]);

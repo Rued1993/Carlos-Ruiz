@@ -33,7 +33,16 @@ La huella sale de PWABuilder/Bubblewrap (y, si usas «Play App Signing», de Pla
 - Cuestionario de contenido: violencia de fantasía; sin compras ni anuncios; sin recopilación de datos.
 - Cuentas personales nuevas: prueba cerrada con ≥12 testers durante 14 días antes de pasar a producción.
 
-## 4. Antes de enviar: propiedad intelectual ⚠
+## 4. Antes de enviar: usa la edición limpia ✔
+El repositorio incluye una **edición limpia** lista para la tienda en la carpeta `clean/` (se genera con `npm run build:clean`, salida en `dist-clean/`). Para publicarla, copia el contenido de `clean/` como raíz de tu sitio (`TU-USUARIO.github.io`) en lugar de la edición normal. Qué cambia respecto a la normal:
+- **Sin crossovers:** fuera Among Us, Los Simpson y Dragon Ball (mobs, jefes Impostor Supremo, Sr. Burns y Goku, y sus misiones).
+- **Nombres propios:** Creeper → Detonador, Enderman → Espectro, Ender Dragon → Dragón del Vacío, Wither → Marchito, Warden → Centinela, Herobrine → Fantasma blanco, Piglin → Porcino, Blaze → Llamarada, Ghast → Medusa, Shulker → Cápsula, Nether → Inframundo, End → Vacío, netherita → ónix…; las esferas del dragón pasan a «esferas del deseo».
+- Detonador y Espectro cambian de color (naranja y azul).
+- Sin menciones a PS4 ni a otras marcas.
+
+Limitación honesta: los modelos siguen siendo cubos con proporciones parecidas. Si Google o un titular de derechos lo cuestionara, habría que rediseñarlos más a fondo.
+
+## 5. Propiedad intelectual de la edición normal ⚠
 Google revisa la marca y los derechos. Esta versión **ya no usa el nombre «Minecraft»**, pero el juego aún incluye personajes y referencias de otras franquicias que pueden provocar el rechazo o la retirada de la app:
 - Criaturas con los nombres/diseños de Minecraft (Creeper, Enderman, Ender Dragon, Wither, Warden, Herobrine…).
 - Crossovers: Among Us, Los Simpson (Homer, Bart, Marge…), Dragon Ball (Goku, Saibamen, Shenlong, Bolas de Dragón).

@@ -1,5 +1,6 @@
 // Misiones: aprendizaje, caza y derrotar a todos los jefes.
 import { B, I } from './blocks.js';
+import { CLEAN, clean } from './flavor.js';
 
 export const QUESTS = [
   // Aprendiz
@@ -56,7 +57,12 @@ export const QUESTS = [
   { id: 'p_ench', group: 'Aprendiz', title: 'Mago', desc: 'Encanta un objeto en la mesa de encantamientos', ev: 'enchant', target: 'x', n: 1, reward: [[I.LAPIS, 6]], xp: 80 },
   { id: 'p_lapis', group: 'Aprendiz', title: 'Azul profundo', desc: 'Consigue 6 lapislázuli', ev: 'collect', target: I.LAPIS, n: 6, reward: [[I.DIAMOND, 2]], xp: 40 },
   { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 19 jefes (y crossovers)', ev: 'bossall', target: null, n: 19, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
-];
+];if (CLEAN) { // edición limpia: sin misiones de crossovers
+  for (const id of ['b_goku', 'b_burns', 'b_impostor', 'k_impostor', 'k_saiba']) { const k = QUESTS.findIndex((q) => q.id === id); if (k >= 0) QUESTS.splice(k, 1); }
+  const m = QUESTS.find((q) => q.id === 'master'); m.n = 16; m.desc = 'Derrota a los 16 jefes';
+}
+for (const q of QUESTS) { q.title = clean(q.title); q.desc = clean(q.desc); }
+
 
 export class Quests {
   constructor(hooks) { this.h = hooks; this.progress = {}; this.done = {}; this.bosses = new Set(); } // hooks: reward(items), toast, xp, sound

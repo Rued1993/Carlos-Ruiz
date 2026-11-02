@@ -15,6 +15,7 @@ import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from 
 import { Ambient } from './ambient.js';
 import { ChunkPool } from './chunkpool.js';
 import { Net } from './net.js';
+import { CLEAN, clean, watchDom } from './flavor.js';
 import { TouchControls } from './touch.js';
 import { Gamepads, PAD_ACTIONS, BTN_NAMES, defaultPadConfig } from './gamepad.js';
 import { Player } from './player.js';
@@ -191,7 +192,7 @@ const xpNeed = (l) => 6 + l * 4;
 function addXp(n) { xpPts += n; while (xpPts >= xpNeed(xpLevel)) { xpPts -= xpNeed(xpLevel); xpLevel++; if (ui) ui.toast('¡Nivel ' + xpLevel + '!'); sound('pop'); } }
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1, ambient, pads = null, padActive = false;
 let dims = {}, dim = 'overworld', extraSaved = { nether: new Map(), end: new Map() }, portalT = 0, travelCool = 0, dragonSpawned = false;
-const DIM_NAMES = { overworld: 'Overworld', nether: 'El Nether', end: 'El End' };
+const DIM_NAMES = { overworld: 'Overworld', nether: clean('El Nether'), end: clean('El End') };
 const fkey = (x, y, z) => (dim === 'overworld' ? '' : dim + ':') + x + ',' + y + ',' + z;
 const mouse = { left: false, right: false };
 const mining = { key: '', progress: 0 };
@@ -289,8 +290,8 @@ function obBroken() {
   if (i !== prevPhase) { ui.toast('★ Nueva fase: ' + p.name + ' ★'); sound('levelup'); addXp(30); }
   const rx = () => 0.5 + (Math.random() - 0.5) * 1.2;
   if (ob.count % 8 === 0 && mode === 'survival') {
-    const t = p.mobs[Math.floor(Math.random() * p.mobs.length)];
-    if (mobs.list.length < 14) mobs.add(t, rx(), 65.2, rx());
+    const pm = p.mobs.filter((q) => MOB_TYPES[q]), t = pm[Math.floor(Math.random() * pm.length)];
+    if (t && mobs.list.length < 14) mobs.add(t, rx(), 65.2, rx());
   }
   if (ob.count % 25 === 0) { // cofre de recompensa
     const out = rollLoot({ x: 0, y: 64, z: 0 });
@@ -298,7 +299,7 @@ function obBroken() {
     ui.toast('🎁 ¡Recompensa de One Block!');
   }
   const bt = OB_BOSSES[ob.count];
-  if (bt && !boss && !ritual) {
+  if (bt && BOSS_INFO[bt] && !boss && !ritual) {
     if (GROUND_BOSS.has(bt)) { obArena(); ui.toast('Se forma una arena de piedra…'); }
     setTimeout(() => { if (!boss) { player.lookDir && summonBoss(bt); } }, GROUND_BOSS.has(bt) ? 600 : 100);
   }
@@ -1257,6 +1258,7 @@ $('bTouch').onclick = () => { settings.touch = settings.touch === 'auto' ? 'on' 
 $('bFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else enterFullscreen(); };
 $('chatSend').onclick = () => { sendChat($('chatIn').value); closePanel(true); };
 initTouch();
+watchDom(); if (CLEAN) { const sp = $('splash'); if (sp) sp.textContent = '¡16 jefes, 3 dimensiones y multijugador!'; }
 
 function pressLeft() { mouse.left = true; swing = swing || 0.001; if (attackCool <= 0) { if (attack()) { attackCool = 0.4; mouse.left = false; } } }
 function pressRight() { mouse.right = true; placeCool = 0.22; useItem(); }
@@ -1477,7 +1479,7 @@ function frame(now) {
         $('bossbar').classList.remove('hidden');
         $('bossFill').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
         $('bossPhase').textContent = 'Fase ' + boss.phase;
-        if ($('bossName').firstChild.nodeValue !== boss.name + ' ') $('bossName').firstChild.nodeValue = boss.name + ' ';
+        if ($('bossName').firstChild.nodeValue !== clean(boss.name) + ' ') $('bossName').firstChild.nodeValue = clean(boss.name) + ' ';
       }
     }
     mobs.update(dt, player, mode, sky.daylight, radius);
