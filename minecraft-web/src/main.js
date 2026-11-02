@@ -1097,7 +1097,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
     explode, drop: (x, y, z, id, n) => drops.spawn(x, y, z, id, n), sound,
     puff: (x, y, z) => particles.burst(x, y, z, [0.9, 0.9, 0.9], 12, 3),
   });
-  ui = new UI({ inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect, onCraft: (id, n) => quests.event('craft', id, n), onArmorChange: () => model && model.setArmor(inv.armor) });
+  ui = new UI({ isTouch: () => touchMode, inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect, onCraft: (id, n) => quests.event('craft', id, n), onArmorChange: () => model && model.setArmor(inv.armor) });
   xpLevel = 0; xpPts = 0;
 
   player.events.onHurt = () => { buzz(45); sound('hurt'); const v = $('vignette'); v.classList.add('hurt'); setTimeout(() => v.classList.remove('hurt'), 120); };
@@ -1255,6 +1255,11 @@ function touchFrame(dt) {
   }
 }
 $('bTouch').onclick = () => { settings.touch = settings.touch === 'auto' ? 'on' : settings.touch === 'on' ? 'off' : 'auto'; touchMode = settings.touch === 'on' || (settings.touch !== 'off' && COARSE); saveSettings(); applyTouchMode(); };
+async function forceUpdate() { // borra el service worker y las cachés y recarga: así se descarga siempre la versión nueva
+  try { const rs = await navigator.serviceWorker.getRegistrations(); for (const r of rs) await r.unregister(); const ks = await caches.keys(); for (const k of ks) await caches.delete(k); } catch {}
+  location.reload();
+}
+for (const id of ['bUpdate', 'bUpdate2']) { const b = $(id); if (b) b.onclick = () => { b.textContent = 'Actualizando…'; forceUpdate(); }; }
 $('bFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else enterFullscreen(); };
 $('chatSend').onclick = () => { sendChat($('chatIn').value); closePanel(true); };
 initTouch();

@@ -119,6 +119,7 @@ export class UI {
       this.furnaceBars();
     } else if (g.getMode() === 'creative') {
       const pal = $('palette'); pal.innerHTML = '';
+      const ph = $('paletteWrap').firstElementChild; if (ph) ph.textContent = this.g.isTouch && this.g.isTouch() ? 'Toca un objeto: se añade a tu barra rápida' : 'Bloques e ítems (clic para coger; soltar aquí para borrar)';
       const ids = [...Object.keys(BLOCKS).map(Number).filter((i) => !BLOCKS[i].hidden), ...Object.keys(ITEMS).map(Number)];
       ids.forEach((id) => pal.appendChild(slotEl({ id, n: 1, d: 0 }, { group: 'pal', index: id })));
     } else {
@@ -149,7 +150,14 @@ export class UI {
       return;
     }
     const group = el.dataset.g, i = +el.dataset.i;
-    if (group === 'pal') { this.cursor = { id: i, n: right ? 1 : maxStack(i), d: 0 }; this.render(); return; }
+    if (group === 'pal') {
+      if (this.g.isTouch && this.g.isTouch()) { // táctil: tocar un objeto lo añade a la barra rápida y lo deja en la mano
+        const inv = this.g.inv; let k = inv.slots.slice(0, 9).findIndex((s) => s && s.id === i); if (k < 0) k = inv.slots.slice(0, 9).findIndex((s) => !s); if (k < 0) k = inv.selected;
+        if (!inv.slots[k] || inv.slots[k].id !== i) inv.slots[k] = { id: i, n: maxStack(i), d: 0 };
+        inv.selected = k; this.g.sound('pop'); this.g.onSelect(); this.render(); return;
+      }
+      this.cursor = { id: i, n: right ? 1 : maxStack(i), d: 0 }; this.render(); return;
+    }
     if (group === 'out') {
       const out = this.recipe(); if (!out) return;
       if (this.cursor && !(this.cursor.id === out.id && this.cursor.n + out.n <= maxStack(out.id))) return;

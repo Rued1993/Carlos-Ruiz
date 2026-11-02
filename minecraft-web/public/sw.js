@@ -1,6 +1,6 @@
 // Service worker de VoxelLands: funciona sin conexión tras la primera visita.
 // Estrategia: red primero (siempre la versión más nueva si hay conexión) y caché como respaldo.
-const CACHE = 'mcweb-v10';
+const CACHE = 'mcweb-v11';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Precarga el HTML y los archivos de /assets/ que referencian (el JS principal y el worker de chunks)
@@ -20,7 +20,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(req).then((res) => {
+    (req.mode === 'navigate' ? fetch(req.url, { cache: 'no-cache' }) : fetch(req)).then((res) => {
       if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req.url, { ignoreVary: true, ignoreSearch: true }).then((m) => m || (req.mode === 'navigate' ? caches.match('./index.html') : Promise.reject('offline'))))

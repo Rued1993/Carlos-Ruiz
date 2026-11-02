@@ -4,6 +4,7 @@ import { moveBody } from './entities.js';
 import { B, I, OPAQUE, LIQUID } from './blocks.js';
 import { CH } from './world.js';
 import { CLEAN, clean } from './flavor.js';
+import { restyleMob } from './restyle.js';
 
 const lam = (c, map) => new THREE.MeshLambertMaterial(map ? { color: c, map } : { color: c });
 function limb(group, w, h, d, color, x, y, z) { // pivote arriba
@@ -383,6 +384,7 @@ export class Mob {
     this.variant = Math.floor(Math.random() * 12);
     this.group = new THREE.Group(); this.parts = {};
     this.def.build(this.group, this.parts, this);
+    if (CLEAN) restyleMob(type, this.group, this.parts, this.def.h);
     this.model = new THREE.Group(); this.model.add(this.group); scene.add(this.model);
     this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.wanderT = 0; this.wanderDir = 0; this.moving = false;

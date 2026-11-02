@@ -37,10 +37,10 @@ La huella sale de PWABuilder/Bubblewrap (y, si usas «Play App Signing», de Pla
 El repositorio incluye una **edición limpia** lista para la tienda en la carpeta `clean/` (se genera con `npm run build:clean`, salida en `dist-clean/`). Para publicarla, copia el contenido de `clean/` como raíz de tu sitio (`TU-USUARIO.github.io`) en lugar de la edición normal. Qué cambia respecto a la normal:
 - **Sin crossovers:** fuera Among Us, Los Simpson y Dragon Ball (mobs, jefes Impostor Supremo, Sr. Burns y Goku, y sus misiones).
 - **Nombres propios:** Creeper → Detonador, Enderman → Espectro, Ender Dragon → Dragón del Vacío, Wither → Marchito, Warden → Centinela, Herobrine → Fantasma blanco, Piglin → Porcino, Blaze → Llamarada, Ghast → Medusa, Shulker → Cápsula, Nether → Inframundo, End → Vacío, netherita → ónix…; las esferas del dragón pasan a «esferas del deseo».
-- Detonador y Espectro cambian de color (naranja y azul).
+- **Rediseño visual** de mobs y jefes: nuevos colores y adornos propios (coronas de cristal, púas, halos, órbitas luminosas).
 - Sin menciones a PS4 ni a otras marcas.
 
-Limitación honesta: los modelos siguen siendo cubos con proporciones parecidas. Si Google o un titular de derechos lo cuestionara, habría que rediseñarlos más a fondo.
+Limitación honesta: el rediseño se apoya en los modelos de cubos originales (cambia colores y añade adornos), no son modelos nuevos desde cero. Si Google o un titular de derechos lo cuestionara, habría que rediseñarlos más a fondo.
 
 ## 5. Propiedad intelectual de la edición normal ⚠
 Google revisa la marca y los derechos. Esta versión **ya no usa el nombre «Minecraft»**, pero el juego aún incluye personajes y referencias de otras franquicias que pueden provocar el rechazo o la retirada de la app:

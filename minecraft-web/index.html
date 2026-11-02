@@ -178,6 +178,17 @@
     @media (max-width: 480px) { #logo small { letter-spacing: 6px; }  #logo { margin-bottom: 26px; } .wcard { grid-template-columns: 64px 1fr; } .wcard img { width: 64px; height: 36px; } .wb { grid-column: 1 / -1; } }
     @media (max-width: 900px), (max-height: 560px) { #splash { position: static; transform: none; animation: none; margin-top: 2px; font-size: 13px; } }
     body.touch #keys { display: none; }
+    /* Inventario en móvil horizontal: dos columnas (paleta/crafteo a la izquierda, mochila y barra a la derecha) */
+    @media (max-height: 560px) and (min-aspect-ratio: 13/10) {
+      #inv .panel { display: grid; grid-template-columns: auto auto; column-gap: 14px; row-gap: 6px; align-items: start; padding: 8px 12px; }
+      #inv .panel > h3:first-child { grid-column: 1 / -1; }
+      #craftArea, #furnaceArea, #paletteWrap { grid-column: 1; grid-row: 2 / span 3; }
+      #armorRow, #invMain, #invHot { grid-column: 2; }
+      #inv .slot { width: 36px; height: 36px; } #inv .slot img { width: 26px; height: 26px; }
+      #invMain, #invHot { grid-template-columns: repeat(9, 36px) !important; } #armorSlots { grid-template-columns: repeat(4, 36px) !important; }
+      #palette { grid-template-columns: repeat(9, 36px); max-height: min(230px, 60vh); }
+      #paletteWrap h3 { font-size: 11px; }
+    }
   </style>
 </head>
 <body>
@@ -303,6 +314,7 @@
           <input id="mpName" placeholder="Tu nombre" maxlength="16" />
           <button class="btn" id="bMulti" style="background:#3a6fb0;color:#fff">Conectar al servidor</button>
         </div>
+        <button class="btn" id="bUpdate2">🔄 Buscar actualización</button>
         <button class="btn hidden" id="bInstall" style="background:#7b4fc9;color:#fff">📲 Instalar como app</button>
         <button class="btn" id="bImport">⬆ Importar partida (.mcw)</button>
         <input type="file" id="fImport" accept=".mcw,application/octet-stream" class="hidden" />
@@ -325,6 +337,7 @@
       <button class="btn" id="bQuality">Gráficos: Alto</button>
       <button class="btn" id="bTouch">🖐 Controles táctiles: Auto</button>
       <button class="btn" id="bFull">⛶ Pantalla completa</button>
+      <button class="btn" id="bUpdate">🔄 Buscar actualización</button>
       <button class="btn" id="bPPad">🎮 Mando (PS4)</button>
       <button class="btn" id="bPSummon">⚔ Invocar jefes (B)</button>
       <button class="btn" id="bPQuests">📜 Misiones (M)</button>
@@ -340,7 +353,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">VoxelLands v2.0</div>
+    <div id="ver">VoxelLands v2.1</div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

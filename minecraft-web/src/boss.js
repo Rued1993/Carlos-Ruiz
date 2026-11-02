@@ -1,6 +1,8 @@
 // Jefe: Tormenta Wither. Cuerpo colosal con 3 cabezas y tentáculos, rayo tractor, cráneos explosivos,
 // devora bloques, 3 fases y un bloque de comandos como punto débil (expuesto en la fase 3).
 import * as THREE from 'three';
+import { CLEAN } from './flavor.js';
+import { restyleBoss } from './restyle.js';
 import { rayBox } from './mobs.js';
 import { B } from './blocks.js';
 
@@ -132,6 +134,8 @@ export class WitherStorm {
 
   update(dt, player, world) {
     if (this.dead) return;
+    if (CLEAN && !this._rs) { this._rs = true; restyleBoss(this); }
+    if (this._spin) this._spin.rotation.y += dt * 0.9;
     this.t += dt; this.flash = Math.max(0, this.flash - dt);
     const k = this.phase - 1;
     this.scale += (this.scaleT - this.scale) * Math.min(1, dt * 1.2);

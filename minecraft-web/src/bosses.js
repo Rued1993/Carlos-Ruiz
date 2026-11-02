@@ -5,6 +5,7 @@ import { rayBox } from './mobs.js';
 import { moveBody } from './entities.js';
 import { B } from './blocks.js';
 import { CLEAN, clean } from './flavor.js';
+import { restyleBoss } from './restyle.js';
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -136,6 +137,8 @@ class BossBase {
   }
   update(dt, player, world) {
     if (this.dead) return;
+    if (CLEAN && !this._rs) { this._rs = true; restyleBoss(this); } // rediseño de la edición limpia
+    if (this._spin) this._spin.rotation.y += dt * 0.9;
     this.t += dt; this.flash = Math.max(0, this.flash - dt);
     this.tick(dt, player, world);
     this.updateProj(dt, player, world); this.updateWaves(dt, player);
