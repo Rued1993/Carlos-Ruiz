@@ -142,6 +142,9 @@
     .wb { display: flex; gap: 4px; } .wb button { background: #6a6a6a; color: #fff; border: 2px solid #111; border-top-color: #bbb; border-left-color: #bbb; padding: 6px 9px; font: bold 12px var(--font); cursor: pointer; }
     .wb button:hover { background: #8a9ad8; } .wb button.play { background: #4f8a30; }
     #ver { position: fixed; left: 8px; bottom: 6px; font-size: 11px; color: #aaa; text-shadow: 1px 1px #000; }
+      #ob { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); color: #fff; padding: 5px 14px; font-size: 13px; text-align: center; z-index: 5; pointer-events: none; min-width: 220px; border: 2px solid #222; }
+    #ob.hidden { display: none; }
+    #ob .obbar { height: 6px; background: #333; margin-top: 4px; } #ob .obbar i { display: block; height: 100%; width: 0; background: #7be04a; }
   </style>
 </head>
 <body>
@@ -154,6 +157,7 @@
   <div id="crosshair"></div>
   <div id="breakbar" class="hidden"><i></i></div>
   <div id="air"></div>
+  <div id="ob" class="hidden"><b id="obPhase"></b> <span id="obCount"></span><div class="obbar"><i id="obFill"></i></div></div>
   <div id="hud">
     <div id="bars"><div id="hearts"></div><div id="food"></div></div>
     <div id="xp"><div id="xpFill"></div><span id="xpLvl">0</span></div>
@@ -201,6 +205,13 @@
       <small>M o Esc para cerrar</small>
     </div>
   </div>
+  <div id="trade" class="screen hidden">
+    <div class="panel wide">
+      <h3>🧑‍🌾 Aldeano — Comercio <span id="tradeInfo" style="font-weight:normal;font-size:11px"></span></h3>
+      <div id="tradeList" class="cards"></div>
+      <div style="font-size:11px">Pulsa Esc para cerrar. Necesitas los materiales en el inventario.</div>
+    </div>
+  </div>
   <div id="padcfg" class="screen hidden">
     <div class="panel wide">
       <h3>🎮 Configuración del mando (PS4 / DualShock 4 / DualSense)</h3>
@@ -235,6 +246,7 @@
         </div>
         <button class="btn primary" id="bSurvival">Nuevo mundo · Supervivencia</button>
         <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+        <button class="btn" id="bOneBlock" style="background:#6b8f3a;color:#fff">⬛ Nuevo mundo · One Block (supervivencia)</button>
         <button class="btn" id="bImport">⬆ Importar partida (.mcw)</button>
         <input type="file" id="fImport" accept=".mcw,application/octet-stream" class="hidden" />
       <div id="keys">
@@ -269,7 +281,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v0.9</div>
+    <div id="ver">Minecraft Web v1.0</div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

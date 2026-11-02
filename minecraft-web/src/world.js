@@ -93,6 +93,11 @@ export class World {
       this.scanTorches(k, data);
       return data;
     }
+    if (this.kind === 'oneblock' && this.dim === 'overworld') { // One Block: mundo vacío con un único bloque
+      const e = new Uint8Array(CS * CS * CH);
+      if (cx === 0 && cz === 0) e[this.idx(0, 64, 0)] = B.GRASS;
+      this.chunks.set(k, e); this.computeTops(k, e); return e;
+    }
     if (this.dim === 'nether') return this.genNether(cx, cz, k);
     if (this.dim === 'end') return this.genEnd(cx, cz, k);
     const seed = this.seed;
@@ -140,7 +145,7 @@ export class World {
       if (onlyAir && data[i] !== AIR) return;
       data[i] = id;
     };
-    const villages = this.villagesNear(x0, z0);
+    const villages = this.villagesNear(x0, z0), structs = this.structuresNear(x0, z0);
     // Árboles, selva y cactus deterministas (incluye los de chunks vecinos que rozan este)
     for (let tz = z0 - 3; tz < z0 + CS + 3; tz++) {
       for (let tx = x0 - 3; tx < x0 + CS + 3; tx++) {
@@ -148,7 +153,7 @@ export class World {
         if (r > 0.06) continue;
         const info = terrainInfo(tx, tz, seed), h = info.h, biome = info.biome;
         if (h <= SEA + 1 || biome === 'ocean' || biome === 'mountains') continue;
-        if (villages.some((v) => Math.abs(v.x - tx) < 26 && Math.abs(v.z - tz) < 26)) continue;
+        if (villages.some((v) => Math.abs(v.x - tx) < 26 && Math.abs(v.z - tz) < 26) || structs.some((s) => Math.abs(s.x - tx) < 14 && Math.abs(s.z - tz) < 14)) continue;
         if (biome === 'desert') {
           if (r < 0.004) { const ch = 1 + Math.floor(hash2(tx, tz, seed + 6) * 3); for (let t = 1; t <= ch; t++) put(tx, h + t, tz, B.CACTUS, false); }
           continue;
@@ -171,10 +176,90 @@ export class World {
       }
     }
     for (const v of villages) this.buildVillage(v, put);
+    { const ctx = { data, x0, z0 }; for (const st of structs) this.buildStructure(st, ctx); }
     this.chunks.set(k, data);
     this.computeTops(k, data);
     this.scanTorches(k, data);
     return data;
+  }
+
+
+  // ---------- Templos y ruinas del Overworld ----------
+  structureAt(rx, rz) {
+    const key = 's' + rx + ',' + rz;
+    if (!this.vcache) this.vcache = new Map();
+    if (this.vcache.has(key)) return this.vcache.get(key);
+    const seed = this.seed; let res = null;
+    if (hash2(rx, rz, seed + 7700) < 0.75) {
+      const x = rx * 176 + 36 + Math.floor(hash2(rx, rz, seed + 7701) * 104), z = rz * 176 + 36 + Math.floor(hash2(rx, rz, seed + 7702) * 104);
+      const c = terrainInfo(x, z, seed);
+      if (c.biome !== 'ocean' && c.biome !== 'mountains' && c.h > SEA + 1 && c.h < SEA + 26) {
+        const r = hash2(rx, rz, seed + 7703); let type = null;
+        if (c.biome === 'desert') type = r < 0.6 ? 'pyramid' : 'ruin';
+        else if (c.biome === 'jungle') type = r < 0.6 ? 'jungle' : 'ruin';
+        else if (c.biome === 'snow') type = r < 0.6 ? 'igloo' : 'ruin';
+        else type = r < 0.5 ? 'outpost' : 'ruin';
+        let nearVillage = false;
+        for (let a = Math.floor((x - 70) / 128); a <= Math.floor((x + 70) / 128); a++) for (let b = Math.floor((z - 70) / 128); b <= Math.floor((z + 70) / 128); b++) { const v = this.villageAt(a, b); if (v && Math.abs(v.x - x) < 70 && Math.abs(v.z - z) < 70) nearVillage = true; }
+        if (!nearVillage) res = { type, x, z, H: c.h };
+      }
+    }
+    this.vcache.set(key, res); return res;
+  }
+  structuresNear(x0, z0) {
+    const out = [];
+    for (let rx = Math.floor((x0 - 24) / 176); rx <= Math.floor((x0 + CS + 24) / 176); rx++) for (let rz = Math.floor((z0 - 24) / 176); rz <= Math.floor((z0 + CS + 24) / 176); rz++) { const s = this.structureAt(rx, rz); if (s && Math.abs(s.x - x0 - 8) < 36 && Math.abs(s.z - z0 - 8) < 36) out.push(s); }
+    return out;
+  }
+  _mix(ctx, x1, y1, z1, x2, y2, z2, a, b, p, salt) { // relleno con dos materiales mezclados (adoquín / adoquín musgoso)
+    const xa = Math.max(Math.min(x1, x2), ctx.x0), xb = Math.min(Math.max(x1, x2), ctx.x0 + CS - 1), za = Math.max(Math.min(z1, z2), ctx.z0), zb = Math.min(Math.max(z1, z2), ctx.z0 + CS - 1);
+    for (let y = Math.max(0, Math.min(y1, y2)); y <= Math.min(CH - 1, Math.max(y1, y2)); y++) for (let z = za; z <= zb; z++) for (let x = xa; x <= xb; x++) ctx.data[this.idx(x - ctx.x0, y, z - ctx.z0)] = hash2(x * 3 + y, z * 5 - y, this.seed + salt) < p ? b : a;
+  }
+  buildStructure(st, ctx) {
+    const F = (a, b, c, d, e, f, id) => this._fill(ctx, st.x + a, st.H + b, st.z + c, st.x + d, st.H + e, st.z + f, id);
+    const M = (a, b, c, d, e, f, id1, id2, p, salt) => this._mix(ctx, st.x + a, st.H + b, st.z + c, st.x + d, st.H + e, st.z + f, id1, id2, p, salt);
+    const SS = B.SANDSTONE, CH_ = B.CHEST, T = B.TORCH, AIRB = AIR;
+    if (st.type === 'pyramid') { // pirámide del desierto con cámara del tesoro
+      F(-10, -8, -10, 10, 0, 10, SS);
+      for (let i = 0; i <= 10; i++) F(-10 + i, 1 + i, -10 + i, 10 - i, 1 + i, 10 - i, SS);
+      F(-7, 1, -7, 7, 8, 7, AIRB); F(-1, 1, 6, 1, 3, 13, AIRB); F(-2, 0, 11, 2, 0, 13, SS);
+      F(-2, -3, -2, 2, 0, 2, AIRB); F(0, -4, 0, 0, -4, 0, B.GOLD_BLOCK);
+      for (const [x, z] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) F(x, -3, z, x, -3, z, CH_);
+      for (const [x, z] of [[-6, -6], [6, -6], [-6, 6], [6, 6]]) { F(x, 1, z, x, 4, z, SS); F(x, 5, z, x, 5, z, T); }
+      for (const x of [-4, 0, 4]) F(x, 1, -6, x, 1, -6, B.CHEST);
+    } else if (st.type === 'jungle') { // templo de la selva de adoquín musgoso
+      M(-7, -5, -6, 7, -1, 6, B.COBBLE, B.MOSSY_COBBLE, 0.4, 1);
+      M(-7, 0, -6, 7, 5, 6, B.COBBLE, B.MOSSY_COBBLE, 0.55, 2); F(-6, 1, -5, 6, 4, 5, AIRB);
+      M(-5, 6, -4, 5, 10, 4, B.COBBLE, B.MOSSY_COBBLE, 0.6, 3); F(-4, 6, -3, 4, 9, 3, AIRB);
+      M(-3, 11, -2, 3, 12, 2, B.COBBLE, B.MOSSY_COBBLE, 0.6, 4);
+      F(-1, 1, 5, 1, 3, 7, AIRB); M(-3, 0, 7, 3, 0, 9, B.COBBLE, B.MOSSY_COBBLE, 0.5, 5);
+      F(-4, 1, -4, -4, 1, -4, CH_); F(4, 1, -4, 4, 1, -4, CH_); F(0, 6, -3, 0, 6, -3, CH_);
+      for (const [x, z] of [[-5, -4], [5, -4], [-5, 4], [5, 4]]) F(x, 2, z, x, 2, z, T);
+      for (let i = 0; i < 5; i++) F(-3, 1, -2 + i, -3, 1 + i, -2 + i, B.MOSSY_COBBLE); F(-3, 5, -2, -3, 5, 2, AIRB); // escalera al piso superior
+    } else if (st.type === 'igloo') { // iglú con mesa y horno
+      for (let dx = -5; dx <= 5; dx++) for (let dz = -5; dz <= 5; dz++) for (let dy = -3; dy <= 5; dy++) {
+        const d = Math.hypot(dx, dy, dz); let id = -1;
+        if (dy < 0) { if (Math.hypot(dx, dz) <= 4.2) id = B.SNOW; }
+        else if (d <= 3.1) id = dy === 0 ? B.PLANKS : AIRB; else if (d <= 4.3) id = B.SNOW;
+        if (id >= 0) F(dx, dy, dz, dx, dy, dz, id);
+      }
+      F(-2, 0, 2, 2, 3, 7, B.SNOW); F(-1, 0, 2, 1, 0, 7, B.PLANKS); F(-1, 1, 2, 1, 2, 7, AIRB);
+      F(-2, 1, -2, -2, 1, -2, B.TABLE); F(2, 1, -2, 2, 1, -2, B.FURNACE); F(0, 1, 2, 0, 1, 2, CH_); F(0, 1, -3, 0, 1, -3, T); F(2, 1, 2, 2, 1, 2, T);
+    } else if (st.type === 'outpost') { // atalaya de madera con cofres
+      F(-4, -5, -4, 4, 0, 4, B.COBBLE); F(-3, 1, -3, 3, 22, 3, AIRB);
+      for (let y = 1; y <= 17; y++) { F(-3, y, -3, 3, y, -3, B.PLANKS); F(-3, y, 3, 3, y, 3, B.PLANKS); F(-3, y, -3, -3, y, 3, B.PLANKS); F(3, y, -3, 3, y, 3, B.PLANKS); }
+      for (const [x, z] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) F(x, 1, z, x, 18, z, B.LOG);
+      for (const y of [4, 10, 15]) for (const [x, z] of [[0, -3], [0, 3], [-3, 0], [3, 0]]) F(x === 0 ? -1 : x, y, z === 0 ? -1 : z, x === 0 ? 1 : x, y + 1, z === 0 ? 1 : z, B.GLASS);
+      F(-1, 1, 3, 1, 3, 3, AIRB);
+      for (const y0 of [1, 7, 13]) { F(-2, y0 + 6, -2, 2, y0 + 6, 2, B.PLANKS); for (let i = 0; i < 5; i++) F(-2 + i, y0 + 1, -2, -2 + i, y0 + 1 + i, -2, B.PLANKS); F(-2, y0 + 6, -2, 0, y0 + 6, -2, AIRB); F(-2, y0 + 6, -1, -1, y0 + 6, -1, AIRB); }
+      F(-4, 19, -4, 4, 19, 4, B.PLANKS); for (const [x, z] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { F(x, 20, z, x, 21, z, B.LOG); F(x, 22, z, x, 22, z, T); }
+      F(-3, 20, -3, -3, 20, 3, B.PLANKS); F(3, 20, -3, 3, 20, 3, B.PLANKS); F(-3, 20, -3, 3, 20, -3, B.PLANKS); F(-3, 20, 3, 3, 20, 3, B.PLANKS);
+      F(2, 1, 2, 2, 1, 2, CH_); F(-2, 13 + 1, 2, -2, 13 + 1, 2, CH_); F(2, 7 + 1, -1, 2, 7 + 1, -1, CH_); F(0, 18, 0, 0, 18, 0, T);
+    } else if (st.type === 'ruin') { // portal en ruinas con oro y cofre
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 5; j++) { const corner = (i === 0 || i === 3) && (j === 0 || j === 4), border = i === 0 || i === 3 || j === 0 || j === 4; if (border && !corner && hash2(st.x + i * 7, st.z + j * 11, this.seed + 7710) < 0.72) F(i, j, 0, i, j, 0, B.OBSIDIAN); }
+      for (let n = 0; n < 9; n++) { const a = Math.floor(hash2(st.x + n, st.z, this.seed + 7711) * 9) - 4, b = Math.floor(hash2(st.x, st.z + n, this.seed + 7712) * 7) - 3; F(a, 0, b, a, 0, b, n % 3 ? B.NETHERRACK : B.MOSSY_COBBLE); }
+      F(-2, 1, 1, -2, 1, 1, B.GOLD_BLOCK); F(2, 0, 2, 2, 0, 2, CH_); F(1, 0, 3, 1, 0, 3, B.NETHERRACK);
+    }
   }
 
   // ---------- pueblos ----------
@@ -214,9 +299,9 @@ export class World {
     for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) for (let y = H + 2; y <= H + 4; y++) put(v.x + dx, y, v.z + dz, B.LOG, false);
     for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) put(v.x + dx, H + 5, v.z + dz, B.PLANKS, false);
     // senderos de grava/adoquín hacia las casas
-    const houses = [[-14, -8], [14, -8], [-14, 10], [14, 10], [0, -16], [0, 17]];
+    const houses = [[-14, -8], [14, -8], [-14, 10], [14, 10], [0, -16], [0, 17], [-16, -24], [16, -24]];
     houses.forEach(([hx, hz], i) => {
-      if (hash2(v.x + hx, v.z + hz, seed + 5) < 0.12 && i > 3) return; // algunas casas faltan
+      if (hash2(v.x + hx, v.z + hz, seed + 5) < (i > 5 ? 0.45 : 0.12) && i > 3) return; // algunas casas faltan
       const cx = v.x + hx, cz = v.z + hz;
       const dirx = Math.abs(hx) > Math.abs(hz) ? -Math.sign(hx) : 0, dirz = dirx ? 0 : -Math.sign(hz);
       // camino desde la puerta al pozo
@@ -249,7 +334,37 @@ export class World {
       // interior: antorcha, mesa y horno
       put(cx - 2, H + 1, cz - 2, B.TORCH, false); put(cx + 2, H + 1, cz - 2, B.TABLE, false); put(cx + 2, H + 1, cz + 2, B.FURNACE, false); put(cx - 2, H + 1, cz + 2, B.TORCH, false);
       put(cx + dirx * 4 + dirz, H + 1, cz + dirz * 4 + dirx, B.TORCH, false);
+      // farolas junto al camino
+      for (let t = 6; t < 40; t += 7) { const px = cx + dirx * (4 + t), pz = cz + dirz * (4 + t); if (Math.abs(px - v.x) < 4 && Math.abs(pz - v.z) < 4) break; const lx = px + dirz * 2, lz = pz + dirx * 2; for (let y = H; y <= H + 3; y++) put(lx, y, lz, y === H ? B.COBBLE : B.LOG, false); put(lx, H + 4, lz, B.TORCH, false); }
     });
+    // edificios especiales: herrería, iglesia y biblioteca
+    const building = (cx, cz, hw, hd, o) => {
+      for (let dx = -hw - 1; dx <= hw + 1; dx++) for (let dz = -hd - 1; dz <= hd + 1; dz++) {
+        const wx = cx + dx, wz = cz + dz, th = terrainHeight(wx, wz, seed);
+        for (let y = Math.max(1, th - 1); y <= H - 1; y++) put(wx, y, wz, B.COBBLE, false);
+        for (let y = H + 1; y <= H + o.h + 6; y++) put(wx, y, wz, 0, false);
+        if (Math.abs(dx) <= hw && Math.abs(dz) <= hd) put(wx, H, wz, o.floor || B.PLANKS, false);
+      }
+      for (let dx = -hw; dx <= hw; dx++) for (let dz = -hd; dz <= hd; dz++) {
+        if (Math.abs(dx) !== hw && Math.abs(dz) !== hd) continue;
+        const corner = Math.abs(dx) === hw && Math.abs(dz) === hd;
+        for (let y = H + 1; y <= H + o.h; y++) {
+          let id = corner ? B.LOG : o.wall;
+          if (!corner && y === H + 2 && ((Math.abs(dx) === hw && dz % 3 === 0) || (Math.abs(dz) === hd && dx % 3 === 0))) id = B.GLASS;
+          if (dx === o.door[0] * hw && dz === o.door[1] * hd && y <= H + 2) id = 0;
+          put(cx + dx, y, cz + dz, id, false);
+        }
+      }
+      for (let dx = -hw - 1; dx <= hw + 1; dx++) for (let dz = -hd - 1; dz <= hd + 1; dz++) put(cx + dx, H + o.h + 1, cz + dz, o.roof, false);
+      o.inside(cx, cz);
+    };
+    const bx = v.x - 30, bz = v.z; // herrería (puerta hacia el pozo)
+    building(bx, bz, 4, 3, { h: 4, wall: B.COBBLE, roof: B.PLANKS, floor: B.COBBLE, door: [1, 0], inside: (cx, cz) => { put(cx - 3, H + 1, cz - 2, B.FURNACE, false); put(cx - 3, H + 1, cz + 2, B.FURNACE, false); put(cx - 3, H + 1, cz, B.CHEST, false); put(cx, H + 1, cz - 2, B.TABLE, false); put(cx + 2, H + 1, cz + 2, B.TORCH, false); put(cx - 1, H + 1, cz + 2, B.TORCH, false); } });
+    const chx = v.x + 32, chz = v.z - 2; // iglesia con campanario
+    building(chx, chz, 5, 3, { h: 5, wall: B.COBBLE, roof: B.PLANKS, floor: B.COBBLE, door: [-1, 0], inside: (cx, cz) => { put(cx + 4, H + 1, cz, B.GOLD_BLOCK, false); put(cx + 4, H + 2, cz, B.TORCH, false); put(cx + 4, H + 1, cz - 2, B.CHEST, false); put(cx - 2, H + 1, cz - 2, B.TORCH, false); put(cx - 2, H + 1, cz + 2, B.TORCH, false);
+      for (let y = H + 6; y <= H + 16; y++) for (let dx = 6; dx <= 9; dx++) for (let dz = -2; dz <= 1; dz++) { const edge = dx === 6 || dx === 9 || dz === -2 || dz === 1; put(cx + dx, y, cz + dz, edge ? (y === H + 11 ? B.GLASS : B.COBBLE) : 0, false); }
+      for (let dx = 6; dx <= 9; dx++) for (let dz = -2; dz <= 1; dz++) put(cx + dx, H + 17, cz + dz, B.COBBLE, false); put(cx + 7, H + 18, cz, B.GLOWSTONE, false); } });
+    building(v.x, v.z + 30, 4, 3, { h: 4, wall: B.PLANKS, roof: B.LOG, door: [0, -1], inside: (cx, cz) => { for (const [a, b] of [[-3, -2], [3, -2], [-3, 2], [3, 2]]) put(cx + a, H + 1, cz + b, B.TABLE, false); put(cx, H + 1, cz + 2, B.CHEST, false); put(cx - 2, H + 1, cz, B.CHEST, false); put(cx, H + 1, cz - 2, B.TORCH, false); put(cx + 2, H + 1, cz, B.TORCH, false); } });
   }
 
   // Emisores de luz (antorchas, piedra luminosa y superficie de lava)

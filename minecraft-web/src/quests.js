@@ -46,7 +46,13 @@ export const QUESTS = [
   { id: 'b_piglink', group: 'Jefes', title: 'Corona de oro', desc: 'Derrota al Rey Piglin', ev: 'boss', target: 'piglinking', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 10]], xp: 180 },
   { id: 'b_endert', group: 'Jefes', title: 'No mires a los ojos', desc: 'Derrota al Enderman Titán', ev: 'boss', target: 'endertitan', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 12]], xp: 200 },
   { id: 'b_voidl', group: 'Jefes', title: 'Al borde del vacío', desc: 'Derrota al Señor del Vacío', ev: 'boss', target: 'voidlord', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 12]], xp: 200 },
-  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 16 jefes de Minecraft', ev: 'bossall', target: null, n: 16, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
+  { id: 'b_goku', group: 'Jefes', title: '¡Es más de 9000!', desc: 'Derrota a Goku', ev: 'boss', target: 'goku', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 12]], xp: 250 },
+  { id: 'b_burns', group: 'Jefes', title: 'Excelente…', desc: 'Derrota al Sr. Burns', ev: 'boss', target: 'burns', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 180 },
+  { id: 'b_impostor', group: 'Jefes', title: 'Eyectado', desc: 'Derrota al Impostor Supremo', ev: 'boss', target: 'impostor', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 180 },
+  { id: 'k_impostor', group: 'Cazador', title: 'Sospechoso', desc: 'Derrota a 3 impostores', ev: 'kill', target: 'impostor', n: 3, reward: [[I.GOLD, 8]], xp: 40 },
+  { id: 'k_saiba', group: 'Cazador', title: 'Semillas del Saiyajin', desc: 'Derrota a 2 saibamen', ev: 'kill', target: 'saibaman', n: 2, reward: [[I.SENZU, 1]], xp: 40 },
+  { id: 'd_balls', group: 'Dimensiones', title: '¡Sal, Shenron!', desc: 'Reúne las 7 Bolas de Dragón', ev: 'collect', target: I.DBALL, n: 7, reward: [[I.DIAMOND, 6]], xp: 300 },
+  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 19 jefes (Minecraft y crossovers)', ev: 'bossall', target: null, n: 19, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
 ];
 
 export class Quests {

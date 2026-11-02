@@ -128,6 +128,9 @@ try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') 
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
 const STORMY = new Set(['storm', 'dragon', 'wither', 'herobrine']);
 const LOOT = {
+  goku: [[I.STAR, 2], [I.DBALL, 3], [I.SENZU, 3], [I.DIAMOND, 12], [I.NETHERITE, 1]],
+  burns: [[I.GOLD, 24], [B.GOLD_BLOCK, 4], [I.DIAMOND, 6], [I.DONUT, 6], [I.DUFF, 6]],
+  impostor: [[I.STAR, 1], [I.DIAMOND, 8], [I.GOLD, 12], [I.SCRAP, 2], [I.PEARL, 2]],
   colossus: [[I.STAR, 1], [I.IRON, 24], [I.DIAMOND, 8], [I.GOLD, 6]],
   creepertitan: [[I.STAR, 1], [I.COAL, 32], [I.DIAMOND, 8], [I.GOLD, 8]],
   blazeking: [[I.STAR, 1], [I.COAL, 24], [I.DIAMOND, 8], [I.GOLD, 10]],
@@ -245,12 +248,62 @@ function explode(x, y, z, r, ds = 1) {
   for (const m of [...mobs.list]) if (Math.hypot(m.pos.x - x, m.pos.y - y, m.pos.z - z) < r * 2) mobs.damage(m, 14, x, z);
 }
 
+// ---------- One Block ----------
+const OB_PHASES = [
+  { name: 'Llanura', until: 30, blocks: [B.GRASS, B.GRASS, B.DIRT, B.DIRT, B.LOG, B.LOG, B.LEAVES, B.SAND], mobs: ['pig', 'cow', 'chicken', 'sheep'] },
+  { name: 'Bosque y cueva', until: 90, blocks: [B.STONE, B.STONE, B.COBBLE, B.LOG, B.PLANKS, B.COAL_ORE, B.COAL_ORE, B.IRON_ORE, B.GRAVEL || B.SAND, B.DIRT], mobs: ['zombie', 'skeleton', 'spider', 'pig', 'creeper'] },
+  { name: 'Desierto y nieve', until: 170, blocks: [B.SAND, B.SANDSTONE, B.SANDSTONE, B.CACTUS, B.SNOW, B.SNOW, B.IRON_ORE, B.GOLD_ORE, B.GLASS], mobs: ['zombie', 'skeleton', 'creeper', 'villager', 'crewmate'] },
+  { name: 'Mina profunda', until: 270, blocks: [B.STONE, B.STONE, B.COBBLE, B.MOSSY_COBBLE, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.GOLD_BLOCK, B.BRICKS], mobs: ['zombie', 'skeleton', 'creeper', 'spider', 'slime', 'saibaman'] },
+  { name: 'Nether', until: 400, blocks: [B.NETHERRACK, B.NETHERRACK, B.SOUL_SAND, B.GLOWSTONE, B.NETHER_BRICKS, B.ANCIENT_DEBRIS, B.OBSIDIAN, B.GOLD_ORE], mobs: ['piglin', 'blaze', 'magmacube', 'witherskeleton', 'hoglin', 'impostor'] },
+  { name: 'El End', until: 550, blocks: [B.END_STONE, B.END_STONE, B.PURPUR, B.END_BRICKS, B.OBSIDIAN, B.DIAMOND_ORE, B.CHEST], mobs: ['enderman', 'endermite', 'shulker', 'phantom', 'saibaman'] },
+  { name: 'CAOS CROSSOVER', until: Infinity, blocks: null, mobs: ['impostor', 'crewmate', 'homer', 'bart', 'marge', 'lisa', 'flanders', 'saibaman', 'dog', 'creeper', 'enderman', 'blaze'] },
+];
+const OB_BOSSES = { 100: 'evoker', 220: 'impostor', 300: 'ghast', 420: 'burns', 520: 'wither', 650: 'blazeking', 800: 'goku', 1000: 'dragon' };
+const GROUND_BOSS = new Set(['impostor', 'burns', 'goku']);
+const obPhaseIdx = () => OB_PHASES.findIndex((p) => ob.count < p.until);
+function obPick() {
+  const p = OB_PHASES[obPhaseIdx()];
+  if (!p.blocks) { const all = Object.keys(BLOCKS).map(Number).filter((i) => i !== B.BEDROCK && i !== B.COMMAND && i !== B.WATER && i !== B.LAVA && !BLOCKS[i].liquid && i !== B.NETHER_PORTAL && i !== B.END_PORTAL && i !== B.END_FRAME_EYE && i !== B.CHEST_OPEN); return all[Math.floor(Math.random() * all.length)]; }
+  return p.blocks[Math.floor(Math.random() * p.blocks.length)] || B.STONE;
+}
+function obEnsure() { if (world.getBlock(0, 64, 0) === AIR) world.setBlock(0, 64, 0, ob.count === 0 ? B.GRASS : obPick()); }
+function obHud() {
+  const i = obPhaseIdx(), p = OB_PHASES[i], from = i ? OB_PHASES[i - 1].until : 0;
+  $('obPhase').textContent = '⬛ ' + p.name; $('obCount').textContent = ob.count + ' bloques' + (p.until < Infinity ? ' / ' + p.until : '');
+  $('obFill').style.width = (p.until < Infinity ? Math.min(100, ((ob.count - from) / (p.until - from)) * 100) : 100) + '%';
+}
+function obArena(r = 26) {
+  for (let x = -r; x <= r; x++) for (let z = -r; z <= r; z++) if (x * x + z * z <= r * r && world.getBlock(x, 63, z) === AIR && !(x === 0 && z === 0)) world.setBlock(x, 63, z, (x + z) & 1 ? B.STONE : B.COBBLE);
+}
+function obBroken() {
+  const prevPhase = obPhaseIdx(); ob.count++;
+  const i = obPhaseIdx(), p = OB_PHASES[i];
+  setTimeout(() => { if (world.getBlock(0, 64, 0) === AIR) world.setBlock(0, 64, 0, obPick()); }, 0);
+  if (i !== prevPhase) { ui.toast('★ Nueva fase: ' + p.name + ' ★'); sound('levelup'); addXp(30); }
+  const rx = () => 0.5 + (Math.random() - 0.5) * 1.2;
+  if (ob.count % 8 === 0 && mode === 'survival') {
+    const t = p.mobs[Math.floor(Math.random() * p.mobs.length)];
+    if (mobs.list.length < 14) mobs.add(t, rx(), 65.2, rx());
+  }
+  if (ob.count % 25 === 0) { // cofre de recompensa
+    const out = rollLoot({ x: 0, y: 64, z: 0 });
+    for (const [id, n] of out) drops.spawn(0.5, 65.5, 0.5, id, n);
+    ui.toast('🎁 ¡Recompensa de One Block!');
+  }
+  const bt = OB_BOSSES[ob.count];
+  if (bt && !boss && !ritual) {
+    if (GROUND_BOSS.has(bt)) { obArena(); ui.toast('Se forma una arena de piedra…'); }
+    setTimeout(() => { if (!boss) { player.lookDir && summonBoss(bt); } }, GROUND_BOSS.has(bt) ? 600 : 100);
+  }
+  obHud();
+}
 // ---------- Interacción ----------
 function breakBlock(hit) {
   const id = world.getBlock(hit.x, hit.y, hit.z);
   if (id === AIR || BLOCKS[id].hardness === Infinity) return;
   const held = inv.held();
   world.setBlock(hit.x, hit.y, hit.z, AIR);
+  if (kind === 'oneblock' && dim === 'overworld' && hit.x === 0 && hit.y === 64 && hit.z === 0) obBroken();
   if (id === B.FURNACE) {
     const key = fkey(hit.x, hit.y, hit.z), f = furnaces.get(key);
     if (f) { for (const sl of f.slots) if (sl) drops.spawn(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, sl.id, sl.n); furnaces.delete(key); }
@@ -280,6 +333,14 @@ function useItem() {
   }
   if (hit && hit.id === B.END_FRAME) { useEyeOnFrame(hit); return; }
   if (hit && hit.id === B.CHEST && !player.keys.has('ShiftLeft')) { openChest(hit); return; }
+  if (!player.keys.has('ShiftLeft')) {
+    const mh = mobs.raycast(eye, dir, 4.5), bh = world.raycast(eye, dir, 4.5);
+    if (mh && (!bh || bh.dist > mh.dist) && mh.mob.def.talk) {
+      const d = mh.mob.def;
+      if (d.villager) { openPanel('trade'); return; }
+      ui.toast(d.name + ': «' + d.talk[Math.floor(Math.random() * d.talk.length)] + '»'); sound('hit'); return;
+    }
+  }
   const held = inv.held();
   if (!held) return;
   if (held.id === I.LIGHTER) { if (hit) lightPortal(hit); return; }
@@ -360,7 +421,7 @@ function openPanel(id) {
   if (state !== 'play') return;
   state = 'panel'; panelId = id; player.keys.clear(); mouse.left = mouse.right = false;
   document.exitPointerLock(); $(id).classList.remove('hidden');
-  if (id === 'summon') renderSummon(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
+  if (id === 'summon') renderSummon(); else if (id === 'trade') renderTrade(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
 }
 function closePanel(relock) {
   if (!panelId) return;
@@ -374,6 +435,29 @@ function renderSummon() {
   }).join('');
   $('mobBtns').innerHTML = Object.keys(MOB_TYPES).map((t) => `<button class="btn" data-mob="${t}">${MOB_TYPES[t].name}</button>`).join('');
 }
+const TRADES = [
+  { give: [[I.COAL, 12]], get: [I.IRON, 2] }, { give: [[I.IRON, 6]], get: [I.GOLD, 3] },
+  { give: [[I.GOLD, 6]], get: [I.DIAMOND, 1] }, { give: [[I.GOLD, 2]], get: [I.DONUT, 3] },
+  { give: [[I.DIAMOND, 2]], get: [I.SENZU, 1] }, { give: [[I.DIAMOND, 3]], get: [I.EYE, 2] },
+  { give: [[I.IRON, 24]], get: [armorId(1, 2), 1] }, { give: [[I.DIAMOND, 24]], get: [armorId(1, 3), 1] },
+  { give: [[I.DIAMOND, 5], [I.GOLD, 10]], get: [I.NETHERITE, 1] }, { give: [[I.DIAMOND, 30]], get: [I.ELYTRA, 1] },
+  { give: [[I.DIAMOND, 12], [I.STAR, 1]], get: [I.DBALL, 1] }, { give: [[I.DIAMOND, 1]], get: [B.TORCH, 32] },
+];
+function renderTrade() {
+  $('tradeInfo').textContent = mode === 'creative' ? '(creativo: gratis)' : '';
+  $('tradeList').innerHTML = TRADES.map((t, i) => {
+    const ok = mode === 'creative' || t.give.every(([id, n]) => inv.count(id) >= n);
+    return `<div class="card"><h4><span>${info(t.get[0]).name} ×${t.get[1]}</span></h4><p>Precio: ${t.give.map(([id, n]) => n + '× ' + info(id).name).join(' + ')}</p><button class="btn" data-trade="${i}" ${ok ? '' : 'disabled style="opacity:.5"'}>Comprar</button></div>`;
+  }).join('');
+}
+$('tradeList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-trade]'); if (!b || state !== 'panel') return;
+  const t = TRADES[+b.dataset.trade];
+  if (mode !== 'creative') { if (!t.give.every(([id, n]) => inv.count(id) >= n)) return; for (const [id, n] of t.give) inv.take(id, n); }
+  const left = inv.add(t.get[0], t.get[1]);
+  if (left) drops.spawn(player.pos.x, player.pos.y + 1, player.pos.z, t.get[0], left);
+  sound('craft'); ui.renderHotbar(); renderTrade();
+});
 function renderQuests() {
   $('questTitle').textContent = `Misiones — ${quests.completed()}/${quests.total()} completadas`;
   let html = '', grp = '';
@@ -422,10 +506,11 @@ function updateTracker() {
 
 
 // ===================================================================== DIMENSIONES Y PORTALES
+let kind = 'normal', ob = { count: 0 };
 function makeWorld(name, saved) {
   const g = new THREE.Group(); g.visible = false; scene.add(g);
   const w = new World(g, materials, name === 'overworld' ? seed : name === 'nether' ? seed + 500 : seed + 900, saved || new Map(), name);
-  w.group = g; return w;
+  w.group = g; w.kind = kind; return w;
 }
 function loadAround(w, ax, az, r = 3) {
   return new Promise((resolve) => { const tick = () => { const pend = w.update(ax, az, r, 12); if (pend > 0) setTimeout(tick, 0); else resolve(); }; tick(); });
@@ -774,7 +859,7 @@ function onDeath() {
 async function saveGame() {
   if (!world || !worldId) return false;
   const meta = { v: 3, gen: 2, dim, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
-    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON(), quests: quests.toJSON(), xp: { l: xpLevel, p: xpPts } };
+    kind, ob, hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON(), quests: quests.toJSON(), xp: { l: xpLevel, p: xpPts } };
   const entries = [];
   for (const [dn, w] of Object.entries(dims)) for (const k of w.unsaved) if (w.chunks.has(k)) entries.push([dn === 'overworld' ? k : (dn === 'nether' ? 'n:' : 'e:') + k, new Uint8Array(w.chunks.get(k))]);
   const ok = await save.saveWorld(worldId, meta, entries, { name: worldName, mode, seed, created: createdAt, played: Math.floor(playedSec), level: xpLevel, thumb: thumbData });
@@ -792,8 +877,10 @@ async function saveWithFeedback() {
 }
 
 // ---------- Arranque de partida ----------
-async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played, nether, end }) {
+async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played, nether, end, kind: kd }) {
   state = 'loading'; mode = md; seed = sd;
+  kind = kd || (meta && meta.kind) || 'normal'; ob = { count: (meta && meta.ob && meta.ob.count) || 0 };
+  $('ob').classList.toggle('hidden', kind !== 'oneblock');
   worldId = id; worldName = name || 'Mundo'; createdAt = created || Date.now(); playedSec = played || 0; thumbData = null;
   showOverlay('menu'); $('msg').textContent = 'Generando mundo…';
   $('menuBody').classList.add('hidden');
@@ -862,7 +949,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   player.events.onSplash = () => sound('splash');
   player.events.onDeath = onDeath;
   player.events.onArmor = () => { const br = inv.wearArmor(1); if (br.length) ui.toast('¡Se ha roto una pieza de tu armadura!'); if (ui.isOpen) ui.render(); };
-  player.events.onVoid = () => { if (dim === 'end') { player.damage(6); const ty = world.topY(0, 30); player.pos.set(0.5, (ty > 0 ? ty : 64) + 1, 30.5); player.vel.set(0, 0, 0); ui.toast('Caíste al vacío…'); } else { player.pos.y = 70; player.vel.set(0, 0, 0); player.damage(4); } };
+  player.events.onVoid = () => { if (kind === 'oneblock' && dim === 'overworld') { player.pos.set(0.5, 65.01, 0.5); player.vel.set(0, 0, 0); if (mode === 'survival') player.damage(3); ui.toast('Volviste al bloque…'); } else if (dim === 'end') { player.damage(6); const ty = world.topY(0, 30); player.pos.set(0.5, (ty > 0 ? ty : 64) + 1, 30.5); player.vel.set(0, 0, 0); ui.toast('Caíste al vacío…'); } else { player.pos.y = 70; player.vel.set(0, 0, 0); player.damage(4); } };
   mobs.dim = dim;
 
   let cx, cz;
@@ -870,7 +957,8 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
     weather.load(meta.weather); quests.load(meta.quests); if (meta.xp) { xpLevel = meta.xp.l; xpPts = meta.xp.p; } inv.load(meta.inv); (meta.furnaces || []).forEach(([k, f]) => furnaces.set(k, f)); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
     player.yaw = meta.yaw; player.pitch = meta.pitch; player.spawn.fromArray(meta.spawn);
     player.pos.fromArray(meta.pos); cx = Math.floor(meta.pos[0]); cz = Math.floor(meta.pos[2]);
-  } else { [cx, cz] = findSpawnColumn(seed); player.pos.set(cx + 0.5, 70, cz + 0.5); }
+  } else if (kind === 'oneblock') { cx = 0; cz = 0; player.pos.set(0.5, 66, 0.5); }
+  else { [cx, cz] = findSpawnColumn(seed); player.pos.set(cx + 0.5, 70, cz + 0.5); }
 
   // Cargar la zona inicial antes de soltar al jugador
   await new Promise((resolve) => {
@@ -881,7 +969,8 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
     };
     tick();
   });
-  if (!meta) { const sp = groundSpawn(cx, cz); player.pos.copy(sp); player.spawn.copy(sp); }
+  if (kind === 'oneblock') { obEnsure(); if (!meta) { player.pos.set(0.5, 65.01, 0.5); player.spawn.copy(player.pos); } obHud(); }
+  if (!meta && kind !== 'oneblock') { const sp = groundSpawn(cx, cz); player.pos.copy(sp); player.spawn.copy(sp); }
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
@@ -1188,14 +1277,15 @@ requestAnimationFrame(frame);
   }
   let list = await refresh();
   $('msg').textContent = list.length ? 'Elige un mundo o crea uno nuevo' : 'Elige cómo jugar';
-  const fresh = (md) => {
+  const fresh = (md, kd) => {
     audio.unlock();
     const name = $('wName').value.trim() || `Mundo ${list.length + 1}`, sv = $('wSeed').value.trim();
     const sd = !sv ? 1 + Math.floor(Math.random() * 900000) : /^\d+$/.test(sv) ? Number(sv) % 900000 + 1 : hashSeed(sv);
-    startGame({ id: save.newId(), name, seed: sd, mode: md, saved: new Map(), meta: null });
+    startGame({ id: save.newId(), name, seed: sd, mode: md, saved: new Map(), meta: null, kind: kd });
   };
   $('bSurvival').onclick = () => fresh('survival');
   $('bCreative').onclick = () => fresh('creative');
+  $('bOneBlock').onclick = () => fresh('survival', 'oneblock');
   $('worldList').addEventListener('click', async (e) => {
     const btn = e.target.closest('button'), card = e.target.closest('.wcard'); if (!btn || !card) return;
     const id = card.dataset.id, w = list.find((x) => x.id === id);
@@ -1203,7 +1293,7 @@ requestAnimationFrame(frame);
       audio.unlock(); $('msg').textContent = 'Cargando mundo…';
       const data = await save.loadWorld(id);
       if (!data.meta) { $('msg').textContent = 'No se pudo leer este mundo'; return; }
-      startGame({ id, name: w.name, seed: data.meta.seed, mode: data.meta.mode, saved: data.chunks, nether: data.nether, end: data.end, meta: data.meta, created: w.created, played: w.played });
+      startGame({ id, name: w.name, kind: data.meta.kind, seed: data.meta.seed, mode: data.meta.mode, saved: data.chunks, nether: data.nether, end: data.end, meta: data.meta, created: w.created, played: w.played });
     } else if (btn.dataset.act === 'del') {
       if (confirm(`¿Borrar "${w.name}" para siempre?`)) { await save.deleteWorld(id); list = await refresh(); }
     } else if (btn.dataset.act === 'rename') {

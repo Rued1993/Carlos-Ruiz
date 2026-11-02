@@ -980,6 +980,158 @@ export class IronColossus extends BossBase {
   }
 }
 
+// ===================================================================== GOKU (crossover)
+export class Goku extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'GOKU', type: 'goku', maxHp: 450, hitbox: { hx: 0.5, hy: 1.0, hz: 0.4, oy: 1.0 }, scale: 1.6, burstColor: [1, 0.8, 0.2] });
+    this.hw = 0.5; this.hh = 3.2; this.state = 'walk'; this.timer = 2; this.kameT = 7; this.tpT = 5; this.comboT = 3; this.genkiT = 20; this.walkA = 0; this.beam = null; this.aim = V();
+    const skin = this.mat(0xf0c090), orange = this.mat(0xf07a10), blue = this.mat(0x2050c0), dk = this.mat(0x15151a), hair = this.mat(0x15151a);
+    this.hairMat = hair; this.hairBlk = [];
+    this.legL = this.group(-0.2, 0.95, 0); this.box(0.34, 0.95, 0.38, orange, 0, -0.48, 0, this.legL); this.legR = this.group(0.2, 0.95, 0); this.box(0.34, 0.95, 0.38, orange, 0, -0.48, 0, this.legR);
+    this.box(0.36, 0.2, 0.42, blue, -0.2, 0.1, 0.02); this.box(0.36, 0.2, 0.42, blue, 0.2, 0.1, 0.02);
+    this.box(0.8, 0.8, 0.45, orange, 0, 1.4, 0); this.box(0.82, 0.14, 0.47, blue, 0, 1.05, 0);
+    this.armL = this.group(-0.58, 1.72, 0); this.box(0.3, 0.7, 0.3, orange, 0, -0.35, 0, this.armL); this.box(0.28, 0.4, 0.28, skin, 0, -0.9, 0, this.armL);
+    this.armR = this.group(0.58, 1.72, 0); this.box(0.3, 0.7, 0.3, orange, 0, -0.35, 0, this.armR); this.box(0.28, 0.4, 0.28, skin, 0, -0.9, 0, this.armR);
+    this.head = this.group(0, 2.0, 0); this.box(0.52, 0.52, 0.5, skin, 0, 0.26, 0, this.head);
+    for (const x of [-0.13, 0.13]) { this.box(0.1, 0.07, 0.04, dk, x, 0.3, 0.26, this.head); this.box(0.14, 0.04, 0.04, dk, x, 0.38, 0.26, this.head); }
+    this.box(0.54, 0.2, 0.52, hair, 0, 0.6, -0.02, this.head);
+    for (let i = 0; i < 7; i++) { const a = (i - 3) * 0.28; const sp = this.box(0.16, 0.6 + (i % 2) * 0.3, 0.16, hair, (i - 3) * 0.1, 0.9, (i % 3 - 1) * 0.08, this.head); sp.rotation.z = -a * 0.6; sp.rotation.x = (i % 3 - 1) * 0.2; this.hairBlk.push(sp); }
+    this.aura = new THREE.Mesh(new THREE.SphereGeometry(1.5, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffe040, transparent: true, opacity: 0, fog: false, depthWrite: false })); this.aura.position.y = 1.4; this.body.add(this.aura);
+    this.h.toast('¡GOKU quiere pelear! Esquiva el Kamehameha: ¡salta o rodea!');
+  }
+  phaseFor(r) { return r > 0.6 ? 1 : r > 0.25 ? 2 : 3; }
+  onPhase(k) {
+    this.h.sound('roar', 1);
+    if (k === 2) { this.h.toast('¡SUPER SAIYAJIN!'); this.hairMat.color.setHex(0xffd820); this.hairMat.emissive.setHex(0x805800); this.aura.material.opacity = 0.22; this.h.explode(this.pos.x, this.pos.y + 1, this.pos.z, 3, 0.1); }
+    else { this.h.toast('¡GENKI DAMA! Aguanta o golpéalo antes de que la lance'); this.genkiT = 0.5; }
+  }
+  tele(player) { const a = Math.random() * 6.28, d = 4.5; this.h.burst(this.pos.x, this.pos.y + 1.5, this.pos.z, [0.6, 0.9, 1], 18, 5); this.pos.x = player.pos.x + Math.cos(a) * d; this.pos.z = player.pos.z + Math.sin(a) * d; this.pos.y = player.pos.y + 0.5; this.vel.set(0, 0, 0); this.h.burst(this.pos.x, this.pos.y + 1.5, this.pos.z, [0.6, 0.9, 1], 18, 5); this.h.sound('hiss', 0.8); }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.timer -= dt; this.kameT -= dt; this.tpT -= dt; this.comboT -= dt; this.genkiT -= dt;
+    if (this.state !== 'kame') this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 6);
+    let speed = k === 1 ? 4.2 : 5.6;
+    if (this.state === 'walk') {
+      if (k === 3 && this.genkiT <= 0 && !player.dead) { this.state = 'genki'; this.timer = 4.5; this.genkiT = 18; this.ball = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 12), new THREE.MeshBasicMaterial({ color: 0x80c8ff, fog: false })); this.ball.position.set(this.pos.x, this.pos.y + 7, this.pos.z); this.scene.add(this.ball); this.extra.push(this.ball); this.vel.set(0, 0, 0); }
+      else if (this.kameT <= 0 && dist > 5 && !player.dead) { this.state = 'kame'; this.timer = 1.5; this.kameT = k === 1 ? 8 : 5.5; this.h.sound('hiss', 1); }
+      else if (this.tpT <= 0 && dist > 3) { this.tpT = k === 1 ? 6 : 3.5; this.tele(player); }
+      else if (this.comboT <= 0 && dist < 3.8 && !player.dead) { this.state = 'combo'; this.timer = 1.2; this.hitN = 0; this.comboT = k === 1 ? 4 : 2.5; }
+    } else if (this.state === 'kame') {
+      speed = 0; const prog = 1 - this.timer / 1.5;
+      this.armL.rotation.x = this.armR.rotation.x = -1.4; this.aim.set(dx, player.pos.y + 1 - (this.pos.y + 2.6), dz).normalize();
+      if (!this.beam) { this.beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x70c8ff, transparent: true, opacity: 0.55, fog: false, depthWrite: false, side: THREE.DoubleSide })); this.scene.add(this.beam); this.charge = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshBasicMaterial({ color: 0xa0e0ff, fog: false })); this.scene.add(this.charge); this.extra.push(this.beam, this.charge); this.beam.visible = false; }
+      const hand = V(this.pos.x + Math.sin(this.yaw) * 1.2, this.pos.y + 2.6, this.pos.z + Math.cos(this.yaw) * 1.2);
+      this.charge.position.copy(hand); this.charge.scale.setScalar(0.2 + prog * 0.7); this.charge.visible = true;
+      if (this.timer <= 0) { this.state = 'fire'; this.timer = 1.2; this.fireDir = this.aim.clone(); this.fireFrom = hand.clone(); this.charge.visible = false; this.beam.visible = true; this.hitBeam = false; this.h.sound('explode', 0.9); }
+    } else if (this.state === 'fire') {
+      speed = 0; const L = 60, d = this.fireDir, mid = this.fireFrom.clone().addScaledVector(d, L / 2);
+      this.beam.position.copy(mid); this.beam.scale.set(0.9 + Math.sin(this.t * 40) * 0.12, L, 0.9 + Math.sin(this.t * 40) * 0.12); this.beam.quaternion.setFromUnitVectors(V(0, 1, 0), d);
+      const pc = V(player.pos.x, player.pos.y + 0.9, player.pos.z).sub(this.fireFrom), t = pc.dot(d), perp = pc.clone().addScaledVector(d, -t).length();
+      if (!this.hitBeam && !player.dead && t > 0 && t < L && perp < 1.6) { this.hitBeam = true; this.h.hurtPlayer(k === 1 ? 14 : 18, d.x * 12, d.z * 12); this.h.explode(player.pos.x, player.pos.y + 1, player.pos.z, 3, 0.15); }
+      if (this.timer <= 0) { this.state = 'walk'; this.beam.visible = false; this.timer = 1.2; this.armL.rotation.x = this.armR.rotation.x = 0; }
+    } else if (this.state === 'combo') {
+      speed = 6; this.armR.rotation.x = Math.sin(this.t * 25) * 1.4; this.armL.rotation.x = -Math.sin(this.t * 25) * 1.4;
+      if (this.timer < 1.2 - (this.hitN + 1) * 0.28 && this.hitN < 4) { this.hitN++; if (dist < 4.2 && !player.dead) this.h.hurtPlayer(4, (dx / dist) * 5, (dz / dist) * 5); this.h.sound('hit', 0.8); }
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = 1.5; this.armL.rotation.x = this.armR.rotation.x = 0; }
+    } else if (this.state === 'genki') {
+      speed = 0; this.armL.rotation.x = this.armR.rotation.x = -3.0; const prog = 1 - this.timer / 4.5; this.ball.position.set(this.pos.x, this.pos.y + 6.5, this.pos.z); this.ball.scale.setScalar(0.6 + prog * 3.4);
+      if (Math.random() < dt * 20) this.h.burst(this.pos.x + rnd(-4, 4), this.pos.y + rnd(1, 6), this.pos.z + rnd(-4, 4), [0.6, 0.85, 1], 3, 2);
+      if (this.timer <= 0) { const from = this.ball.position.clone(); this.scene.remove(this.ball); this.extra = this.extra.filter((e) => e !== this.ball); this.ball = null; this.shootProj(from, V(player.pos.x, player.pos.y + 1, player.pos.z).sub(from), { speed: 20, size: 4.5, color: 0x80c8ff, emissive: 0x4090ff, radius: 7, ds: 1.3 }); this.state = 'walk'; this.timer = 2; this.armL.rotation.x = this.armR.rotation.x = 0; }
+    }
+    this.walk(dt, world, dx, dz, dist, this.state === 'walk' && dist < 2.5 ? 0 : speed);
+    this.walkA += dt * Math.hypot(this.vel.x, this.vel.z) * 1.5; const sw = Math.sin(this.walkA) * 0.6;
+    this.legL.rotation.x = sw; this.legR.rotation.x = -sw;
+    if (this.state === 'walk') { this.armL.rotation.x = -sw * 0.7; this.armR.rotation.x = sw * 0.7; }
+    if (k >= 2) { this.aura.material.opacity = 0.2 + Math.sin(this.t * 14) * 0.06; this.aura.scale.setScalar(1 + Math.sin(this.t * 9) * 0.08); }
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
+// ===================================================================== SR. BURNS (crossover)
+export class MrBurns extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'SR. BURNS', type: 'burns', maxHp: 260, hitbox: { hx: 0.45, hy: 0.95, hz: 0.35, oy: 0.95 }, scale: 1.7, burstColor: [0.5, 1, 0.3] });
+    this.hw = 0.4; this.hh = 3.2; this.state = 'walk'; this.timer = 2; this.dogT = 6; this.barrelT = 4; this.waveT = 9; this.shieldT = 14; this.shield = 0; this.walkA = 0;
+    const skin = this.mat(0xe8dcb0), suit = this.mat(0x35302c), shirt = this.mat(0xf0f0e8), dk = this.mat(0x101010), green = this.mat(0x60e030, 0x30a010);
+    this.legL = this.group(-0.15, 0.85, 0); this.box(0.26, 0.85, 0.3, suit, 0, -0.42, 0, this.legL); this.legR = this.group(0.15, 0.85, 0); this.box(0.26, 0.85, 0.3, suit, 0, -0.42, 0, this.legR);
+    this.box(0.62, 0.9, 0.34, suit, 0, 1.3, 0); this.box(0.2, 0.6, 0.05, shirt, 0, 1.4, 0.19);
+    this.armL = this.group(-0.45, 1.65, 0); this.box(0.2, 0.9, 0.22, suit, 0, -0.45, 0, this.armL); this.armR = this.group(0.45, 1.65, 0); this.box(0.2, 0.9, 0.22, suit, 0, -0.45, 0, this.armR);
+    this.box(0.2, 0.2, 0.2, skin, 0, -0.95, 0, this.armR); this.box(0.2, 0.2, 0.2, skin, 0, -0.95, 0, this.armL);
+    this.head = this.group(0, 1.95, 0); this.box(0.46, 0.5, 0.4, skin, 0, 0.25, 0, this.head); this.box(0.14, 0.18, 0.14, skin, 0, 0.2, 0.26, this.head);
+    for (const x of [-0.11, 0.11]) this.box(0.1, 0.1, 0.04, dk, x, 0.32, 0.21, this.head);
+    this.box(0.1, 0.08, 0.04, dk, 0, 0.08, 0.2, this.head);
+    this.box(0.14, 0.16, 0.1, skin, -0.3, 0.2, 0, this.head); this.box(0.14, 0.16, 0.1, skin, 0.3, 0.2, 0, this.head);
+    this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), new THREE.MeshBasicMaterial({ color: 0x70ff50, transparent: true, opacity: 0.28, fog: false, depthWrite: false })); this.shieldMesh.position.y = 1.2; this.shieldMesh.visible = false; this.body.add(this.shieldMesh);
+    this.barrels = [];
+    this.h.toast('Sr. Burns: «Excelente…» ¡Cuidado con los perros y los barriles radiactivos!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡Sr. Burns activa el reactor! Ondas nucleares'); this.waveT = 1.5; }
+  damageMul() { return this.shield > 0 ? 0.1 : 1; }
+  onHit() { if (this.shield > 0 && Math.random() < 0.3) this.h.toast('¡Escudo de Sr. Burns! Espera a que baje'); }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.dogT -= dt; this.barrelT -= dt; this.waveT -= dt; this.shieldT -= dt; this.timer -= dt;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 4);
+    if (this.shield > 0) { this.shield -= dt; this.shieldMesh.visible = true; this.shieldMesh.material.opacity = 0.2 + Math.sin(this.t * 12) * 0.08; if (this.shield <= 0) this.shieldMesh.visible = false; }
+    else if (this.shieldT <= 0) { this.shield = 4; this.shieldT = k === 1 ? 16 : 11; this.h.toast('Sr. Burns: «Excelente…»'); }
+    if (this.dogT <= 0) { this.dogT = k === 1 ? 11 : 8; if (this.h.minions() < 7) { this.h.spawnMinion('dog'); this.h.spawnMinion('dog'); } this.h.sound('roar', 0.5); }
+    if (this.barrelT <= 0 && !player.dead) { this.barrelT = k === 1 ? 5 : 3.4; const from = V(this.pos.x, this.pos.y + 3.2, this.pos.z); this.shootProj(from, V(player.pos.x, player.pos.y + 1, player.pos.z).sub(from), { speed: 14, size: 0.9, color: 0x50d020, emissive: 0x40ff10, radius: 2.2, ds: 0.3, effect: ['poison', 5], cloud: true }); this.armR.rotation.x = -2.2; }
+    if (this.waveT <= 0 && !player.dead) { this.waveT = k === 1 ? 10 : 6; this.addWave(this.pos.x, this.pos.y, this.pos.z, { max: 22, speed: 11, dmg: 8, color: 0x70ff30, effect: ['poison', 4] }); this.h.sound('explode', 0.6); }
+    const away = dist < 8 ? -1 : dist > 14 ? 1 : 0; // mantiene distancia
+    this.walk(dt, world, dx * (away || 0.0001), dz * (away || 0.0001), dist, away ? 3.2 : 0);
+    this.walkA += dt * Math.hypot(this.vel.x, this.vel.z) * 1.6; const sw = Math.sin(this.walkA) * 0.5;
+    this.legL.rotation.x = sw; this.legR.rotation.x = -sw; this.armL.rotation.x = -sw * 0.6; this.armR.rotation.x += (sw * 0.6 - this.armR.rotation.x) * Math.min(1, dt * 5);
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
+// ===================================================================== IMPOSTOR SUPREMO (crossover Among Us)
+export class ImpostorBoss extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'IMPOSTOR SUPREMO', type: 'impostor', maxHp: 340, hitbox: { hx: 0.8, hy: 1.1, hz: 0.6, oy: 1.1 }, scale: 1.9, burstColor: [1, 0.2, 0.2] });
+    this.hw = 0.7; this.hh = 3.6; this.state = 'walk'; this.timer = 2; this.lungeT = 4; this.ventT = 8; this.lightsT = 14; this.reactorT = 10; this.meetT = 16; this.walkA = 0; this.lights = 0;
+    const red = this.mat(0xc01818, 0x300404), dark = this.mat(0x8a0f0f), visor = this.mat(0x9fe8ff, 0x305060), knife = this.mat(0xe0e0e8, 0x303030);
+    this.legL = this.group(-0.3, 0.8, 0); this.box(0.5, 0.8, 0.55, dark, 0, -0.4, 0, this.legL); this.legR = this.group(0.3, 0.8, 0); this.box(0.5, 0.8, 0.55, dark, 0, -0.4, 0, this.legR);
+    this.box(1.3, 1.5, 0.95, red, 0, 1.5, 0); this.box(0.8, 1.0, 0.45, dark, 0, 1.5, -0.65); this.box(0.9, 0.5, 0.1, visor, 0, 1.85, 0.52); this.box(1.0, 0.65, 0.05, this.mat(0x40a0c0, 0x103040), 0, 1.85, 0.5);
+    this.armR = this.group(0.8, 1.5, 0.1); this.box(0.3, 0.3, 0.9, red, 0, 0, 0.45, this.armR); this.box(0.08, 0.08, 1.0, knife, 0, 0, 1.4, this.armR);
+    this.armL = this.group(-0.8, 1.5, 0.1); this.box(0.3, 0.3, 0.9, red, 0, 0, 0.45, this.armL);
+    this.h.toast('El Impostor Supremo te ha encontrado… ¡SUS!');
+  }
+  phaseFor(r) { return r > 0.55 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡REUNIÓN DE EMERGENCIA! El impostor se enfurece'); this.meetT = 1; this.lightsT = 3; }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.timer -= dt; this.lungeT -= dt; this.ventT -= dt; this.lightsT -= dt; this.reactorT -= dt; this.meetT -= dt;
+    if (this.state !== 'lunge') this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 5);
+    let speed = k === 1 ? 4 : 5.2;
+    if (this.lights > 0) { this.lights -= dt; this.h.darkness(0.75); if (this.lights <= 0) this.h.darkness(0); }
+    if (this.state === 'walk') {
+      if (this.timer <= 0 && dist < 3.8 && !player.dead) { this.state = 'stab'; this.timer = 0.45; }
+      else if (this.lungeT <= 0 && dist > 5 && dist < 20 && this.onGround) { this.state = 'lunge'; this.timer = 0.9; this.lungeT = k === 1 ? 5.5 : 3.6; this.vel.x = (dx / dist) * 20; this.vel.z = (dz / dist) * 20; this.vel.y = 6; this.lungeHit = false; this.h.sound('hiss', 1); }
+      else if (this.ventT <= 0) { this.ventT = k === 1 ? 9 : 5.5; this.h.burst(this.pos.x, this.pos.y + 1, this.pos.z, [0.7, 0.1, 0.1], 20, 4); const a = Math.random() * 6.28; this.pos.x = player.pos.x + Math.cos(a) * 6; this.pos.z = player.pos.z + Math.sin(a) * 6; this.pos.y = player.pos.y + 0.5; this.vel.set(0, 0, 0); this.h.burst(this.pos.x, this.pos.y + 1, this.pos.z, [0.7, 0.1, 0.1], 20, 4); }
+      else if (this.lightsT <= 0 && this.lights <= 0) { this.lightsT = k === 1 ? 20 : 13; this.lights = 6; this.h.toast('¡Se apagaron las luces! Los impostores atacan'); if (this.h.minions() < 7) for (let i = 0; i < 3; i++) this.h.spawnMinion('impostor'); }
+      else if (this.reactorT <= 0 && this.onGround) { this.reactorT = k === 1 ? 11 : 7; this.addWave(this.pos.x, this.pos.y, this.pos.z, { max: 18, speed: 11, dmg: 8, color: 0xff3030 }); this.h.sound('roar', 0.6); }
+      else if (k === 2 && this.meetT <= 0 && !player.dead) { this.meetT = 14; this.h.toast('¡Reunión de emergencia! Te arrastran'); this.state = 'meet'; this.timer = 1.2; }
+    } else if (this.state === 'stab') {
+      speed = 0; this.armR.rotation.x = -1.6;
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = 1.4; if (dist < 4.2 && !player.dead) this.h.hurtPlayer(11, (dx / dist) * 9, (dz / dist) * 9); this.h.sound('hit', 1); this.armR.rotation.x = 0.4; }
+    } else if (this.state === 'lunge') {
+      speed = 0; this.armR.rotation.x = -1.4;
+      if (!this.lungeHit && dist < 3.2 && !player.dead) { this.lungeHit = true; this.h.hurtPlayer(13, (dx / dist) * 12, (dz / dist) * 12); }
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = 1.8; this.armR.rotation.x = 0; }
+    } else if (this.state === 'meet') {
+      speed = 0; const p = this.h.player(); p.vel.x -= dx / dist * 22 * dt; p.vel.z -= dz / dist * 22 * dt;
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = 1.2; }
+    }
+    this.walk(dt, world, dx, dz, dist, this.state === 'walk' ? speed : 0);
+    this.walkA += dt * Math.hypot(this.vel.x, this.vel.z) * 1.4; const sw = Math.sin(this.walkA) * 0.6;
+    this.legL.rotation.x = sw; this.legR.rotation.x = -sw;
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+  dispose() { this.h.darkness(0); super.dispose(); }
+}
+
 export const BOSS_INFO = {
   storm: { name: 'Tormenta Wither', color: '#b060ff', hp: 360, desc: 'Colosal masa con tres cabezas. Rayo tractor, cráneos explosivos y un bloque de comandos como punto débil.', icon: '🌀' },
   dragon: { name: 'Ender Dragon', color: '#e040ff', hp: 300, desc: 'Vuela en círculos, pica en picado y lanza aliento. Destruye sus 4 cristales para poder herirlo.', icon: '🐉', make: (s, h, p, arena) => new EnderDragon(s, h, p, arena), up: 16 },
@@ -1002,4 +1154,9 @@ Object.assign(BOSS_INFO, {
   creepertitan: { name: 'Creeper Titán', color: '#60e060', hp: 320, desc: 'Se hincha y explota con un radio colosal. Tras estallar queda aturdido: es tu momento.', icon: '💥', make: (s, h, p) => new CreeperTitan(s, h, p), ground: true, dist: 30 },
   colossus: { name: 'Gólem Colosal', color: '#d0d0e0', hp: 420, desc: 'Puñetazos devastadores, golpes al suelo que lanzan ondas de choque y rocas. Furia roja en la fase 2.', icon: '🗿', make: (s, h, p) => new IronColossus(s, h, p), ground: true, dist: 22 },
 });
-export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking', 'colossus', 'creepertitan', 'blazeking', 'piglinking', 'endertitan', 'voidlord'];
+Object.assign(BOSS_INFO, {
+  goku: { name: 'Goku', color: '#ff9a20', hp: 450, desc: 'Kamehameha, teletransporte instantáneo y combos. Se vuelve Super Saiyajin y al final lanza la Genki Dama.', icon: '🟠', make: (s, h, p) => new Goku(s, h, p), ground: true, dist: 20 },
+  burns: { name: 'Sr. Burns', color: '#60e030', hp: 260, desc: 'Suelta perros, lanza barriles radiactivos que envenenan, se protege con un escudo y activa ondas nucleares.', icon: '☢', make: (s, h, p) => new MrBurns(s, h, p), ground: true, dist: 18 },
+  impostor: { name: 'Impostor Supremo', color: '#ff3030', hp: 340, desc: 'Embiste con el cuchillo, se teletransporta por los conductos, apaga las luces y llama a más impostores. «¡SUS!»', icon: '🔴', make: (s, h, p) => new ImpostorBoss(s, h, p), ground: true, dist: 16 },
+});
+export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking', 'colossus', 'creepertitan', 'blazeking', 'piglinking', 'endertitan', 'voidlord', 'goku', 'burns', 'impostor'];

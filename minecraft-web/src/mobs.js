@@ -213,6 +213,126 @@ export const MOB_TYPES = {
     },
     drops: () => [],
   },
+  villager: {
+    hw: 0.32, h: 1.95, hp: 20, speed: 1.2, hostile: false, name: 'Aldeano', villager: true, talk: ['Hrmm.', '¿Quieres comerciar?', '¡Buenos días!', 'Hrm… hrm.'], xp: 0,
+    build(g, o) {
+      const robe = 0x6b4a2a, skin = 0xc8957a;
+      o.legs = [limb(g, 0.3, 0.8, 0.3, robe, -0.15, 0.8, 0), limb(g, 0.3, 0.8, 0.3, robe, 0.15, 0.8, 0)];
+      part(g, 0.7, 1.0, 0.45, 0x8a5e34, 0, 1.3, 0); part(g, 0.74, 0.3, 0.5, 0xe8e0d0, 0, 1.55, 0); part(g, 0.9, 0.3, 0.5, robe, 0, 1.5, 0.34); // brazos cruzados
+      o.head = part(g, 0.55, 0.6, 0.55, skin, 0, 2.0, 0); part(g, 0.16, 0.34, 0.2, skin, 0, 1.92, 0.36); part(g, 0.58, 0.1, 0.1, 0x3a2a1a, 0, 2.2, 0.28);
+      part(g, 0.1, 0.1, 0.03, 0x1a6a2a, -0.14, 2.05, 0.28); part(g, 0.1, 0.1, 0.03, 0x1a6a2a, 0.14, 2.05, 0.28);
+    },
+    drops: () => [],
+  },
+  crewmate: {
+    hw: 0.34, h: 1.65, hp: 20, speed: 1.5, hostile: false, name: 'Tripulante', talk: ['Sus…', '¿Quién es el impostor?', '¡Ya hice mis tareas!', 'Eso es muy sospechoso…', 'Vi a alguien salir del conducto.'], xp: 2,
+    build(g, o, m) {
+      const c = AMONG_COLORS[(m.variant || 0) % AMONG_COLORS.length];
+      o.legs = [limb(g, 0.28, 0.5, 0.3, c, -0.18, 0.5, 0), limb(g, 0.28, 0.5, 0.3, c, 0.18, 0.5, 0)];
+      part(g, 0.74, 0.85, 0.52, c, 0, 0.95, 0); part(g, 0.62, 0.22, 0.46, c, 0, 1.46, 0); part(g, 0.22, 0.6, 0.42, c, 0, 0.95, -0.4);
+      part(g, 0.5, 0.3, 0.1, 0x9ed2e6, 0, 1.25, 0.28).material.emissive = new THREE.Color(0x4a7a90);
+      part(g, 0.18, 0.08, 0.06, 0xe8f8ff, -0.12, 1.32, 0.34);
+    },
+    drops: () => (Math.random() < 0.25 ? [[I.COAL, 1]] : []),
+  },
+  impostor: {
+    hw: 0.34, h: 1.65, hp: 34, speed: 3.3, hostile: true, name: 'Impostor', melee: true, damage: 8, reach: 1.7, cd: 1.1, teleports: true, tpCool: 6, xp: 12,
+    build(g, o) {
+      const c = 0xc51111;
+      o.legs = [limb(g, 0.28, 0.5, 0.3, c, -0.18, 0.5, 0), limb(g, 0.28, 0.5, 0.3, c, 0.18, 0.5, 0)];
+      part(g, 0.74, 0.85, 0.52, c, 0, 0.95, 0); part(g, 0.62, 0.22, 0.46, c, 0, 1.46, 0); part(g, 0.22, 0.6, 0.42, 0x8a0c0c, 0, 0.95, -0.4);
+      part(g, 0.5, 0.3, 0.1, 0x9ed2e6, 0, 1.25, 0.28).material.emissive = new THREE.Color(0x4a7a90); part(g, 0.18, 0.08, 0.06, 0xe8f8ff, -0.12, 1.32, 0.34);
+      part(g, 0.08, 0.5, 0.06, 0xd0d0d8, 0.5, 0.95, 0.34); part(g, 0.14, 0.08, 0.1, 0x303030, 0.5, 0.68, 0.34); // cuchillo
+    },
+    drops: () => (Math.random() < 0.5 ? [[I.COAL, 2]] : [[I.IRON, 1]]),
+  },
+  homer: {
+    hw: 0.42, h: 1.95, hp: 40, speed: 2.0, hostile: false, neutral: true, melee: true, damage: 6, reach: 1.6, name: 'Homer', talk: ['¡D\'oh!', 'Mmm… rosquillas.', '¡Woohoo!', '¿Dónde está Bart?', 'Para todo en la vida hay una cerveza.'], xp: 6,
+    build(g, o) {
+      const skin = 0xffd90f;
+      o.legs = [limb(g, 0.32, 0.8, 0.34, 0x5a7ec0, -0.18, 0.8, 0), limb(g, 0.32, 0.8, 0.34, 0x5a7ec0, 0.18, 0.8, 0)];
+      part(g, 0.86, 1.0, 0.55, 0xf4f4f4, 0, 1.3, 0); part(g, 0.7, 0.3, 0.5, 0x5a7ec0, 0, 0.88, 0);
+      o.arms = [limb(g, 0.26, 0.8, 0.26, skin, -0.55, 1.75, 0), limb(g, 0.26, 0.8, 0.26, skin, 0.55, 1.75, 0)];
+      o.head = part(g, 0.66, 0.62, 0.62, skin, 0, 2.05, 0); part(g, 0.5, 0.18, 0.2, 0xa89868, 0, 1.92, 0.34); part(g, 0.14, 0.14, 0.14, 0xffffff, -0.15, 2.12, 0.34); part(g, 0.14, 0.14, 0.14, 0xffffff, 0.15, 2.12, 0.34);
+      part(g, 0.05, 0.05, 0.04, 0x101010, -0.15, 2.12, 0.42); part(g, 0.05, 0.05, 0.04, 0x101010, 0.15, 2.12, 0.42); part(g, 0.22, 0.18, 0.2, skin, 0, 2.0, 0.42); part(g, 0.03, 0.14, 0.03, 0x202020, -0.06, 2.42, 0.05); part(g, 0.03, 0.14, 0.03, 0x202020, 0.06, 2.42, 0.05);
+    },
+    drops: () => [[I.DONUT, 1 + Math.floor(Math.random() * 3)], ...(Math.random() < 0.35 ? [[I.DUFF, 1]] : [])],
+  },
+  bart: {
+    hw: 0.26, h: 1.4, hp: 22, speed: 4.2, hostile: true, melee: true, damage: 3, reach: 1.15, cd: 0.8, name: 'Bart', talk: ['¡Ay, caramba!', '¡Cómete mis shorts!', 'No fui yo.', '¡Eeeeeso!'], xp: 5,
+    build(g, o) {
+      const skin = 0xffd90f;
+      o.legs = [limb(g, 0.2, 0.55, 0.22, skin, -0.1, 0.55, 0), limb(g, 0.2, 0.55, 0.22, skin, 0.1, 0.55, 0)]; part(g, 0.5, 0.2, 0.34, 0x2a5cc0, 0, 0.62, 0);
+      part(g, 0.5, 0.55, 0.34, 0xe86020, 0, 0.98, 0); o.arms = [limb(g, 0.18, 0.5, 0.2, skin, -0.34, 1.2, 0), limb(g, 0.18, 0.5, 0.2, skin, 0.34, 1.2, 0)];
+      o.head = part(g, 0.46, 0.46, 0.42, skin, 0, 1.5, 0);
+      for (let i = -2; i <= 2; i++) part(g, 0.08, 0.2 + (i % 2 ? 0.08 : 0), 0.08, skin, i * 0.1, 1.84, 0).rotation.z = -i * 0.15;
+      part(g, 0.1, 0.1, 0.1, 0xffffff, -0.12, 1.55, 0.24); part(g, 0.1, 0.1, 0.1, 0xffffff, 0.12, 1.55, 0.24); part(g, 0.04, 0.04, 0.03, 0x101010, -0.12, 1.55, 0.3); part(g, 0.04, 0.04, 0.03, 0x101010, 0.12, 1.55, 0.3);
+    },
+    drops: () => [[I.DONUT, 1]],
+  },
+  marge: {
+    hw: 0.34, h: 2.7, hp: 24, speed: 1.4, hostile: false, name: 'Marge', talk: ['Hmmmm…', '¡Homero!', 'Eso no está bien.', 'Niños, a cenar.'], xp: 2,
+    build(g, o) {
+      const skin = 0xffd90f, blue = 0x2f6fd0;
+      o.legs = [limb(g, 0.28, 0.7, 0.3, skin, -0.14, 0.7, 0), limb(g, 0.28, 0.7, 0.3, skin, 0.14, 0.7, 0)]; part(g, 0.7, 0.9, 0.45, 0x3aa060, 0, 1.15, 0.0); part(g, 0.74, 0.5, 0.5, 0x3aa060, 0, 0.8, 0);
+      o.arms = [limb(g, 0.2, 0.7, 0.22, skin, -0.46, 1.55, 0), limb(g, 0.2, 0.7, 0.22, skin, 0.46, 1.55, 0)]; o.head = part(g, 0.56, 0.52, 0.52, skin, 0, 1.85, 0);
+      part(g, 0.6, 1.1, 0.56, blue, 0, 2.5, 0); part(g, 0.5, 0.4, 0.5, blue, 0, 3.2, 0); for (let i = -2; i <= 2; i++) part(g, 0.07, 0.07, 0.07, 0xffffff, i * 0.1, 1.55, 0.26);
+      part(g, 0.12, 0.12, 0.12, 0xffffff, -0.12, 1.9, 0.28); part(g, 0.12, 0.12, 0.12, 0xffffff, 0.12, 1.9, 0.28); part(g, 0.04, 0.04, 0.03, 0x101010, -0.12, 1.9, 0.34); part(g, 0.04, 0.04, 0.03, 0x101010, 0.12, 1.9, 0.34);
+    },
+    drops: () => [[I.DONUT, 1]],
+  },
+  lisa: {
+    hw: 0.28, h: 1.7, hp: 20, speed: 1.8, hostile: false, name: 'Lisa', talk: ['La inteligencia importa.', 'Tocaré mi saxofón.', 'Ser vegetariana es lo correcto.', '¡Bart, no!'], xp: 2,
+    build(g, o) {
+      const skin = 0xffd90f;
+      o.legs = [limb(g, 0.2, 0.55, 0.22, skin, -0.1, 0.55, 0), limb(g, 0.2, 0.55, 0.22, skin, 0.1, 0.55, 0)]; part(g, 0.54, 0.7, 0.34, 0xd03a2a, 0, 0.95, 0); part(g, 0.6, 0.3, 0.36, 0xd03a2a, 0, 0.7, 0);
+      o.arms = [limb(g, 0.16, 0.5, 0.18, skin, -0.36, 1.25, 0), limb(g, 0.16, 0.5, 0.18, skin, 0.36, 1.25, 0)]; o.head = part(g, 0.48, 0.46, 0.44, skin, 0, 1.55, 0);
+      for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; part(g, 0.1, 0.3, 0.1, skin, Math.cos(a) * 0.25, 1.9, Math.sin(a) * 0.25).rotation.z = -Math.cos(a) * 0.6; }
+      part(g, 0.1, 0.1, 0.1, 0xffffff, -0.12, 1.6, 0.24); part(g, 0.1, 0.1, 0.1, 0xffffff, 0.12, 1.6, 0.24);
+    },
+    drops: () => [],
+  },
+  maggie: {
+    hw: 0.2, h: 0.75, hp: 12, speed: 0.9, hostile: false, name: 'Maggie', talk: ['*chupete*', '¡Pi pi pi!'], xp: 1,
+    build(g, o) {
+      const skin = 0xffd90f;
+      o.legs = [limb(g, 0.14, 0.2, 0.16, 0x7ab0e8, -0.09, 0.2, 0.1), limb(g, 0.14, 0.2, 0.16, 0x7ab0e8, 0.09, 0.2, 0.1)]; part(g, 0.34, 0.34, 0.3, 0x7ab0e8, 0, 0.4, 0);
+      o.head = part(g, 0.34, 0.3, 0.3, skin, 0, 0.7, 0.04); for (const x of [-0.07, 0.07]) part(g, 0.06, 0.06, 0.03, 0x101010, x, 0.72, 0.2); part(g, 0.08, 0.06, 0.06, 0xe03030, 0, 0.62, 0.22);
+      part(g, 0.05, 0.16, 0.05, skin, 0, 0.92, 0.04); part(g, 0.05, 0.12, 0.05, skin, 0.06, 0.9, 0.04).rotation.z = -0.4;
+    },
+    drops: () => [],
+  },
+  flanders: {
+    hw: 0.3, h: 1.9, hp: 24, speed: 1.6, hostile: false, name: 'Flanders', talk: ['¡Hola holita, vecinito!', 'Okily dokily.', '¡Qué diddly día!', 'Hola, Homero.'], xp: 2,
+    build(g, o) {
+      const skin = 0xffd90f;
+      o.legs = [limb(g, 0.26, 0.8, 0.28, 0x4a5a8a, -0.14, 0.8, 0), limb(g, 0.26, 0.8, 0.28, 0x4a5a8a, 0.14, 0.8, 0)]; part(g, 0.6, 0.85, 0.4, 0x4a9a3a, 0, 1.2, 0);
+      o.arms = [limb(g, 0.2, 0.75, 0.22, 0x4a9a3a, -0.4, 1.6, 0), limb(g, 0.2, 0.75, 0.22, 0x4a9a3a, 0.4, 1.6, 0)]; o.head = part(g, 0.5, 0.5, 0.46, skin, 0, 1.93, 0);
+      part(g, 0.3, 0.07, 0.06, 0x1a1a1a, 0, 1.83, 0.26); part(g, 0.5, 0.1, 0.46, 0x2a1a10, 0, 2.2, 0); part(g, 0.4, 0.14, 0.04, 0xcfe8f0, 0, 1.97, 0.26);
+    },
+    drops: () => [],
+  },
+  saibaman: {
+    hw: 0.24, h: 1.15, hp: 14, speed: 3.8, hostile: true, name: 'Saibaman', creeper: true, explodeR: 2.4, fuseTime: 1.1, xp: 8,
+    build(g, o) {
+      const c = 0x4ea040;
+      o.legs = [limb(g, 0.14, 0.5, 0.16, c, -0.12, 0.5, 0), limb(g, 0.14, 0.5, 0.16, c, 0.12, 0.5, 0)]; part(g, 0.4, 0.5, 0.24, c, 0, 0.78, 0); o.arms = [limb(g, 0.1, 0.5, 0.12, c, -0.27, 0.98, 0), limb(g, 0.1, 0.5, 0.12, c, 0.27, 0.98, 0)];
+      o.head = part(g, 0.5, 0.42, 0.42, c, 0, 1.15, 0); part(g, 0.1, 0.1, 0.04, 0xf0e020, -0.12, 1.2, 0.22); part(g, 0.1, 0.1, 0.04, 0xf0e020, 0.12, 1.2, 0.22); part(g, 0.16, 0.05, 0.04, 0x102010, 0, 1.06, 0.22);
+      for (const [x, y] of [[0.1, 0.8], [-0.1, 0.65]]) part(g, 0.1, 0.1, 0.03, 0x2a6a22, x, y, 0.13);
+      part(g, 0.08, 0.2, 0.08, c, 0, 1.46, 0);
+    },
+    drops: () => (Math.random() < 0.08 ? [[I.DBALL, 1]] : []),
+  },
+  dog: {
+    hw: 0.3, h: 0.85, hp: 10, speed: 5.2, hostile: true, melee: true, damage: 3, reach: 1.1, cd: 0.8, name: 'Perro de Burns', xp: 3,
+    build(g, o) {
+      const c = 0x8a8a90;
+      part(g, 0.4, 0.4, 0.9, c, 0, 0.55, 0); o.head = part(g, 0.34, 0.34, 0.4, c, 0, 0.72, 0.6); part(g, 0.2, 0.15, 0.2, 0x303030, 0, 0.64, 0.84); part(g, 0.1, 0.16, 0.08, 0x303030, -0.14, 0.95, 0.55); part(g, 0.1, 0.16, 0.08, 0x303030, 0.14, 0.95, 0.55);
+      part(g, 0.12, 0.12, 0.35, c, 0, 0.7, -0.6).rotation.x = 0.7;
+      o.legs = [[-0.14, 0.3], [0.14, 0.3], [-0.14, -0.3], [0.14, -0.3]].map(([x, z]) => limb(g, 0.12, 0.35, 0.12, 0x6a6a70, x, 0.35, z));
+    },
+    drops: () => [],
+  },
   zombie: {
     hw: 0.3, h: 1.8, hp: 20, speed: 2.5, hostile: true, name: 'Zombi', damage: 3,
     build(g, o) {
@@ -243,7 +363,9 @@ export const MOB_TYPES = {
   },
 };
 
-const HOSTILE_NIGHT = ['zombie', 'zombie', 'zombie', 'creeper', 'creeper', 'skeleton', 'skeleton', 'skeleton', 'spider', 'spider', 'enderman'];
+const AMONG_COLORS = [0xc51111, 0x132ed1, 0x117f2d, 0xed54ba, 0xef7d0e, 0xf5f557, 0x3f474e, 0xd6e0f0, 0x6b2fbb, 0x71491e, 0x38fedc, 0x50ef39];
+const HOSTILE_NIGHT = ['zombie', 'zombie', 'zombie', 'creeper', 'creeper', 'skeleton', 'skeleton', 'skeleton', 'spider', 'spider', 'enderman', 'impostor', 'impostor', 'saibaman', 'saibaman', 'bart'];
+const CROSSOVER_PASSIVE = ['crewmate', 'crewmate', 'crewmate', 'homer', 'marge', 'lisa', 'maggie', 'flanders'];
 const HOSTILE_CAVE = ['zombie', 'zombie', 'creeper', 'skeleton', 'skeleton', 'spider'];
 
 export class Mob {
@@ -252,8 +374,9 @@ export class Mob {
     this.pos = new THREE.Vector3(x, y, z); this.vel = new THREE.Vector3();
     this.hw = this.def.hw; this.h = this.def.h;
     this.hp = this.def.hp; this.yaw = Math.random() * Math.PI * 2;
+    this.variant = Math.floor(Math.random() * 12);
     this.group = new THREE.Group(); this.parts = {};
-    this.def.build(this.group, this.parts);
+    this.def.build(this.group, this.parts, this);
     this.model = new THREE.Group(); this.model.add(this.group); scene.add(this.model);
     this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.wanderT = 0; this.wanderDir = 0; this.moving = false;
@@ -325,7 +448,7 @@ export class MobManager {
         const look = player.lookDir(), tx = m.pos.x - player.pos.x, ty = m.pos.y + 2.6 - (player.pos.y + 1.62), tz = m.pos.z - player.pos.z, tl = Math.hypot(tx, ty, tz);
         if ((look.x * tx + look.y * ty + look.z * tz) / tl > 0.985) m.aggro = true;
       }
-      if (m.def.enderman && m.aggro && mode === 'survival' && !player.dead) hostile = true;
+      if ((m.def.enderman || m.def.neutral) && m.aggro && mode === 'survival' && !player.dead) hostile = true;
       let target = null, speed = m.def.speed;
       if (m.type === 'hoglin' && hostile && dist < 10) speed *= 1.9;
       if (m.def.static) hostile = hostile && true;
@@ -350,11 +473,11 @@ export class MobManager {
       }
       // Creeper: mecha
       if (m.def.creeper) {
-        if (hostile && dist < 3 && Math.abs(dy) < 2) { m.fuse += dt; if (m.fuse - dt <= 0) this.hooks.sound('hiss'); moving = false; }
+        if (hostile && dist < (m.def.explodeR ? 2.2 : 3) && Math.abs(dy) < 2) { m.fuse += dt; if (m.fuse - dt <= 0) this.hooks.sound('hiss'); moving = false; }
         else m.fuse = Math.max(0, m.fuse - dt * 2);
         const s = 1 + (m.fuse > 0 ? Math.sin(m.fuse * 30) * 0.04 + m.fuse * 0.15 : 0);
         m.group.scale.set(s, s, s);
-        if (m.fuse >= 1.5) { this.hooks.explode(m.pos.x, m.pos.y + 0.8, m.pos.z, 3.2); m.dispose(this.scene); this.list.splice(i, 1); continue; }
+        if (m.fuse >= (m.def.fuseTime || 1.5)) { this.hooks.explode(m.pos.x, m.pos.y + 0.8, m.pos.z, m.def.explodeR || 3.2); m.dispose(this.scene); this.list.splice(i, 1); continue; }
       }
       const inWater = w.isLiquid(Math.floor(m.pos.x), Math.floor(m.pos.y + 0.2), Math.floor(m.pos.z));
       const fx = -Math.sin(m.yaw), fz = -Math.cos(m.yaw);
@@ -375,8 +498,8 @@ export class MobManager {
       }
 
       // Ataque del zombi y del piglin
-      if ((m.type === 'zombie' || m.type === 'piglin' || m.type === 'witherskeleton' || m.type === 'hoglin' || m.type === 'endermite') && hostile && dist < (m.def.reach || 1.2) && Math.abs(dy) < 1.8 && m.cool <= 0) {
-        m.cool = m.type === 'endermite' ? 0.8 : 1; this.hooks.hurtPlayer(m.def.damage, (dx / (dist || 1)) * (m.type === 'hoglin' ? 9 : 5), (dz / (dist || 1)) * (m.type === 'hoglin' ? 9 : 5));
+      if ((m.def.melee || m.type === 'zombie' || m.type === 'piglin' || m.type === 'witherskeleton' || m.type === 'hoglin' || m.type === 'endermite') && hostile && dist < (m.def.reach || 1.2) && Math.abs(dy) < 1.8 && m.cool <= 0) {
+        m.cool = m.def.cd || (m.type === 'endermite' ? 0.8 : 1); this.hooks.hurtPlayer(m.def.damage, (dx / (dist || 1)) * (m.type === 'hoglin' ? 9 : 5), (dz / (dist || 1)) * (m.type === 'hoglin' ? 9 : 5));
         if (m.def.effect) this.hooks.effect(m.def.effect[0], m.def.effect[1]);
       }
       // Araña y enderman: cuerpo a cuerpo
@@ -398,10 +521,10 @@ export class MobManager {
         if (!w.raycast(o, dv, L)) { m.cool = 2.2; this.shootArrow(o, dv.multiplyScalar(1).setY(dv.y + 0.04 * L / 10)); }
       }
       // Enderman: se teletransporta cuando está enfadado
-      if (m.def.enderman && m.aggro) {
+      if ((m.def.enderman && m.aggro) || (m.def.teleports && hostile)) {
         m.tpT = (m.tpT === undefined ? 4 : m.tpT) - dt;
         if (m.tpT <= 0 && dist > 3) {
-          m.tpT = 5 + Math.random() * 3;
+          m.tpT = (m.def.tpCool || 5) + Math.random() * 3;
           const a = Math.random() * Math.PI * 2, d2 = 4 + Math.random() * 5, nx = Math.floor(player.pos.x + Math.cos(a) * d2), nz = Math.floor(player.pos.z + Math.sin(a) * d2), top = w.topY(nx, nz);
           if (top > 0 && !w.isSolid(nx, top + 1, nz)) { this.hooks.tp(m.pos.x, m.pos.y + 1, m.pos.z); m.pos.set(nx + 0.5, top + 1, nz + 0.5); m.vel.set(0, 0, 0); this.hooks.tp(m.pos.x, m.pos.y + 1, m.pos.z); }
         }
@@ -554,11 +677,22 @@ export class MobManager {
       const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);
       return [x, z];
     };
+    if (this.list.filter((m) => m.type === 'villager').length < 5 && Math.random() < 0.45) { // aldeanos en casas con mesa, horno o cofre cerca
+      for (let tries = 0; tries < 10; tries++) {
+        const x = Math.floor(player.pos.x + (Math.random() - 0.5) * 52), z = Math.floor(player.pos.z + (Math.random() - 0.5) * 52);
+        for (let y = Math.min(CH - 6, Math.floor(player.pos.y) + 10); y > Math.max(3, Math.floor(player.pos.y) - 10); y--) {
+          if (w.getBlock(x, y - 1, z) !== B.PLANKS || w.isSolid(x, y, z) || w.isSolid(x, y + 1, z) || w.isSolid(x, y + 2, z)) continue;
+          let furn = false; for (let a = -4; a <= 4 && !furn; a++) for (let b = -4; b <= 4; b++) { const id = w.getBlock(x + a, y, z + b); if (id === B.TABLE || id === B.FURNACE || id === B.CHEST) { furn = true; break; } }
+          if (furn && Math.hypot(x - player.pos.x, z - player.pos.z) > 8) { this.add('villager', x + 0.5, y, z + 0.5); return; }
+          break;
+        }
+      }
+    }
     if (passive < 10 && day > 0.45) {
       const [x, z] = pickColumn(16, 40); const top = w.topY(x, z);
       if (top > 0) {
         const id = w.getBlock(x, top, z);
-        if ((id === B.GRASS || id === B.SNOW) && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z)) this.add(['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)], x + 0.5, top + 1, z + 0.5);
+        if ((id === B.GRASS || id === B.SNOW) && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z)) this.add(Math.random() < 0.28 ? CROSSOVER_PASSIVE[Math.floor(Math.random() * CROSSOVER_PASSIVE.length)] : ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)], x + 0.5, top + 1, z + 0.5);
       }
     }
     if (mode !== 'survival' || hostile >= 8) return;
