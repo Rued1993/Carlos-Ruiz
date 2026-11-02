@@ -6,7 +6,7 @@ import { Weather, WEATHER_NAMES } from './weather.js';
 import { WitherStorm } from './boss.js';
 import { BOSS_INFO, BOSS_ORDER } from './bosses.js';
 import { Quests, QUESTS } from './quests.js';
-import { World, terrainHeight, biomeAt, SEA, CH } from './world.js';
+import { World, terrainHeight, terrainInfo, biomeAt, SEA, CH } from './world.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
 import { Sky } from './sky.js';
@@ -50,7 +50,7 @@ const materials = {
 };
 
 // ---------- Ajustes (persistentes) ----------
-const settings = { radius: 6, fov: 75, sens: 1, vol: 0.5, cam: 0 };
+const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
 const LOOT = {
@@ -90,7 +90,8 @@ let state = 'menu'; // menu | loading | play | inv | pause | dead
 let mode = 'survival', radius = settings.radius, camMode = settings.cam | 0;
 const furnaces = new Map(); // "x,y,z" -> {slots:[entrada,combustible,salida], burn, burnMax, cook}
 let model, furnRenderT = 0, weather, boss = null, ritual = null, bossHooks, quests, panelId = null;
-let xpLevel = 0, xpPts = 0, darkTarget = 0, mmT = 0, trackT = 0;
+let xpLevel = 0, xpPts = 0, darkTarget = 0, mmT = 0, trackT = 0, wBudget = 2;
+let worldId = null, worldName = 'Mundo', playedSec = 0, createdAt = 0, thumbData = null, thumbReq = false, lastSaved = 0;
 const xpNeed = (l) => 6 + l * 4;
 function addXp(n) { xpPts += n; while (xpPts >= xpNeed(xpLevel)) { xpPts -= xpNeed(xpLevel); xpLevel++; if (ui) ui.toast('¡Nivel ' + xpLevel + '!'); sound('pop'); } }
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1;
@@ -113,7 +114,8 @@ function findSpawnColumn(sd) {
   for (let r = 0; r < 600; r += 5)
     for (let a = 0; a < 12; a++) {
       const x = Math.round(Math.cos((a / 12) * Math.PI * 2) * r), z = Math.round(Math.sin((a / 12) * Math.PI * 2) * r);
-      if (terrainHeight(x, z, sd) > SEA + 3) return [x, z];
+      const ti = terrainInfo(x, z, sd);
+      if (ti.h > SEA + 3 && ti.h < SEA + 16 && ti.biome !== 'ocean' && ti.biome !== 'mountains') return [x, z];
     }
   return [0, 0];
 }
@@ -461,19 +463,30 @@ function onDeath() {
 
 // ---------- Guardado ----------
 async function saveGame() {
-  if (!world) return;
-  const meta = { v: 1, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
+  if (!world || !worldId) return false;
+  const meta = { v: 2, gen: 2, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
     hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON(), quests: quests.toJSON(), xp: { l: xpLevel, p: xpPts } };
   const entries = [...world.unsaved].filter((k) => world.chunks.has(k)).map((k) => [k, new Uint8Array(world.chunks.get(k))]);
-  const ok = await save.saveAll(meta, entries);
-  if (ok) world.unsaved.clear();
+  const ok = await save.saveWorld(worldId, meta, entries, { name: worldName, mode, seed, created: createdAt, played: Math.floor(playedSec), level: xpLevel, thumb: thumbData });
+  if (ok) { world.unsaved.clear(); lastSaved = Date.now(); }
+  return ok;
+}
+function captureThumb() {
+  try { const c = document.createElement('canvas'); c.width = 160; c.height = 90; c.getContext('2d').drawImage(canvas, 0, 0, 160, 90); thumbData = c.toDataURL('image/jpeg', 0.6); } catch {}
+}
+async function saveWithFeedback() {
+  thumbReq = true; await new Promise((r) => setTimeout(r, 120));
+  const ok = await saveGame();
+  ui.toast(ok ? '💾 Partida guardada' : '⚠ No se pudo guardar');
+  return ok;
 }
 
 // ---------- Arranque de partida ----------
-async function startGame({ seed: sd, mode: md, saved, meta }) {
+async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played }) {
   state = 'loading'; mode = md; seed = sd;
+  worldId = id; worldName = name || 'Mundo'; createdAt = created || Date.now(); playedSec = played || 0; thumbData = null;
   showOverlay('menu'); $('msg').textContent = 'Generando mundo…';
-  for (const id of ['bContinue', 'bSurvival', 'bCreative']) $(id).classList.add('hidden');
+  $('menuBody').classList.add('hidden');
 
   furnaces.clear();
   world = new World(scene, materials, seed, saved);
@@ -549,7 +562,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, openPanel, closePanel, addXp, get xp() { return [xpLevel, xpPts]; } };
+  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, openPanel, closePanel, addXp, terrainInfo, get xp() { return [xpLevel, xpPts]; } };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -612,7 +625,13 @@ function resize() {
 addEventListener('resize', resize); resize();
 
 $('bResume').onclick = () => { audio.unlock(); canvas.requestPointerLock(); };
-$('bSave').onclick = async () => { await saveGame(); location.reload(); };
+$('bSave').onclick = async () => { thumbReq = true; await new Promise((r) => setTimeout(r, 120)); await saveGame(); location.reload(); };
+$('bSaveNow').onclick = async () => { await saveWithFeedback(); $('bSaveNow').textContent = '💾 Guardado ✔'; setTimeout(() => ($('bSaveNow').textContent = '💾 Guardar partida'), 1500); };
+$('bExport').onclick = async () => {
+  await saveGame();
+  const blob = await save.exportWorld(worldId), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = worldName.replace(/[^\w\-]+/g, '_') + '.mcw'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
 $('bRespawn').onclick = () => { audio.unlock(); player.respawn(); state = 'play'; showOverlay(null); ui.renderStats(); canvas.requestPointerLock(); };
 $('bCam').onclick = () => setCamMode((camMode + 1) % 3);
 $('bPSummon').onclick = () => { showOverlay(null); state = 'play'; openPanel('summon'); };
@@ -649,7 +668,8 @@ function frame(now) {
     gameU.uTime.value += dt; gameU.uWind.value = 0.25 + weather.wind.s * 2.2;
     audio.setAmbient(weather.intensity * (0.25 + 0.75 * exposed) * (player.headUnder ? 0.2 : 1), weather.wind.s * (0.3 + 0.7 * exposed) * (weather.state === 'clear' ? 0.25 : 1), weather.t * 0.4);
     sky.update(dt, camera.position, radius * 16, player.headUnder, weather.wind);
-    world.update(player.pos.x, player.pos.z, radius, 2);
+    const pend = world.update(player.pos.x, player.pos.z, radius, wBudget);
+    wBudget = pend > 40 ? 4 : 2;
     player.push.x = player.push.y = player.push.z = 0;
     if (ritual) updateRitual(dt);
     if (boss) {
@@ -687,19 +707,56 @@ function frame(now) {
     }
     mmT -= dt; if (mmT <= 0) { mmT = 0.4; drawMinimap(); }
     trackT -= dt; if (trackT <= 0) { trackT = 0.5; updateTracker(); }
-    saveT += dt; if (saveT > 20) { saveT = 0; saveGame(); }
+    playedSec += dt;
+    saveT += dt; if (saveT > 25) { saveT = 0; thumbReq = true; }
   }
   renderer.render(scene, camera);
+  if (thumbReq) { thumbReq = false; captureThumb(); saveGame(); }
 }
 requestAnimationFrame(frame);
 
 // ---------- Menú inicial ----------
 (async function menu() {
-  const data = await save.loadAll();
-  $('msg').textContent = 'Elige cómo jugar';
-  if (data.meta) $('bContinue').classList.remove('hidden');
-  const fresh = async (md) => { audio.unlock(); await save.wipe(); startGame({ seed: 1 + Math.floor(Math.random() * 900000), mode: md, saved: new Map(), meta: null }); };
+  const fmt = (sec) => (sec >= 3600 ? Math.floor(sec / 3600) + ' h ' : '') + Math.floor((sec % 3600) / 60) + ' min';
+  const hashSeed = (str) => { let h = 7; for (const c of str) h = (Math.imul(h, 31) + c.charCodeAt(0)) | 0; return Math.abs(h) % 900000 + 1; };
+  async function refresh() {
+    const list = await save.listWorlds();
+    $('worldsBox').classList.toggle('hidden', !list.length);
+    $('worldList').innerHTML = list.map((w) => `<div class="wcard" data-id="${w.id}"><img src="${w.thumb || ''}" alt=""><div><b>${(w.name || 'Mundo').replace(/</g, '&lt;')}</b><small>${w.mode === 'creative' ? 'Creativo' : 'Supervivencia'} · nivel ${w.level || 0} · ${fmt(w.played || 0)} · ${new Date(w.updated).toLocaleString()}</small></div><div class="wb"><button class="play" data-act="play">▶ Jugar</button><button data-act="export" title="Exportar">⬇</button><button data-act="rename" title="Renombrar">✎</button><button data-act="del" title="Borrar">🗑</button></div></div>`).join('');
+    return list;
+  }
+  let list = await refresh();
+  $('msg').textContent = list.length ? 'Elige un mundo o crea uno nuevo' : 'Elige cómo jugar';
+  const fresh = (md) => {
+    audio.unlock();
+    const name = $('wName').value.trim() || `Mundo ${list.length + 1}`, sv = $('wSeed').value.trim();
+    const sd = !sv ? 1 + Math.floor(Math.random() * 900000) : /^\d+$/.test(sv) ? Number(sv) % 900000 + 1 : hashSeed(sv);
+    startGame({ id: save.newId(), name, seed: sd, mode: md, saved: new Map(), meta: null });
+  };
   $('bSurvival').onclick = () => fresh('survival');
   $('bCreative').onclick = () => fresh('creative');
-  $('bContinue').onclick = () => { audio.unlock(); startGame({ seed: data.meta.seed, mode: data.meta.mode, saved: data.chunks, meta: data.meta }); };
+  $('worldList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button'), card = e.target.closest('.wcard'); if (!btn || !card) return;
+    const id = card.dataset.id, w = list.find((x) => x.id === id);
+    if (btn.dataset.act === 'play') {
+      audio.unlock(); $('msg').textContent = 'Cargando mundo…';
+      const data = await save.loadWorld(id);
+      if (!data.meta) { $('msg').textContent = 'No se pudo leer este mundo'; return; }
+      startGame({ id, name: w.name, seed: data.meta.seed, mode: data.meta.mode, saved: data.chunks, meta: data.meta, created: w.created, played: w.played });
+    } else if (btn.dataset.act === 'del') {
+      if (confirm(`¿Borrar "${w.name}" para siempre?`)) { await save.deleteWorld(id); list = await refresh(); }
+    } else if (btn.dataset.act === 'rename') {
+      const n = prompt('Nuevo nombre', w.name); if (n && n.trim()) { await save.renameWorld(id, n.trim().slice(0, 28)); list = await refresh(); }
+    } else if (btn.dataset.act === 'export') {
+      const blob = await save.exportWorld(id), a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = (w.name || 'mundo').replace(/[^\w\-]+/g, '_') + '.mcw'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+  });
+  $('bImport').onclick = () => $('fImport').click();
+  $('fImport').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { await save.importWorld(f); list = await refresh(); $('msg').textContent = '✔ Partida importada'; } catch { $('msg').textContent = '⚠ Archivo no válido'; }
+    e.target.value = '';
+  };
+  window.__menu = { refresh: async () => (list = await refresh()) };
 })();

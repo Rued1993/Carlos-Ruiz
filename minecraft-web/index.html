@@ -115,6 +115,16 @@
     #msg { color: #ffe84a !important; font-size: 15px !important; }
     #keys { display: grid; grid-template-columns: auto auto; gap: 2px 18px; text-align: left; font-size: 12px; background: rgba(0,0,0,.35); padding: 10px 16px; border: 2px solid #222; margin-top: 8px; }
     #keys kbd { background: #ddd; color: #222; padding: 0 5px; border-bottom: 2px solid #777; border-radius: 2px; font: bold 11px var(--font); }
+    .newbox { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .newbox input { background: #1b1b1b; color: #fff; border: 2px solid #777; padding: 9px 12px; font: bold 14px var(--font); width: 200px; }
+    #worldsBox { width: min(640px, 92vw); background: rgba(0,0,0,.45); border: 2px solid #222; padding: 8px 10px; }
+    #worldsBox h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: 2px; color: #ffe84a; text-align: left; }
+    #worldList { max-height: 210px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+    .wcard { display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; align-items: center; background: #3a3a3a; border: 2px solid #111; border-top-color: #777; border-left-color: #777; padding: 5px; text-align: left; }
+    .wcard img { width: 96px; height: 54px; object-fit: cover; background: #111; image-rendering: auto; }
+    .wcard b { display: block; font-size: 14px; } .wcard small { color: #bbb; font-size: 11px; }
+    .wb { display: flex; gap: 4px; } .wb button { background: #6a6a6a; color: #fff; border: 2px solid #111; border-top-color: #bbb; border-left-color: #bbb; padding: 6px 9px; font: bold 12px var(--font); cursor: pointer; }
+    .wb button:hover { background: #8a9ad8; } .wb button.play { background: #4f8a30; }
     #ver { position: fixed; left: 8px; bottom: 6px; font-size: 11px; color: #aaa; text-shadow: 1px 1px #000; }
   </style>
 </head>
@@ -176,9 +186,16 @@
     <div id="menu">
       <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡5 jefes y misiones!</div></div>
       <p id="msg">Cargando…</p>
-      <button class="btn primary hidden" id="bContinue">Continuar mundo guardado</button>
-      <button class="btn" id="bSurvival">Nuevo mundo · Supervivencia</button>
-      <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+      <div id="menuBody" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+        <div id="worldsBox" class="hidden"><h3>Tus mundos guardados</h3><div id="worldList"></div></div>
+        <div class="newbox">
+          <input id="wName" placeholder="Nombre del mundo" maxlength="28" />
+          <input id="wSeed" placeholder="Semilla (opcional)" maxlength="20" />
+        </div>
+        <button class="btn primary" id="bSurvival">Nuevo mundo · Supervivencia</button>
+        <button class="btn" id="bCreative">Nuevo mundo · Creativo</button>
+        <button class="btn" id="bImport">⬆ Importar partida (.mcw)</button>
+        <input type="file" id="fImport" accept=".mcw,application/octet-stream" class="hidden" />
       <div id="keys">
         <span><kbd>WASD</kbd> mover</span><span><kbd>Espacio</kbd> saltar / nadar</span>
         <span><kbd>Shift</kbd> correr</span><span><kbd>E</kbd> inventario</span>
@@ -188,6 +205,7 @@
         <span><kbd>B</kbd> invocar jefes y mobs</span><span><kbd>M</kbd> misiones</span>
         <span><kbd>T</kbd> cambiar clima</span><span><kbd>F3</kbd> datos de depuración</span>
       </div>
+      </div>
     </div>
     <div id="pause" class="hidden">
       <div id="logo"><h1 style="font-size:40px">PAUSA</h1></div>
@@ -195,10 +213,12 @@
       <button class="btn" id="bCam">Cámara: Primera persona</button>
       <button class="btn" id="bPSummon">⚔ Invocar jefes (B)</button>
       <button class="btn" id="bPQuests">📜 Misiones (M)</button>
-      <div class="row"><span>Render</span><input id="rRadius" type="range" min="3" max="10" step="1" value="6" /><b id="vRadius">6</b></div>
+      <div class="row"><span>Render</span><input id="rRadius" type="range" min="3" max="16" step="1" value="8" /><b id="vRadius">6</b></div>
       <div class="row"><span>Campo visión</span><input id="rFov" type="range" min="60" max="110" step="1" value="75" /><b id="vFov">75</b></div>
       <div class="row"><span>Sensibilidad</span><input id="rSens" type="range" min="0.3" max="2.5" step="0.1" value="1" /><b id="vSens">1.0</b></div>
       <div class="row"><span>Volumen</span><input id="rVol" type="range" min="0" max="1" step="0.05" value="0.5" /><b id="vVol">50</b></div>
+      <button class="btn primary" id="bSaveNow">💾 Guardar partida</button>
+      <button class="btn" id="bExport">⬇ Exportar partida (.mcw)</button>
       <button class="btn" id="bSave">Guardar y salir al menú</button>
     </div>
     <div id="death" class="hidden">

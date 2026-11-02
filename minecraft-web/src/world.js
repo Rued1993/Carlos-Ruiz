@@ -4,8 +4,8 @@ import { TILE_INDEX, TILE_COUNT } from './atlas.js';
 import { fbm, hash2, noise3 } from './noise.js';
 
 export const CS = 16;   // tamaño del chunk en X/Z
-export const CH = 80;   // altura del mundo
-export const SEA = 25;  // nivel del mar
+export const CH = 128;  // altura del mundo
+export const SEA = 30;  // nivel del mar
 
 const ckey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 const ckx = (k) => Math.floor(k / 65536) - 32768;
@@ -13,25 +13,47 @@ const ckz = (k) => (k % 65536) - 32768;
 
 // dir, sombreado, esquinas {p: posición, uv}
 const FACES = [
-  { dir: [-1, 0, 0], shade: 0.8, ax: 0, corners: [{ p: [0, 1, 0], uv: [0, 1] }, { p: [0, 0, 0], uv: [0, 0] }, { p: [0, 1, 1], uv: [1, 1] }, { p: [0, 0, 1], uv: [1, 0] }] },
-  { dir: [1, 0, 0], shade: 0.8, ax: 0, corners: [{ p: [1, 1, 1], uv: [0, 1] }, { p: [1, 0, 1], uv: [0, 0] }, { p: [1, 1, 0], uv: [1, 1] }, { p: [1, 0, 0], uv: [1, 0] }] },
-  { dir: [0, -1, 0], shade: 0.5, ax: 1, bottom: true, corners: [{ p: [1, 0, 1], uv: [1, 0] }, { p: [0, 0, 1], uv: [0, 0] }, { p: [1, 0, 0], uv: [1, 1] }, { p: [0, 0, 0], uv: [0, 1] }] },
+  { dir: [-1, 0, 0], shade: 0.9, ax: 0, corners: [{ p: [0, 1, 0], uv: [0, 1] }, { p: [0, 0, 0], uv: [0, 0] }, { p: [0, 1, 1], uv: [1, 1] }, { p: [0, 0, 1], uv: [1, 0] }] },
+  { dir: [1, 0, 0], shade: 0.9, ax: 0, corners: [{ p: [1, 1, 1], uv: [0, 1] }, { p: [1, 0, 1], uv: [0, 0] }, { p: [1, 1, 0], uv: [1, 1] }, { p: [1, 0, 0], uv: [1, 0] }] },
+  { dir: [0, -1, 0], shade: 0.75, ax: 1, bottom: true, corners: [{ p: [1, 0, 1], uv: [1, 0] }, { p: [0, 0, 1], uv: [0, 0] }, { p: [1, 0, 0], uv: [1, 1] }, { p: [0, 0, 0], uv: [0, 1] }] },
   { dir: [0, 1, 0], shade: 1.0, ax: 1, top: true, corners: [{ p: [0, 1, 1], uv: [1, 1] }, { p: [1, 1, 1], uv: [0, 1] }, { p: [0, 1, 0], uv: [1, 0] }, { p: [1, 1, 0], uv: [0, 0] }] },
-  { dir: [0, 0, -1], shade: 0.65, ax: 2, corners: [{ p: [1, 0, 0], uv: [0, 0] }, { p: [0, 0, 0], uv: [1, 0] }, { p: [1, 1, 0], uv: [0, 1] }, { p: [0, 1, 0], uv: [1, 1] }] },
-  { dir: [0, 0, 1], shade: 0.65, ax: 2, corners: [{ p: [0, 0, 1], uv: [0, 0] }, { p: [1, 0, 1], uv: [1, 0] }, { p: [0, 1, 1], uv: [0, 1] }, { p: [1, 1, 1], uv: [1, 1] }] },
+  { dir: [0, 0, -1], shade: 0.82, ax: 2, corners: [{ p: [1, 0, 0], uv: [0, 0] }, { p: [0, 0, 0], uv: [1, 0] }, { p: [1, 1, 0], uv: [0, 1] }, { p: [0, 1, 0], uv: [1, 1] }] },
+  { dir: [0, 0, 1], shade: 0.82, ax: 2, corners: [{ p: [0, 0, 1], uv: [0, 0] }, { p: [1, 0, 1], uv: [1, 0] }, { p: [0, 1, 1], uv: [0, 1] }, { p: [1, 1, 1], uv: [1, 1] }] },
 ];
 for (const f of FACES) f.tan = [0, 1, 2].filter((a) => a !== f.ax);
 const AO = [0.5, 0.68, 0.84, 1];
+const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-export function biomeAt(x, z, seed) {
-  const t = fbm(x * 0.0035, z * 0.0035, seed + 500, 2);
-  return t < 0.36 ? 'snow' : t > 0.64 ? 'desert' : 'plains';
+// Terreno: continentes, océanos profundos, cordilleras, colinas y ríos
+export function terrainInfo(x, z, seed) {
+  const cont = fbm(x * 0.0022, z * 0.0022, seed, 4);
+  const mn = fbm(x * 0.0055, z * 0.0055, seed + 31, 3);
+  const ridged = 1 - Math.abs(2 * fbm(x * 0.011, z * 0.011, seed + 37, 3) - 1);
+  const hills = fbm(x * 0.013, z * 0.013, seed + 7, 3), detail = fbm(x * 0.05, z * 0.05, seed + 9, 2);
+  let h, m = 0;
+  if (cont < 0.4) h = SEA - 2 - (0.4 - cont) * 80 + detail * 3;
+  else {
+    const land = Math.min(1, (cont - 0.4) / 0.5);
+    h = SEA + 1 + land * 10 + hills * 12 + detail * 3;
+    m = smoothstep(0.52, 0.78, mn) * smoothstep(0.45, 0.6, cont);
+    h += m * (ridged * 62 + 14);
+  }
+  if (cont >= 0.4 && m < 0.5) { // ríos
+    const rv = Math.abs(fbm(x * 0.0032 + 11, z * 0.0032 - 7, seed + 61, 2) - 0.5);
+    if (rv < 0.016) { const f = smoothstep(0.016, 0.004, rv); h = h * (1 - f) + (SEA - 2) * f; }
+  }
+  h = Math.max(6, Math.min(CH - 8, Math.floor(h)));
+  const t = fbm(x * 0.0035, z * 0.0035, seed + 500, 2), hm = fbm(x * 0.004, z * 0.004, seed + 900, 2);
+  let biome;
+  if (h <= SEA - 1) biome = 'ocean';
+  else if (m > 0.3) biome = 'mountains';
+  else if (t < 0.34) biome = 'snow';
+  else if (t > 0.64) biome = hm > 0.55 ? 'jungle' : 'desert';
+  else biome = t > 0.55 && hm > 0.6 ? 'jungle' : 'plains';
+  return { h, biome, m, t, hm };
 }
-export function terrainHeight(x, z, seed) {
-  const base = fbm(x * 0.008, z * 0.008, seed, 3);
-  const detail = fbm(x * 0.04, z * 0.04, seed + 7, 3);
-  return Math.floor(12 + base * 30 + detail * 6);
-}
+export const terrainHeight = (x, z, seed) => terrainInfo(x, z, seed).h;
+export function biomeAt(x, z, seed) { return terrainInfo(x, z, seed).biome; }
 
 export class World {
   constructor(scene, materials, seed = 1337, saved = new Map()) {
@@ -57,7 +79,8 @@ export class World {
   generateChunk(cx, cz) {
     const k = ckey(cx, cz);
     if (this.saved.has(k)) {
-      const data = new Uint8Array(this.saved.get(k));
+      let data = new Uint8Array(this.saved.get(k));
+      if (data.length !== CS * CS * CH) { const full = new Uint8Array(CS * CS * CH); full.set(data.subarray(0, Math.min(data.length, full.length))); data = full; } // mundos de versiones antiguas
       this.chunks.set(k, data);
       this.modified.add(k);
       this.computeTops(k, data);
@@ -70,22 +93,24 @@ export class World {
     for (let lz = 0; lz < CS; lz++) {
       for (let lx = 0; lx < CS; lx++) {
         const wx = x0 + lx, wz = z0 + lz;
-        const h = terrainHeight(wx, wz, seed);
-        const biome = biomeAt(wx, wz, seed);
-        const beach = h <= SEA + 1;
+        const info = terrainInfo(wx, wz, seed), h = info.h, biome = info.biome;
         let top = B.GRASS, sub = B.DIRT;
-        if (beach || biome === 'desert') { top = B.SAND; sub = B.SAND; }
+        if (biome === 'ocean' || h <= SEA + 1) { top = B.SAND; sub = B.SAND; }
+        else if (biome === 'desert') { top = B.SAND; sub = B.SAND; }
         else if (biome === 'snow') top = B.SNOW;
+        else if (biome === 'mountains') {
+          if (h > 92) { top = B.SNOW; sub = B.SNOW; } else if (h > 64) { top = B.STONE; sub = B.STONE; }
+        }
         for (let y = 0; y <= h && y < CH; y++) {
           let b = B.STONE;
           if (y === h) b = top;
           else if (y >= h - 3) b = sub;
           else {
             const r = hash2(wx * 31 + y, wz * 17 - y, seed + 77 + y);
-            if (y < 50 && r < 0.025) b = B.COAL_ORE;
-            else if (y < 40 && r > 0.975 && r < 0.99) b = B.IRON_ORE;
-            else if (y < 24 && r > 0.99 && r < 0.996) b = B.GOLD_ORE;
-            else if (y < 14 && r > 0.996) b = B.DIAMOND_ORE;
+            if (y < 64 && r < 0.025) b = B.COAL_ORE;
+            else if (y < 48 && r > 0.975 && r < 0.99) b = B.IRON_ORE;
+            else if (y < 28 && r > 0.99 && r < 0.996) b = B.GOLD_ORE;
+            else if (y < 16 && r > 0.996) b = B.DIAMOND_ORE;
           }
           if (y === 0 || (y === 1 && hash2(wx, wz, seed + 3) < 0.5)) b = B.BEDROCK;
           // cuevas: túneles = intersección de dos superficies de ruido, más cavernas amplias
@@ -100,43 +125,122 @@ export class World {
         for (let y = h + 1; y <= SEA; y++) data[this.idx(lx, y, lz)] = B.WATER;
       }
     }
-    // Árboles y cactus deterministas (incluye los de chunks vecinos que rozan este)
-    for (let tz = z0 - 2; tz < z0 + CS + 2; tz++) {
-      for (let tx = x0 - 2; tx < x0 + CS + 2; tx++) {
+    const put = (wx, wy, wz, id, onlyAir) => {
+      const lx = wx - x0, lz = wz - z0;
+      if (lx < 0 || lz < 0 || lx >= CS || lz >= CS || wy >= CH || wy < 0) return;
+      const i = this.idx(lx, wy, lz);
+      if (onlyAir && data[i] !== AIR) return;
+      data[i] = id;
+    };
+    const villages = this.villagesNear(x0, z0);
+    // Árboles, selva y cactus deterministas (incluye los de chunks vecinos que rozan este)
+    for (let tz = z0 - 3; tz < z0 + CS + 3; tz++) {
+      for (let tx = x0 - 3; tx < x0 + CS + 3; tx++) {
         const r = hash2(tx, tz, seed + 99);
-        if (r > 0.04) continue;
-        const biome = biomeAt(tx, tz, seed);
-        const h = terrainHeight(tx, tz, seed);
-        if (h <= SEA + 1) continue;
-        const forest = fbm(tx * 0.012, tz * 0.012, seed + 800, 2) > 0.58;
-        const put = (wx, wy, wz, id, onlyAir) => {
-          const lx = wx - x0, lz = wz - z0;
-          if (lx < 0 || lz < 0 || lx >= CS || lz >= CS || wy >= CH || wy < 0) return;
-          const i = this.idx(lx, wy, lz);
-          if (onlyAir && data[i] !== AIR) return;
-          data[i] = id;
-        };
+        if (r > 0.06) continue;
+        const info = terrainInfo(tx, tz, seed), h = info.h, biome = info.biome;
+        if (h <= SEA + 1 || biome === 'ocean' || biome === 'mountains') continue;
+        if (villages.some((v) => Math.abs(v.x - tx) < 26 && Math.abs(v.z - tz) < 26)) continue;
         if (biome === 'desert') {
           if (r < 0.004) { const ch = 1 + Math.floor(hash2(tx, tz, seed + 6) * 3); for (let t = 1; t <= ch; t++) put(tx, h + t, tz, B.CACTUS, false); }
           continue;
         }
-        const density = forest ? 0.03 : biome === 'snow' ? 0.007 : 0.005;
+        const forest = fbm(tx * 0.012, tz * 0.012, seed + 800, 2) > 0.58;
+        const density = biome === 'jungle' ? 0.055 : forest ? 0.03 : biome === 'snow' ? 0.007 : 0.005;
         if (r > density) continue;
-        const trunk = 4 + Math.floor(hash2(tx, tz, seed + 5) * 3);
+        const jungle = biome === 'jungle';
+        const trunk = jungle ? 8 + Math.floor(hash2(tx, tz, seed + 5) * 6) : 4 + Math.floor(hash2(tx, tz, seed + 5) * 3);
+        const rad0 = jungle ? 3 : 2;
         for (let dy = -2; dy <= 1; dy++) {
-          const rad = dy <= -1 ? 2 : 1;
+          const rad = dy <= -1 ? rad0 : rad0 - 1;
           for (let dz = -rad; dz <= rad; dz++)
             for (let dx = -rad; dx <= rad; dx++) {
-              if (rad === 2 && Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
+              if (rad >= 2 && Math.abs(dx) === rad && Math.abs(dz) === rad) continue;
               put(tx + dx, h + trunk + dy, tz + dz, B.LEAVES, true);
             }
         }
         for (let t = 1; t <= trunk; t++) put(tx, h + t, tz, B.LOG, false);
       }
     }
+    for (const v of villages) this.buildVillage(v, put);
     this.chunks.set(k, data);
     this.computeTops(k, data);
     return data;
+  }
+
+  // ---------- pueblos ----------
+  villageAt(rx, rz) {
+    const key = rx + ',' + rz;
+    if (!this.vcache) this.vcache = new Map();
+    if (this.vcache.has(key)) return this.vcache.get(key);
+    const seed = this.seed;
+    let res = null;
+    if (hash2(rx, rz, seed + 444) < 0.3) {
+      const x = rx * 128 + 28 + Math.floor(hash2(rx, rz, seed + 445) * 72), z = rz * 128 + 28 + Math.floor(hash2(rx, rz, seed + 446) * 72);
+      const c = terrainInfo(x, z, seed);
+      if (c.biome !== 'ocean' && c.biome !== 'mountains' && c.h > SEA + 1 && c.h < SEA + 20) {
+        const flat = [[12, 0], [-12, 0], [0, 12], [0, -12], [10, 10], [-10, -10]].every(([dx, dz]) => { const e = terrainInfo(x + dx, z + dz, seed); return Math.abs(e.h - c.h) <= 3 && e.biome !== 'ocean'; });
+        if (flat) res = { x, z, H: c.h, biome: c.biome };
+      }
+    }
+    this.vcache.set(key, res);
+    return res;
+  }
+  villagesNear(x0, z0) {
+    const out = [];
+    for (let rx = Math.floor((x0 - 40) / 128); rx <= Math.floor((x0 + CS + 40) / 128); rx++)
+      for (let rz = Math.floor((z0 - 40) / 128); rz <= Math.floor((z0 + CS + 40) / 128); rz++) { const v = this.villageAt(rx, rz); if (v) out.push(v); }
+    return out;
+  }
+  buildVillage(v, put) {
+    const seed = this.seed, H = v.H;
+    const wallA = v.biome === 'desert' ? B.SAND : B.PLANKS, floor = B.PLANKS;
+    // pozo central
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
+      for (let y = H - 3; y <= H; y++) put(v.x + dx, y, v.z + dz, edge ? B.COBBLE : (y === H ? B.WATER : B.WATER), false);
+      for (let y = H + 1; y <= H + 6; y++) put(v.x + dx, y, v.z + dz, 0, false);
+      if (edge) put(v.x + dx, H + 1, v.z + dz, B.COBBLE, false);
+    }
+    for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) for (let y = H + 2; y <= H + 4; y++) put(v.x + dx, y, v.z + dz, B.LOG, false);
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) put(v.x + dx, H + 5, v.z + dz, B.PLANKS, false);
+    // senderos de grava/adoquín hacia las casas
+    const houses = [[-14, -8], [14, -8], [-14, 10], [14, 10], [0, -16], [0, 17]];
+    houses.forEach(([hx, hz], i) => {
+      if (hash2(v.x + hx, v.z + hz, seed + 5) < 0.12 && i > 3) return; // algunas casas faltan
+      const cx = v.x + hx, cz = v.z + hz;
+      const dirx = Math.abs(hx) > Math.abs(hz) ? -Math.sign(hx) : 0, dirz = dirx ? 0 : -Math.sign(hz);
+      // camino desde la puerta al pozo
+      for (let t = 0; t < 40; t++) {
+        const px = cx + dirx * (4 + t), pz = cz + dirz * (4 + t);
+        if (Math.abs(px - v.x) < 3 && Math.abs(pz - v.z) < 3) break;
+        put(px, H, pz, B.COBBLE, false); for (let y = H + 1; y <= H + 3; y++) put(px, y, pz, 0, false);
+      }
+      // cimientos, suelo y limpieza
+      for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
+        const wx = cx + dx, wz = cz + dz, th = terrainHeight(wx, wz, seed);
+        for (let y = Math.max(1, th - 1); y <= H - 1; y++) put(wx, y, wz, B.COBBLE, false);
+        for (let y = H + 1; y <= H + 9; y++) put(wx, y, wz, 0, false);
+        if (Math.abs(dx) <= 3 && Math.abs(dz) <= 3) put(wx, H, wz, floor, false);
+      }
+      // paredes
+      for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
+        if (Math.abs(dx) !== 3 && Math.abs(dz) !== 3) continue;
+        const corner = Math.abs(dx) === 3 && Math.abs(dz) === 3;
+        for (let y = H + 1; y <= H + 3; y++) {
+          let id = corner ? B.LOG : wallA;
+          const side = !corner && ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0));
+          if (side && y === H + 2) id = B.GLASS;
+          if (dx === dirx * 3 && dz === dirz * 3 && y <= H + 2) id = 0; // puerta
+          put(cx + dx, y, cz + dz, id, false);
+        }
+      }
+      // tejado en pirámide
+      for (let r = 4, y = H + 4; r >= 0; r--, y++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) put(cx + dx, y, cz + dz, r === 0 ? B.LOG : B.PLANKS, false);
+      // interior: antorcha, mesa y horno
+      put(cx - 2, H + 1, cz - 2, B.TORCH, false); put(cx + 2, H + 1, cz - 2, B.TABLE, false); put(cx + 2, H + 1, cz + 2, B.FURNACE, false); put(cx - 2, H + 1, cz + 2, B.TORCH, false);
+      put(cx + dirx * 4 + dirz, H + 1, cz + dirz * 4 + dirx, B.TORCH, false);
+    });
   }
 
   scanTorches(k, data) {
@@ -146,6 +250,10 @@ export class World {
   }
 
   computeTops(k, data) {
+    let hi = 0;
+    for (let i = data.length - 1; i >= 0; i--) if (data[i]) { hi = Math.floor(i / (CS * CS)); break; }
+    if (!this.hi) this.hi = new Map();
+    this.hi.set(k, hi);
     const tops = new Int16Array(CS * CS).fill(-1);
     for (let lz = 0; lz < CS; lz++)
       for (let lx = 0; lx < CS; lx++) {
@@ -195,6 +303,7 @@ export class World {
     const lx = x - cx * CS, lz = z - cz * CS;
     const ii = this.idx(lx, y, lz), old = c[ii];
     c[ii] = id;
+    if (id && y > this.hi.get(k)) this.hi.set(k, y);
     this.modified.add(k); this.unsaved.add(k);
     if (old === B.TORCH || id === B.TORCH) {
       let set = this.torches.get(k);
@@ -303,6 +412,13 @@ export class World {
       if (lx >= 0 && lz >= 0 && lx < CS && lz < CS && wy >= 0 && wy < CH) return data[(wy * CS + lz) * CS + lx];
       return this.getBlock(wx, wy, wz);
     };
+    // Tinte de vegetación por clima (seco/amarillento, húmedo/verde, frío/azulado)
+    const tint = new Float32Array(CS * CS * 3);
+    for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
+      const wx = x0 + lx, wz = z0 + lz, hm = fbm(wx * 0.004, wz * 0.004, this.seed + 900, 2), t = fbm(wx * 0.0035, wz * 0.0035, this.seed + 500, 2);
+      const w = smoothstep(0.35, 0.7, hm), cold = smoothstep(0.42, 0.28, t), i = (lz * CS + lx) * 3;
+      tint[i] = (1.15 * (1 - w) + 0.78 * w) * (1 - 0.18 * cold); tint[i + 1] = 1.0 * (1 - w) + 1.1 * w; tint[i + 2] = (0.6 * (1 - w) + 0.8 * w) + 0.3 * cold;
+    }
     const eps = 0.0015;
     const cell = [0, 0, 0], tmp = [0, 0, 0];
     const ao = [0, 0, 0, 0], lg = [0, 0, 0, 0], bg = [0, 0, 0, 0];
@@ -339,7 +455,8 @@ export class World {
       return Math.pow(lm[(y * LW + (z - lmz0)) * LW + (x - lmx0)] / 10, 1.7);
     };
 
-    for (let y = 0; y < CH; y++)
+    const yMax = Math.min(CH - 1, (this.hi.get(k) || CH) + 1);
+    for (let y = 0; y <= yMax; y++)
       for (let lz = 0; lz < CS; lz++)
         for (let lx = 0; lx < CS; lx++) {
           const id = data[(y * CS + lz) * CS + lx];
@@ -368,6 +485,8 @@ export class World {
             if (OPAQUE[nid] || (nid === id && def.transparent)) continue;
             const tile = TILE_INDEX[f.top ? def.tiles[0] : f.bottom ? def.tiles[1] : def.tiles[2]];
             const [ta, tb] = f.tan;
+            let cr = 1, cg = 1, cb = 1;
+            if (id === B.LEAVES || (id === B.GRASS && f.top)) { const ti = (lz * CS + lx) * 3; cr = tint[ti]; cg = tint[ti + 1]; cb = tint[ti + 2]; }
             const centerL = (ny < CH ? this.skyLit(nx, ny, nz) : 1);
             const centerB = bAt(nx, ny, nz);
             // AO y luz por vértice
@@ -400,7 +519,7 @@ export class World {
               L.nor.push(f.dir[0], f.dir[1], f.dir[2]);
               L.uv.push((tile + (c.uv[0] ? 1 - eps : eps)) / TILE_COUNT, c.uv[1] ? 1 - eps : eps);
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
-              L.col.push(v, v, v);
+              L.col.push(v * cr, v * cg, v * cb);
               L.bl.push(f.shade * AO[ao[ci]] * bg[ci]);
               L.sw.push(id === B.LEAVES ? 1 : id === B.WATER ? 2 : 0);
             }

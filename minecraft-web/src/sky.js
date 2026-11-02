@@ -127,7 +127,7 @@ export class Sky {
     this.cloudX += wind.x / (wind.s || 1) * sp * dt; this.cloudZ += wind.z / (wind.s || 1) * sp * dt;
     const size = 64 * 12; // cada píxel de la textura = 12 bloques
     const shade = (0.3 + 0.7 * raw) * (1 - 0.5 * wet);
-    for (const [m, mat, y, mul] of [[this.clouds, this.cloudMat, 92, 1], [this.clouds2, this.cloudMat2, 86, 0.7]]) {
+    for (const [m, mat, y, mul] of [[this.clouds, this.cloudMat, 150, 1], [this.clouds2, this.cloudMat2, 142, 0.7]]) {
       m.position.set(playerPos.x, y, playerPos.z);
       mat.map.repeat.set(900 / size, 900 / size);
       mat.map.offset.set((playerPos.x + this.cloudX * mul) / size + (mul < 1 ? 0.37 : 0), -(playerPos.z + this.cloudZ * mul) / size);
