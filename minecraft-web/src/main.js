@@ -13,6 +13,7 @@ import { BOSS_INFO, BOSS_ORDER } from './bosses.js';
 import { Quests, QUESTS } from './quests.js';
 import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from './world.js';
 import { Ambient } from './ambient.js';
+import { ChunkPool } from './chunkpool.js';
 import { Gamepads, PAD_ACTIONS, BTN_NAMES, defaultPadConfig } from './gamepad.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -509,11 +510,14 @@ function updateTracker() {
 
 
 // ===================================================================== DIMENSIONES Y PORTALES
-let kind = 'normal', ob = { count: 0 };
+let kind = 'normal', ob = { count: 0 }, chunkPool = null;
 function makeWorld(name, saved) {
   const g = new THREE.Group(); g.visible = false; scene.add(g);
   const w = new World(g, materials, name === 'overworld' ? seed : name === 'nether' ? seed + 500 : seed + 900, saved || new Map(), name);
-  w.group = g; w.kind = kind; return w;
+  w.group = g; w.kind = kind;
+  if (!chunkPool && typeof Worker !== 'undefined' && !/[?&]noworker/.test(location.search)) { try { chunkPool = new ChunkPool(); } catch { chunkPool = null; } }
+  if (chunkPool) w.useWorkers(chunkPool);
+  return w;
 }
 function loadAround(w, ax, az, r = 3) {
   return new Promise((resolve) => { const tick = () => { const pend = w.update(ax, az, r, 12); if (pend > 0) setTimeout(tick, 0); else resolve(); }; tick(); });

@@ -29,6 +29,7 @@ npm run build    # versión de producción en dist/
 - **Más estructuras:** pirámides del desierto (7 cofres), templos de la selva, iglús, puestos de saqueadores y ruinas; aldeas ampliadas con herrería, iglesia con campanario, biblioteca, farolas y más casas. Los **aldeanos** viven en las casas y comercian (clic derecho).
 - **Crossovers:** **Among Us** (tripulantes de colores, impostores que se teletransportan, **Impostor Supremo**), **Los Simpson** (Homer, Bart, Marge, Lisa, Maggie, Flanders, perros y el jefe **Sr. Burns**) y **Dragon Ball** (saibamen explosivos, el jefe **Goku** con Kamehameha, Super Saiyajin y Genki Dama, semillas del ermitaño y las **7 Bolas de Dragón** que invocan a Shenlong para pedir un deseo).
 - **Modo One Block:** botón del menú. Un mundo vacío con un solo bloque que se regenera al romperlo, con fases (Llanura → Bosque y cueva → Desierto y nieve → Mina profunda → Nether → End → Caos crossover), mobs, recompensas y jefes por hitos.
+- **Web Workers:** la generación del terreno y el mallado de chunks se hacen en hilos aparte (la carga en el hilo principal baja de ~80 ms a ~7 ms por fotograma al avanzar). Añade `?noworker` a la URL para volver al modo síncrono.
 - **Supervivencia, crafteo, horno, antorchas, clima con tormentas y rayos, minimapa, XP y efectos de estado.**
 - **Creativo:** bloques infinitos, vuelo y paleta con todo.
 

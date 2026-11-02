@@ -79,6 +79,9 @@ export class World {
     this.onChunkMeshed = null;
   }
 
+  // Activa la generación y el mallado en Web Workers
+  useWorkers(pool) { this.pool = pool; this.inflightGen = new Set(); this.inflightMesh = new Set(); this.jobTok = new Map(); this.tokN = 0; this.lastPcx = 0; this.lastPcz = 0; }
+
   idx(lx, y, lz) { return (y * CS + lz) * CS + lx; }
 
   // ---------- generación ----------
@@ -660,6 +663,8 @@ export class World {
   update(px, pz, radius, budget = 2) {
     const pcx = Math.floor(px / CS), pcz = Math.floor(pz / CS);
     const gen = [], mesh = [];
+    this.lastPcx = pcx; this.lastPcz = pcz;
+    if (this.pool && this.pool.failed) this.pool = null; // si el worker falla, se vuelve al modo síncrono
     for (let dz = -radius - 1; dz <= radius + 1; dz++)
       for (let dx = -radius - 1; dx <= radius + 1; dx++) {
         const cx = pcx + dx, cz = pcz + dz, k = ckey(cx, cz), d = dx * dx + dz * dz;
@@ -670,7 +675,21 @@ export class World {
         }
       }
     gen.sort((a, b) => a.d - b.d);
-    for (let i = 0; i < Math.min(budget * 2, gen.length); i++) this.generateChunk(gen[i].cx, gen[i].cz);
+    if (this.pool) {
+      let syncN = 0;
+      for (const g of gen) {
+        const k = ckey(g.cx, g.cz);
+        if (this.saved.has(k)) { if (syncN++ < budget * 2) this.generateChunk(g.cx, g.cz); continue; }
+        if (this.inflightGen.has(k)) continue;
+        if (this.inflightGen.size >= 24) break;
+        this.inflightGen.add(k);
+        this.pool.request({ t: 'gen', dim: this.dim, seed: this.seed, kind: this.kind || 'normal', cx: g.cx, cz: g.cz }, [], (r) => {
+          this.inflightGen.delete(k);
+          if (this.chunks.has(k)) return;
+          this.chunks.set(k, r.data); this.computeTops(k, r.data); this.scanTorches(k, r.data);
+        });
+      }
+    } else for (let i = 0; i < Math.min(budget * 2, gen.length); i++) this.generateChunk(gen[i].cx, gen[i].cz);
     mesh.sort((a, b) => a.d - b.d);
     // Solo se mallan chunks cuyos 8 vecinos ya tengan datos (para bordes correctos)
     let built = 0, pending = 0;
@@ -678,13 +697,28 @@ export class World {
       let ready = true;
       for (let a = -1; a <= 1 && ready; a++) for (let b = -1; b <= 1; b++) if (!this.chunks.has(ckey(m.cx + a, m.cz + b))) { ready = false; break; }
       if (!ready) { pending++; continue; }
-      if (built < (m.d < -5000 ? 6 : budget)) { this.buildMesh(m.cx, m.cz); built++; } else pending++;
+      const urgent = m.d < -5000, k = ckey(m.cx, m.cz);
+      if (this.pool && !urgent) { // mallado en worker
+        pending++;
+        if (this.inflightMesh.has(k) || this.inflightMesh.size >= 10) continue;
+        const bufs = [];
+        for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) bufs.push(new Uint8Array(this.chunks.get(ckey(m.cx + a, m.cz + b))));
+        const tok = ++this.tokN; this.jobTok.set(k, tok); this.inflightMesh.add(k); this.dirty.delete(k);
+        this.pool.request({ t: 'mesh', dim: this.dim, seed: this.seed, cx: m.cx, cz: m.cz, bufs }, bufs.map((u) => u.buffer), (r) => {
+          this.inflightMesh.delete(k);
+          if (this.jobTok.get(k) !== tok) return; // obsoleto: hubo una malla síncrona o se descargó
+          this.jobTok.delete(k);
+          if (Math.abs(m.cx - this.lastPcx) > radius + 2 || Math.abs(m.cz - this.lastPcz) > radius + 2) return;
+          this._applyLists(m.cx, m.cz, r.lists); this.dirty.delete(k);
+          if (this.onChunkMeshed) this.onChunkMeshed(m.cx, m.cz);
+        });
+      } else if (built < (urgent ? 6 : budget)) { this.buildMesh(m.cx, m.cz); built++; } else pending++;
     }
     // Liberar lo lejano
     for (const [k, m] of this.meshes) {
       if (Math.abs(ckx(k) - pcx) > radius + 2 || Math.abs(ckz(k) - pcz) > radius + 2) {
         this.disposeMesh(m);
-        this.meshes.delete(k);
+        this.meshes.delete(k); if (this.jobTok) this.jobTok.delete(k);
       }
     }
     if ((this.unloadT -= 1) <= 0) {
@@ -703,10 +737,19 @@ export class World {
     for (const o of [m.opaque, m.trans]) if (o) { this.scene.remove(o); o.geometry.dispose(); }
   }
 
+  // Malla síncrona (ediciones del jugador y modo sin workers)
   buildMesh(cx, cz) {
     const k = ckey(cx, cz);
+    if (!this.chunks.get(k)) return;
+    if (this.jobTok) this.jobTok.delete(k); // invalida un resultado de worker en vuelo
+    this._applyLists(cx, cz, this.meshLists(cx, cz));
+  }
+
+  // Cálculo puro de la geometría de un chunk (se ejecuta en el hilo principal o en un worker)
+  meshLists(cx, cz) {
+    const k = ckey(cx, cz);
     const data = this.chunks.get(k);
-    if (!data) return;
+    if (!data) return null;
     const x0 = cx * CS, z0 = cz * CS;
     const lists = [
       { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], sk: [], ind: [] }, // opaco
@@ -833,20 +876,26 @@ export class World {
           }
         }
 
+    return lists.map((L) => ({ n: L.ind.length, pos: Float32Array.from(L.pos), nor: Float32Array.from(L.nor), uv: Float32Array.from(L.uv), col: Float32Array.from(L.col), bl: Float32Array.from(L.bl), sw: Float32Array.from(L.sw), sk: Float32Array.from(L.sk), ind: Uint32Array.from(L.ind) }));
+  }
+
+  _applyLists(cx, cz, lists) {
+    const k = ckey(cx, cz), x0 = cx * CS, z0 = cz * CS;
     const old = this.meshes.get(k);
     if (old) this.disposeMesh(old);
     const entry = { opaque: null, trans: null };
+    const BA = THREE.BufferAttribute;
     const make = (L, mat, order, cast) => {
-      if (!L.ind.length) return null;
+      if (!L.n) return null;
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(L.pos, 3));
-      geo.setAttribute('normal', new THREE.Float32BufferAttribute(L.nor, 3));
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute(L.uv, 2));
-      geo.setAttribute('color', new THREE.Float32BufferAttribute(L.col, 3));
-      geo.setAttribute('blight', new THREE.Float32BufferAttribute(L.bl, 1));
-      geo.setAttribute('sway', new THREE.Float32BufferAttribute(L.sw, 1));
-      geo.setAttribute('skyl', new THREE.Float32BufferAttribute(L.sk, 1));
-      geo.setIndex(L.ind);
+      geo.setAttribute('position', new BA(L.pos, 3));
+      geo.setAttribute('normal', new BA(L.nor, 3));
+      geo.setAttribute('uv', new BA(L.uv, 2));
+      geo.setAttribute('color', new BA(L.col, 3));
+      geo.setAttribute('blight', new BA(L.bl, 1));
+      geo.setAttribute('sway', new BA(L.sw, 1));
+      geo.setAttribute('skyl', new BA(L.sk, 1));
+      geo.setIndex(new BA(L.ind, 1));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x0, 0, z0);
