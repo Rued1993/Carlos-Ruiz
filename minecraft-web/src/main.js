@@ -115,6 +115,12 @@ try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') 
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
 const STORMY = new Set(['storm', 'dragon', 'wither', 'herobrine']);
 const LOOT = {
+  colossus: [[I.STAR, 1], [I.IRON, 24], [I.DIAMOND, 8], [I.GOLD, 6]],
+  creepertitan: [[I.STAR, 1], [I.COAL, 32], [I.DIAMOND, 8], [I.GOLD, 8]],
+  blazeking: [[I.STAR, 1], [I.COAL, 24], [I.DIAMOND, 8], [I.GOLD, 10]],
+  piglinking: [[I.STAR, 2], [I.GOLD, 32], [I.DIAMOND, 10]],
+  endertitan: [[I.STAR, 2], [I.PEARL, 6], [I.DIAMOND, 12]],
+  voidlord: [[I.STAR, 2], [I.PEARL, 4], [I.DIAMOND, 12], [I.GOLD, 12]],
   ravager: [[I.STAR, 1], [I.DIAMOND, 8], [I.GOLD, 10]],
   evoker: [[I.STAR, 1], [I.DIAMOND, 6], [I.GOLD, 8], [I.PEARL, 1]],
   ghast: [[I.STAR, 1], [I.DIAMOND, 6], [I.COAL, 16]],
@@ -303,18 +309,23 @@ function summonBoss(type) {
   const dist = inf.dist || (type === 'warden' ? 12 : type === 'guardian' ? 16 : type === 'wither' ? 20 : 26);
   const x = player.pos.x + fx * dist, z = player.pos.z + fz * dist;
   let y;
-  if (inf.ground) { const t = world.topY(Math.floor(x), Math.floor(z)); y = t > 0 ? t + 1 : player.pos.y; }
+  if (inf.ground) { const t = floorAt(Math.floor(x), Math.floor(z)); y = t !== null ? t : player.pos.y; }
   else y = player.pos.y + (inf.up === undefined ? 10 : inf.up) + (type === 'storm' ? 10 : 0);
   if (type === 'dragon' && dim === 'end') { spawnBossOf('dragon', 0.5, 100, 0.5, { cx: 0, cy: 64, cz: 0, pillars: endPillars() }); dragonSpawned = true; }
   else spawnBossOf(type, x, y, z);
   ui.toast('¡' + inf.name + ' ha sido invocado!');
   return true;
 }
+function floorAt(x, z) { // suelo con 2 de aire encima; en el Overworld, la superficie
+  if (dim === 'overworld') { const t = world.topY(x, z); return t > 0 ? t + 1 : null; }
+  for (let y = Math.min(CH - 6, Math.floor(player.pos.y) + 12); y > 4; y--) if (world.isSolid(x, y - 1, z) && !LIQUID[world.getBlock(x, y - 1, z)] && !world.isSolid(x, y, z) && !world.isSolid(x, y + 1, z) && !LIQUID[world.getBlock(x, y, z)]) return y;
+  return null;
+}
 function summonMob(type) {
   const look = player.lookDir(), l = Math.hypot(look.x, look.z) || 1;
   for (let d = 6; d <= 10; d += 2) {
-    const x = Math.floor(player.pos.x + (look.x / l) * d), z = Math.floor(player.pos.z + (look.z / l) * d), t = world.topY(x, z);
-    if (t > 0) { mobs.add(type, x + 0.5, t + 1, z + 0.5); return; }
+    const x = Math.floor(player.pos.x + (look.x / l) * d), z = Math.floor(player.pos.z + (look.z / l) * d), t = floorAt(x, z);
+    if (t !== null) { mobs.add(type, x + 0.5, MOB_TYPES[type].fly ? t + 4 : t, z + 0.5); return; }
   }
   mobs.add(type, player.pos.x + 3, player.pos.y + 1, player.pos.z);
 }
@@ -751,8 +762,8 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
     player: () => player,
     spawnMinion: (type) => {
       for (let i = 0; i < 6; i++) {
-        const a = Math.random() * Math.PI * 2, d = 10 + Math.random() * 8, x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d), top = world.topY(x, z);
-        if (top > 0 && !world.isSolid(x, top + 1, z)) { mobs.add(type || (Math.random() < 0.6 ? 'zombie' : 'creeper'), x + 0.5, top + 1, z + 0.5); return; }
+        const a = Math.random() * Math.PI * 2, d = 10 + Math.random() * 8, x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d), top = floorAt(x, z);
+        if (top !== null) { const tp = type || (dim === 'nether' ? 'piglin' : dim === 'end' ? 'endermite' : Math.random() < 0.6 ? 'zombie' : 'creeper'); mobs.add(tp, x + 0.5, MOB_TYPES[tp].fly ? top + 4 : top, z + 0.5); return; }
       }
     },
     loot: (x, y, z, type = 'storm') => { for (const [id, n] of (LOOT[type] || LOOT.storm)) drops.spawn(x, y, z, id, n); },
@@ -951,7 +962,7 @@ function frame(now) {
       $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${dim === 'overworld' ? WEATHER_NAMES[weather.state] : DIM_NAMES[dim]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
       $('xpFill').style.width = (xpPts / xpNeed(xpLevel)) * 100 + '%'; $('xpLvl').textContent = xpLevel;
       $('xp').style.visibility = mode === 'survival' ? 'visible' : 'hidden';
-      const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`);
+      const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`); if (player.effects.levitate > 0) ef.push(`<span style="border-color:#fff">☁ Levitación ${Math.ceil(player.effects.levitate)}s</span>`);
       $('effects').innerHTML = ef.join('');
       $('darkness').style.opacity = darkTarget;
     }

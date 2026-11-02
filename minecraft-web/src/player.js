@@ -23,7 +23,7 @@ export class Player {
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
     this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
-    this.effects = { poison: 0, fatigue: 0, burn: 0 }; this.poisonT = 0; this.burnT = 0;
+    this.effects = { poison: 0, fatigue: 0, burn: 0, levitate: 0 }; this.poisonT = 0; this.burnT = 0;
   }
 
   collides(px, py, pz) {
@@ -55,7 +55,7 @@ export class Player {
   heal(n) { this.hp = Math.min(20, this.hp + n); }
   eat(n) { this.food = Math.min(20, this.food + n); }
   respawn() {
-    this.hp = 20; this.food = 20; this.air = 10; this.dead = false; this.invuln = 2; this.effects.poison = 0; this.effects.fatigue = 0; this.effects.burn = 0;
+    this.hp = 20; this.food = 20; this.air = 10; this.dead = false; this.invuln = 2; this.effects.poison = 0; this.effects.fatigue = 0; this.effects.burn = 0; this.effects.levitate = 0;
     this.pos.copy(this.spawn); this.vel.set(0, 0, 0); this.fallStart = null;
   }
 
@@ -100,6 +100,7 @@ export class Player {
     }
 
     this.vel.x += this.push.x; this.vel.z += this.push.z; this.vel.y += this.push.y * dt;
+    if (this.effects.levitate > 0) { this.effects.levitate -= dt; this.vel.y = Math.min(this.vel.y + 24 * dt, 3.2); this.fallStart = null; }
     const wasGround = this.onGround;
     const steps = 2, sdt = dt / steps;
     this.onGround = false;

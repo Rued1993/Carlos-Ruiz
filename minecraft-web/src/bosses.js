@@ -16,7 +16,7 @@ class BossBase {
     this.hp = this.maxHp; this.phase = 1; this.t = 0; this.yaw = 0; this.flash = 0; this.dead = false;
     this.scale = cfg.scale || 1;
     this.root = new THREE.Group(); this.body = new THREE.Group(); this.root.add(this.body);
-    this.flashMats = []; this.proj = []; this.clouds = []; this.extra = [];
+    this.flashMats = []; this.proj = []; this.clouds = []; this.extra = []; this.waves = []; this.vel = new THREE.Vector3();
     scene.add(this.root); this.root.position.copy(pos); this.root.scale.setScalar(this.scale);
   }
   mat(color, emissive = 0, basic = false) {
@@ -63,7 +63,8 @@ class BossBase {
     this.root.traverse((o) => o.geometry && o.geometry.dispose());
     for (const p of this.proj) this.scene.remove(p.mesh);
     for (const e of this.extra) this.scene.remove(e);
-    this.proj = [];
+    for (const w of this.waves) this.scene.remove(w.mesh);
+    this.proj = []; this.waves = [];
   }
 
   // Proyectiles explosivos
@@ -111,11 +112,31 @@ class BossBase {
     for (const m of this.flashMats) if (m.userData.baseE === undefined) { m.userData.baseE = m.emissive.clone(); }
     for (const m of this.flashMats) m.emissive.copy(m.userData.baseE).addScalar(e);
   }
+  // Ondas expansivas en el suelo (hay que saltarlas)
+  addWave(x, y, z, o) {
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(1, 0.16, 6, 44), new THREE.MeshBasicMaterial({ color: o.color || 0xff8030, transparent: true, opacity: 0.85, fog: false, depthWrite: false }));
+    mesh.rotation.x = Math.PI / 2; mesh.position.set(x, y + 0.35, z); this.scene.add(mesh);
+    this.waves.push({ x, y, z, r: 1, max: o.max || 16, speed: o.speed || 11, dmg: o.dmg || 8, effect: o.effect, mesh, hit: false });
+  }
+  updateWaves(dt, player) {
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const w = this.waves[i]; w.r += w.speed * dt; w.mesh.scale.set(w.r, w.r, 1); w.mesh.material.opacity = 0.85 * Math.max(0, 1 - w.r / w.max);
+      const d = Math.hypot(player.pos.x - w.x, player.pos.z - w.z);
+      if (!w.hit && !player.dead && Math.abs(d - w.r) < 1.5 && player.pos.y < w.y + 1.15) { w.hit = true; this.h.hurtPlayer(w.dmg, ((player.pos.x - w.x) / (d || 1)) * 8, ((player.pos.z - w.z) / (d || 1)) * 8); if (w.effect) this.h.effect(w.effect[0], w.effect[1]); }
+      if (w.r >= w.max) { this.scene.remove(w.mesh); this.waves.splice(i, 1); }
+    }
+  }
+  // Caminar con física (jefes terrestres): requiere this.hw / this.hh
+  walk(dt, world, dx, dz, dist, speed) {
+    this.vel.x += ((dx / dist) * speed - this.vel.x) * Math.min(1, dt * 5); this.vel.z += ((dz / dist) * speed - this.vel.z) * Math.min(1, dt * 5);
+    const r = moveBody(world, { pos: this.pos, vel: this.vel, hw: this.hw, h: this.hh }, dt, 30);
+    if ((r.hitX || r.hitZ) && r.onGround) this.vel.y = 11; this.onGround = r.onGround; return r;
+  }
   update(dt, player, world) {
     if (this.dead) return;
     this.t += dt; this.flash = Math.max(0, this.flash - dt);
     this.tick(dt, player, world);
-    this.updateProj(dt, player, world);
+    this.updateProj(dt, player, world); this.updateWaves(dt, player);
     this.applyFlash();
   }
 }
@@ -694,6 +715,271 @@ export class SlimeKing extends BossBase {
   }
 }
 
+
+// ===================================================================== REY BLAZE (Nether)
+export class BlazeKing extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'REY BLAZE', type: 'blazeking', maxHp: 280, hitbox: { hx: 1.4, hy: 1.7, hz: 1.4, oy: 1.4 }, scale: 1.8, burstColor: [1, 0.6, 0.1] });
+    this.theta = Math.random() * 6; this.volleyT = 3; this.waveT = 6; this.minionT = 12;
+    const yel = this.mat(0xf0b020, 0xa05000), org = this.mat(0xff7a10, 0xc03000), dk = this.mat(0x201000, 0, true);
+    this.head = this.box(1.5, 1.5, 1.5, yel, 0, 2.2, 0);
+    for (const x of [-0.35, 0.35]) this.box(0.34, 0.26, 0.06, dk, x, 2.35, 0.77, this.body); this.box(0.7, 0.16, 0.06, dk, 0, 1.85, 0.77);
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; this.box(0.25, 0.7, 0.25, org, Math.cos(a) * 0.6, 3.15, Math.sin(a) * 0.6).rotation.z = Math.cos(a) * 0.3; }
+    this.core = this.box(0.8, 0.8, 0.8, this.mat(0xffe070, 0, true), 0, 1.0, 0);
+    this.rings = [];
+    for (let k = 0; k < 3; k++) { const g = this.group(0, 0.2 + k * 0.7, 0); for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; this.box(0.22, 1.5, 0.22, k % 2 ? org : yel, Math.cos(a) * (1.1 + k * 0.1), 0, Math.sin(a) * (1.1 + k * 0.1), g); } this.rings.push(g); }
+    this.h.toast('¡El Rey Blaze arde sobre el Nether! Salta sus ondas de fuego');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Rey Blaze llama a sus blazes!'); this.minionT = 1; }
+  tick(dt, player, world) {
+    const k = this.phase; this.theta += dt * (0.32 + 0.1 * k);
+    const R = 15, tx = player.pos.x + Math.cos(this.theta) * R, tz = player.pos.z + Math.sin(this.theta) * R, ty = player.pos.y + 8 + Math.sin(this.t * 1.1) * 1.5;
+    const f = Math.min(1, dt * 0.9); this.pos.x += (tx - this.pos.x) * f; this.pos.z += (tz - this.pos.z) * f; this.pos.y += (ty - this.pos.y) * f;
+    this.yaw += wrap(Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z) - this.yaw) * Math.min(1, dt * 4);
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+    this.rings.forEach((g, i) => (g.rotation.y += dt * (1.6 + i * 0.7) * (i % 2 ? -1 : 1))); this.core.scale.setScalar(1 + Math.sin(this.t * 6) * 0.15);
+    this.volleyT -= dt;
+    if (this.volleyT <= 0 && !player.dead) {
+      this.volleyT = k === 1 ? 3.6 : 2.5; const from = V(this.pos.x, this.pos.y + 3, this.pos.z), base = V(player.pos.x, player.pos.y + 1, player.pos.z).sub(from).normalize(), n = k === 1 ? 5 : 7;
+      for (let i = 0; i < n; i++) { const a = (i - (n - 1) / 2) * 0.16, d = base.clone(); d.x = base.x * Math.cos(a) - base.z * Math.sin(a); d.z = base.x * Math.sin(a) + base.z * Math.cos(a); this.shootProj(from, d, { speed: 13, size: 0.75, color: 0xffb040, emissive: 0xff5010, radius: 1.8, ds: 0.28, effect: ['burn', 4] }); }
+    }
+    this.waveT -= dt;
+    if (this.waveT <= 0 && !player.dead) { this.waveT = k === 1 ? 7.5 : 5; this.addWave(this.pos.x, player.pos.y, this.pos.z, { max: 30, speed: 12, dmg: 9, color: 0xff6a10, effect: ['burn', 4] }); this.h.sound('roar', 0.6); }
+    if (k === 2) { this.minionT -= dt; if (this.minionT <= 0) { this.minionT = 13; if (this.h.minions() < 6) { this.h.spawnMinion('blaze'); this.h.spawnMinion('blaze'); } } }
+  }
+}
+
+// ===================================================================== REY PIGLIN (Nether)
+export class PiglinKing extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'REY PIGLIN', type: 'piglinking', maxHp: 340, hitbox: { hx: 1.0, hy: 1.9, hz: 1.0, oy: 1.9 }, scale: 1.9, burstColor: [0.9, 0.7, 0.2] });
+    this.hw = 0.9; this.hh = 7; this.state = 'walk'; this.timer = 3; this.slamT = 9; this.cryT = 12; this.axeT = 5; this.spinT = 7; this.walkA = 0;
+    const skin = this.mat(0xc98a78), gold = this.mat(0xe8c040, 0x302400), brown = this.mat(0x5a4a38), dk = this.mat(0x7a6a50), red = this.mat(0xff3020, 0, true);
+    this.legL = this.group(-0.28, 1.5, 0); this.box(0.5, 1.5, 0.5, brown, 0, -0.75, 0, this.legL); this.legR = this.group(0.28, 1.5, 0); this.box(0.5, 1.5, 0.5, brown, 0, -0.75, 0, this.legR);
+    this.box(1.2, 1.5, 0.6, dk, 0, 2.25, 0); this.box(1.3, 0.35, 0.7, gold, 0, 2.85, 0); this.box(1.25, 0.25, 0.65, gold, 0, 1.7, 0);
+    this.armL = this.group(-0.82, 2.85, 0); this.box(0.45, 1.5, 0.45, skin, 0, -0.75, 0, this.armL);
+    this.armR = this.group(0.82, 2.85, 0); this.box(0.45, 1.5, 0.45, skin, 0, -0.75, 0, this.armR);
+    this.box(0.2, 2.2, 0.2, this.mat(0x6a4a2a), 0, -1.4, 0.4, this.armR); this.box(1.1, 0.7, 0.18, this.mat(0x9a9a9a), 0.5, -2.2, 0.4, this.armR); // hacha
+    this.head = this.group(0, 3.35, 0); this.box(1.2, 1.0, 1.0, skin, 0, 0.1, 0, this.head); this.box(0.7, 0.45, 0.25, this.mat(0xb0705f), 0, -0.05, 0.6, this.head);
+    for (const x of [-1, 1]) { this.box(0.14, 0.14, 0.05, red, x * 0.3, 0.3, 0.52, this.head); this.box(0.25, 0.6, 0.12, skin, x * 0.78, 0.35, 0, this.head).rotation.z = x * 0.6; this.box(0.12, 0.3, 0.1, this.mat(0xf0e8d0), x * 0.2, -0.3, 0.7, this.head); }
+    this.box(1.3, 0.3, 1.1, gold, 0, 0.65, 0, this.head); for (let i = -1; i <= 1; i++) this.box(0.25, 0.4, 0.2, gold, i * 0.45, 0.95, 0, this.head);
+    this.h.toast('El Rey Piglin golpea su hacha: ¡oro y furia!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Rey Piglin gira como un torbellino!'); this.spinT = 2; }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.timer -= dt; this.slamT -= dt; this.cryT -= dt; this.axeT -= dt; this.spinT -= dt;
+    if (this.state !== 'spin') this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 4);
+    let speed = k === 1 ? 3.4 : 4.4;
+    if (this.state === 'walk') {
+      if (this.timer <= 0 && dist < 6.5 && !player.dead) { this.state = 'windup'; this.timer = 0.65; }
+      else if (this.slamT <= 0 && dist < 22 && this.onGround) { this.vel.y = 14; this.vel.x = (dx / dist) * Math.min(dist, 14) * 0.7; this.vel.z = (dz / dist) * Math.min(dist, 14) * 0.7; this.state = 'slam'; this.slamT = k === 1 ? 9 : 6; this.slammed = false; this.h.sound('roar', 0.7); }
+      else if (this.spinT <= 0 && k === 2 && dist < 8) { this.state = 'spin'; this.timer = 1.8; this.spinT = 7; this.spinHit = 0; }
+      else if (this.axeT <= 0 && dist > 7 && !player.dead) { this.axeT = k === 1 ? 5.5 : 3.8; const from = V(this.pos.x, this.pos.y + 4, this.pos.z); this.shootProj(from, V(player.pos.x, player.pos.y + 1, player.pos.z).sub(from), { speed: 15, size: 1.0, color: 0xe8c040, emissive: 0x806010, radius: 1.5, ds: 0.22 }); this.armR.rotation.x = -2.4; }
+      if (this.cryT <= 0) { this.cryT = 14; this.h.sound('roar', 1); this.h.toast('¡El Rey Piglin llama a su guardia!'); if (this.h.minions() < 6) for (let i = 0; i < 3; i++) this.h.spawnMinion('piglin'); }
+    } else if (this.state === 'windup') {
+      speed = 0; this.armR.rotation.x = -2.6 * Math.min(1, (0.65 - this.timer) * 2);
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = k === 1 ? 2.6 : 1.8; if (dist < 7.5 && !player.dead) this.h.hurtPlayer(13, (dx / dist) * 12, (dz / dist) * 12); this.h.sound('hit', 1); this.armR.rotation.x = 0.6; }
+    } else if (this.state === 'slam') {
+      speed = 0; if (this.onGround && this.vel.y <= 0 && this.t > 0.2) { this.state = 'walk'; this.timer = 1.5; this.h.burst(this.pos.x, this.pos.y + 0.4, this.pos.z, [0.6, 0.4, 0.3], 30, 8); this.addWave(this.pos.x, this.pos.y, this.pos.z, { max: 14, speed: 12, dmg: 9, color: 0xe8c040 }); this.h.sound('explode', 0.8); }
+    } else if (this.state === 'spin') {
+      speed = 1.2; this.yaw += dt * 14; this.spinHit -= dt; this.armR.rotation.x = -1.6;
+      if (dist < 5 && this.spinHit <= 0 && !player.dead) { this.spinHit = 0.45; this.h.hurtPlayer(7, (dx / dist) * 9, (dz / dist) * 9); }
+      if (this.timer <= 0) this.state = 'walk';
+    }
+    const r = this.walk(dt, world, dx, dz, dist, speed);
+    this.walkA += dt * Math.hypot(this.vel.x, this.vel.z) * 1.4; const sw = Math.sin(this.walkA) * 0.6;
+    this.legL.rotation.x = sw; this.legR.rotation.x = -sw; this.armL.rotation.x = -sw * 0.7; if (this.state === 'walk') this.armR.rotation.x += (sw * 0.7 - this.armR.rotation.x) * Math.min(1, dt * 6);
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
+// ===================================================================== ENDERMAN TITÁN (End)
+export class EnderTitan extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'ENDERMAN TITÁN', type: 'endertitan', maxHp: 380, hitbox: { hx: 0.45, hy: 1.5, hz: 0.45, oy: 1.5 }, scale: 3.6, burstColor: [0.7, 0.2, 1] });
+    this.hw = 1.2; this.hh = 10; this.tpT = 4; this.rockT = 3; this.sweepT = 0; this.mite = 12; this.gaze = 0; this.gazeCool = 0;
+    const c = this.mat(0x120a18), eye = this.mat(0xe070ff, 0, true);
+    this.legL = this.group(-0.12, 1.5, 0); this.box(0.18, 1.5, 0.18, c, 0, -0.75, 0, this.legL); this.legR = this.group(0.12, 1.5, 0); this.box(0.18, 1.5, 0.18, c, 0, -0.75, 0, this.legR);
+    this.box(0.5, 0.95, 0.26, c, 0, 1.98, 0);
+    this.armL = this.group(-0.34, 2.45, 0); this.box(0.13, 1.35, 0.13, c, 0, -0.67, 0, this.armL); this.armR = this.group(0.34, 2.45, 0); this.box(0.13, 1.35, 0.13, c, 0, -0.67, 0, this.armR);
+    this.head = this.group(0, 2.7, 0); this.box(0.5, 0.42, 0.5, c, 0, 0, 0, this.head); for (const x of [-0.13, 0.13]) this.box(0.15, 0.06, 0.03, eye, x, 0.02, 0.26, this.head);
+    this.jaw = this.group(0, -0.22, 0, this.head); this.box(0.44, 0.1, 0.44, c, 0, 0, 0, this.jaw);
+    this.h.toast('El Enderman Titán se alza… ¡no le mires a los ojos!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Titán grita y convoca endermites!'); this.mite = 1; }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.tpT -= dt; this.rockT -= dt; this.sweepT -= dt; this.mite -= dt; this.gazeCool -= dt;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 4);
+    // teletransporte cerca del jugador
+    if (this.tpT <= 0 && !player.dead) {
+      this.tpT = k === 1 ? 5.2 : 3.4; this.h.burst(this.pos.x, this.pos.y + 4, this.pos.z, [0.8, 0.3, 1], 30, 6);
+      const a = Math.random() * Math.PI * 2, d = 7 + Math.random() * 3, nx = Math.floor(player.pos.x + Math.cos(a) * d), nz = Math.floor(player.pos.z + Math.sin(a) * d), top = world.topY(nx, nz);
+      if (top > 0) { this.pos.set(nx + 0.5, top + 1, nz + 0.5); this.vel.set(0, 0, 0); this.sweepT = 0.8; this.h.burst(this.pos.x, this.pos.y + 4, this.pos.z, [0.8, 0.3, 1], 30, 6); this.h.sound('pop', 1); }
+    }
+    // barrido con el brazo tras aparecer
+    if (this.sweepT > 0) { this.armR.rotation.x = -2.2; this.armL.rotation.x = -2.2; if (this.sweepT - dt <= 0 && dist < 9 && !player.dead) { this.h.hurtPlayer(12, (dx / dist) * 11, (dz / dist) * 11); this.h.sound('hit', 1); } }
+    else { this.armR.rotation.x += (Math.sin(this.t * 1.5) * 0.1 - this.armR.rotation.x) * Math.min(1, dt * 5); this.armL.rotation.x = this.armR.rotation.x; }
+    // rocas de piedra del End
+    if (this.rockT <= 0 && dist > 5 && !player.dead) {
+      this.rockT = k === 1 ? 3.8 : 2.6; const n = k === 1 ? 1 : 2;
+      for (let i = 0; i < n; i++) { const from = V(this.pos.x, this.pos.y + 9, this.pos.z), dir = V(player.pos.x + player.vel.x * 0.5, player.pos.y + 1, player.pos.z + player.vel.z * 0.5).sub(from); dir.x += rnd(-0.08, 0.08) * i; this.shootProj(from, dir, { speed: 15, size: 1.8, color: 0xd8d8a0, emissive: 0x302040, radius: 2.4, ds: 0.42 }); }
+      this.jaw.rotation.x = 0.8;
+    } else this.jaw.rotation.x *= 0.92;
+    // mirada: si el jugador lo mira a los ojos demasiado tiempo, ¡chilla!
+    const look = player.lookDir(), tx = this.pos.x - player.pos.x, ty = this.pos.y + 9.4 - (player.pos.y + 1.6), tz = this.pos.z - player.pos.z, tl = Math.hypot(tx, ty, tz) || 1;
+    if ((look.x * tx + look.y * ty + look.z * tz) / tl > 0.985 && tl < 45) this.gaze += dt; else this.gaze = Math.max(0, this.gaze - dt * 2);
+    if (this.gaze > 1.6 && this.gazeCool <= 0 && !player.dead) { this.gaze = 0; this.gazeCool = 6; this.h.sound('roar', 1); this.h.hurtPlayer(5, 0, 0); this.h.effect('levitate', 3); this.h.toast('¡Su mirada te eleva!'); }
+    if (k === 2 && this.mite <= 0) { this.mite = 12; if (this.h.minions() < 7) for (let i = 0; i < 3; i++) this.h.spawnMinion('endermite'); }
+    this.walk(dt, world, dx, dz, dist, dist > 14 ? 3.5 : 0);
+    const sw = Math.sin(this.t * 3) * 0.25; this.legL.rotation.x = sw; this.legR.rotation.x = -sw;
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
+// ===================================================================== SEÑOR DEL VACÍO (End)
+export class VoidLord extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'SEÑOR DEL VACÍO', type: 'voidlord', maxHp: 300, hitbox: { hx: 2.0, hy: 2.2, hz: 2.0, oy: 0 }, scale: 1.8, burstColor: [0.5, 0.1, 0.9] });
+    this.rifts = []; this.riftT = 3; this.laserT = 6; this.charge = 0; this.tpT = 9; this.minionT = 14;
+    const dk = this.mat(0x07040e), glow = this.mat(0xb050ff, 0, true), mid = this.mat(0x241038, 0x180830);
+    const core = this.group(0, 0, 0); core.rotation.set(0.6, 0.6, 0); this.core = core;
+    this.box(2.4, 2.4, 2.4, dk, 0, 0, 0, core); this.box(2.6, 0.14, 2.6, glow, 0, 0, 0, core); this.box(0.14, 2.6, 2.6, glow, 0, 0, 0, core); this.box(2.6, 2.6, 0.14, glow, 0, 0, 0, core);
+    this.eye = this.box(0.9, 0.9, 0.2, this.mat(0xff60ff, 0, true), 0, 0, 1.3); this.body.add(this.eye);
+    this.orbs = []; for (let i = 0; i < 5; i++) { const o = this.box(0.5, 1.1, 0.5, mid, 0, 0, 0); o.rotation.z = 0.5; this.orbs.push(o); }
+    this.laser = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1, 6), new THREE.MeshBasicMaterial({ color: 0xd070ff, transparent: true, opacity: 0, fog: false, depthWrite: false })); scene.add(this.laser); this.extra.push(this.laser);
+    this.h.toast('El Señor del Vacío abre grietas bajo tus pies… ¡muévete!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El vacío se desborda! Su gravedad te atrae'); }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, hd = Math.hypot(dx, dz) || 1;
+    const want = 16; if (hd > want + 2) { this.pos.x += (dx / hd) * 4 * dt; this.pos.z += (dz / hd) * 4 * dt; } else if (hd < want - 5) { this.pos.x -= (dx / hd) * 3 * dt; this.pos.z -= (dz / hd) * 3 * dt; }
+    this.pos.y += (player.pos.y + 7 - this.pos.y) * Math.min(1, dt * 0.9);
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 3);
+    this.root.position.set(this.pos.x, this.pos.y + Math.sin(this.t * 1.2) * 0.6, this.pos.z); this.root.rotation.y = this.yaw;
+    this.core.rotation.y += dt * 0.8; this.core.rotation.x += dt * 0.3;
+    this.orbs.forEach((o, i) => { const a = this.t * 1.1 + (i / 5) * Math.PI * 2; o.position.set(Math.cos(a) * 2.8, Math.sin(this.t * 2 + i) * 0.6, Math.sin(a) * 2.8); o.rotation.y = a; });
+    // grietas del vacío bajo el jugador
+    this.riftT -= dt;
+    if (this.riftT <= 0 && !player.dead) {
+      this.riftT = k === 1 ? 4.2 : 2.8; const n = k === 1 ? 1 : 2;
+      for (let i = 0; i < n; i++) {
+        const x = player.pos.x + (i ? rnd(-5, 5) : 0), z = player.pos.z + (i ? rnd(-5, 5) : 0);
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.25, 24), new THREE.MeshBasicMaterial({ color: 0x8030ff, transparent: true, opacity: 0.25, fog: false, depthWrite: false }));
+        const ty = world.topY(Math.floor(x), Math.floor(z)); m.position.set(x, (ty > 0 ? ty : player.pos.y - 1) + 1.2, z); this.scene.add(m); this.rifts.push({ x, z, y: m.position.y, t: -1.2, m, tick: 0 });
+      }
+    }
+    for (let i = this.rifts.length - 1; i >= 0; i--) {
+      const r = this.rifts[i]; r.t += dt;
+      if (r.t < 0) { r.m.material.opacity = 0.18 + Math.sin(this.t * 14) * 0.08; }
+      else {
+        r.m.material.opacity = 0.7; r.m.material.color.setHex(0x1a0830); r.tick -= dt;
+        if (r.tick <= 0) { r.tick = 0.45; this.h.burst(r.x + rnd(-2, 2), r.y, r.z + rnd(-2, 2), [0.6, 0.2, 1], 5, 3); }
+        if (Math.hypot(player.pos.x - r.x, player.pos.z - r.z) < 3.1 && Math.abs(player.pos.y + 0.5 - r.y) < 2.2 && !player.dead) { r.dmgT = (r.dmgT || 0) - dt; if (r.dmgT <= 0) { r.dmgT = 0.5; this.h.hurtPlayer(3, 0, 0); this.h.effect('levitate', 2); } }
+        if (r.t > 5) { this.scene.remove(r.m); this.rifts.splice(i, 1); }
+      }
+    }
+    // láser con carga
+    this.laserT -= dt;
+    const from = V(this.pos.x, this.pos.y, this.pos.z), tgt = V(player.pos.x, player.pos.y + 1, player.pos.z), dir = tgt.clone().sub(from), L = dir.length(); dir.normalize();
+    if (this.charge > 0) {
+      const total = k === 1 ? 2.1 : 1.5, pg = 1 - this.charge / total; this.charge -= dt;
+      this.laser.material.opacity = 0.2 + pg * 0.7; this.laser.scale.set(0.5 + pg * 3, L, 0.5 + pg * 3); this.laser.position.copy(from).add(tgt).multiplyScalar(0.5); this.laser.quaternion.setFromUnitVectors(V(0, 1, 0), dir);
+      if (this.charge <= 0) { this.laser.material.opacity = 0; this.h.sound('explode', 0.7); if (!world.raycast(from, dir, L) && !player.dead) this.h.hurtPlayer(10, dir.x * 6, dir.z * 6); this.laserT = k === 1 ? 6.5 : 4; }
+    } else { this.laser.material.opacity = 0; if (this.laserT <= 0 && L < 45 && !player.dead) { this.charge = k === 1 ? 2.1 : 1.5; this.h.sound('hiss', 0.7); } }
+    // gravedad (fase 2) y teletransporte
+    if (k === 2 && L < 36) { player.push.x = (this.pos.x - player.pos.x) / hd * 3.2; player.push.z = (this.pos.z - player.pos.z) / hd * 3.2; }
+    this.tpT -= dt;
+    if (this.tpT <= 0 && !player.dead) { this.tpT = k === 1 ? 10 : 7; this.h.burst(this.pos.x, this.pos.y, this.pos.z, [0.6, 0.2, 1], 30, 6); const a = Math.random() * Math.PI * 2; this.pos.set(player.pos.x + Math.cos(a) * 16, player.pos.y + 8, player.pos.z + Math.sin(a) * 16); this.h.burst(this.pos.x, this.pos.y, this.pos.z, [0.6, 0.2, 1], 30, 6); this.h.sound('pop', 1); }
+    if (k === 2) { this.minionT -= dt; if (this.minionT <= 0) { this.minionT = 15; if (this.h.minions() < 6) { this.h.spawnMinion('shulker'); this.h.spawnMinion('shulker'); } } }
+  }
+  dispose() { for (const r of this.rifts) this.scene.remove(r.m); this.rifts = []; super.dispose(); }
+}
+
+// ===================================================================== CREEPER TITÁN (Overworld)
+export class CreeperTitan extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'CREEPER TITÁN', type: 'creepertitan', maxHp: 320, hitbox: { hx: 0.6, hy: 1.8, hz: 0.6, oy: 1.8 }, scale: 2.6, burstColor: [0.3, 0.9, 0.3] });
+    this.hw = 1.15; this.hh = 9; this.fuse = 0; this.stun = 0; this.mT = 12; this.walkA = 0;
+    this.green = this.mat(0x4ea84e, 0x103010); this.green2 = this.mat(0x3e8e3e, 0x082008);
+    this.legs = [[-0.28, 0.3], [0.28, 0.3], [-0.28, -0.3], [0.28, -0.3]].map(([x, z]) => { const g = this.group(x, 0.9, z); this.box(0.5, 0.9, 0.5, this.green2, 0, -0.45, 0, g); return g; });
+    this.box(1.0, 1.6, 0.6, this.green, 0, 1.7, 0);
+    const c = document.createElement('canvas'); c.width = c.height = 8; const x = c.getContext('2d'); x.fillStyle = '#4ea84e'; x.fillRect(0, 0, 8, 8); x.fillStyle = '#0c1a0c'; x.fillRect(1, 2, 2, 2); x.fillRect(5, 2, 2, 2); x.fillRect(3, 4, 2, 2); x.fillRect(2, 5, 1, 2); x.fillRect(5, 5, 1, 2);
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+    const faceM = new THREE.MeshLambertMaterial({ map: t, emissive: 0x103010 }); this.flashMats.push(faceM);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), [this.green, this.green, this.green, this.green, faceM, this.green]); head.position.set(0, 3.1, 0); this.body.add(head); this.head = head;
+    this.h.toast('¡El Creeper Titán sisea! Aléjate cuando se hinche');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡Un rayo lo carga! Su explosión será colosal'); this.h.strikeNear(this.pos.x, this.pos.z); this.green.emissive.setHex(0x1030ff); this.green2.emissive.setHex(0x0820c0); this.flashMats.forEach((m) => (m.userData.baseE = undefined)); }
+  damageMul() { return this.stun > 0 ? 1.8 : 1; }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 3); this.mT -= dt;
+    let speed = k === 1 ? 2.8 : 3.6;
+    if (this.stun > 0) { this.stun -= dt; speed = 0; this.root.rotation.z = Math.sin(this.t * 20) * 0.02; }
+    else if (this.fuse > 0) {
+      this.fuse -= dt; speed = 0.8; const total = k === 1 ? 3.2 : 2.2, pg = 1 - this.fuse / total;
+      this.body.scale.setScalar(1 + pg * 0.28); this.flash = Math.floor(this.fuse * 10) % 2 === 0 ? 0.12 : 0; if (Math.floor(pg * 20) % 4 === 0) this.h.sound('hiss', 0.3);
+      if (this.fuse <= 0) {
+        this.body.scale.setScalar(1); this.h.explode(this.pos.x, this.pos.y + 3.2, this.pos.z, k === 1 ? 9 : 12, 0.95); this.h.burst(this.pos.x, this.pos.y + 3, this.pos.z, [1, 0.7, 0.2], 60, 12);
+        this.stun = 3.6; this.h.toast('¡Está aturdido! Golpéalo ahora');
+      }
+    } else if (dist < 15 && !player.dead) this.fuse = k === 1 ? 3.2 : 2.2;
+    this.walk(dt, world, dx, dz, dist, speed);
+    this.walkA += dt * Math.hypot(this.vel.x, this.vel.z) * 1.1; const sw = Math.sin(this.walkA) * 0.5; this.legs.forEach((l, i) => (l.rotation.x = i % 2 ? -sw : sw));
+    if (this.mT <= 0 && this.stun <= 0) { this.mT = 14; if (this.h.minions() < 6) { this.h.spawnMinion('creeper'); this.h.spawnMinion('creeper'); } }
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
+// ===================================================================== GÓLEM COLOSAL (Overworld)
+export class IronColossus extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'GÓLEM COLOSAL', type: 'colossus', maxHp: 420, hitbox: { hx: 1.8, hy: 2.1, hz: 0.8, oy: 2.1 }, scale: 2.0, burstColor: [0.8, 0.8, 0.8] });
+    this.hw = 1.5; this.hh = 8; this.state = 'walk'; this.timer = 3; this.poundT = 6; this.rockT = 7; this.novaT = 9; this.walkA = 0;
+    const iron = this.mat(0xc8c8c8, 0x101010), iron2 = this.mat(0x9a9a9a), vine = this.mat(0x4a7a3a);
+    this.legL = this.group(-0.4, 1.4, 0); this.box(0.7, 1.4, 0.7, iron2, 0, -0.7, 0, this.legL); this.legR = this.group(0.4, 1.4, 0); this.box(0.7, 1.4, 0.7, iron2, 0, -0.7, 0, this.legR);
+    this.box(1.9, 1.6, 1.1, iron, 0, 2.2, 0); this.box(1.2, 0.8, 0.9, iron2, 0, 1.4, 0); for (const [x, y] of [[-0.5, 2.6], [0.6, 2.0]]) this.box(0.4, 0.8, 0.12, vine, x, y, 0.58);
+    this.armL = this.group(-1.2, 2.9, 0); this.box(0.6, 2.4, 0.6, iron, 0, -1.2, 0, this.armL); this.box(0.8, 0.8, 0.8, iron2, 0, -2.5, 0, this.armL);
+    this.armR = this.group(1.2, 2.9, 0); this.box(0.6, 2.4, 0.6, iron, 0, -1.2, 0, this.armR); this.box(0.8, 0.8, 0.8, iron2, 0, -2.5, 0, this.armR);
+    this.head = this.group(0, 3.4, 0.1); this.box(0.8, 0.9, 0.8, iron, 0, 0.3, 0, this.head); this.box(0.2, 0.4, 0.25, iron2, 0, 0.2, 0.5, this.head);
+    this.eyes = [-1, 1].map((x) => this.box(0.18, 0.1, 0.04, this.mat(0xf0f080, 0, true), x * 0.2, 0.5, 0.42, this.head));
+    this.h.toast('El Gólem Colosal despierta: ¡salta sus ondas de choque!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡Sus ojos arden en rojo!'); this.eyes.forEach((e) => e.material.color.setHex(0xff2020)); this.novaT = 1.5; }
+  damageMul() { return 0.85; }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.timer -= dt; this.poundT -= dt; this.rockT -= dt; this.novaT -= dt;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 3);
+    let speed = k === 1 ? 2.4 : 3.2;
+    if (this.state === 'walk') {
+      if (this.timer <= 0 && dist < 8.5 && !player.dead) { this.state = 'punch'; this.timer = 0.8; }
+      else if (this.poundT <= 0 && dist < 18) { this.state = 'pound'; this.timer = 1.1; this.poundT = k === 1 ? 7 : 4.5; }
+      else if (this.rockT <= 0 && dist > 9) { this.rockT = k === 1 ? 7 : 4.5; const from = V(this.pos.x, this.pos.y + 6, this.pos.z); this.shootProj(from, V(player.pos.x, player.pos.y + 1, player.pos.z).sub(from), { speed: 14, size: 1.6, color: 0x8a8a8a, emissive: 0x202020, radius: 2.2, ds: 0.4 }); this.armR.rotation.x = -2.6; }
+      else if (k === 2 && this.novaT <= 0 && this.onGround) { this.novaT = 8; this.addWave(this.pos.x, this.pos.y, this.pos.z, { max: 20, speed: 13, dmg: 9, color: 0xe0e0ff }); this.h.sound('roar', 0.7); }
+    } else if (this.state === 'punch') {
+      speed = 0; this.armR.rotation.x = -2.8 * Math.min(1, (0.8 - this.timer) * 1.8);
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = k === 1 ? 2.4 : 1.6; if (dist < 9.5 && !player.dead) this.h.hurtPlayer(14, (dx / dist) * 13, (dz / dist) * 13); this.h.sound('hit', 1); this.armR.rotation.x = 0.8; }
+    } else if (this.state === 'pound') {
+      speed = 0; this.armL.rotation.x = this.armR.rotation.x = -3.0 * Math.min(1, (1.1 - this.timer) * 1.2);
+      if (this.timer <= 0) { this.state = 'walk'; this.timer = 1.4; this.armL.rotation.x = this.armR.rotation.x = 0.7; this.h.sound('explode', 0.8); this.h.burst(this.pos.x, this.pos.y + 0.4, this.pos.z, [0.6, 0.6, 0.6], 36, 9); this.addWave(this.pos.x, this.pos.y, this.pos.z, { max: k === 1 ? 16 : 22, speed: 12, dmg: 10, color: 0xffffff }); }
+    }
+    this.walk(dt, world, dx, dz, dist, speed);
+    this.walkA += dt * Math.hypot(this.vel.x, this.vel.z) * 1.3; const sw = Math.sin(this.walkA) * 0.5;
+    this.legL.rotation.x = sw; this.legR.rotation.x = -sw;
+    if (this.state === 'walk') { this.armL.rotation.x += (-sw * 0.6 - this.armL.rotation.x) * Math.min(1, dt * 5); this.armR.rotation.x += (sw * 0.6 - this.armR.rotation.x) * Math.min(1, dt * 5); }
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
 export const BOSS_INFO = {
   storm: { name: 'Tormenta Wither', color: '#b060ff', hp: 360, desc: 'Colosal masa con tres cabezas. Rayo tractor, cráneos explosivos y un bloque de comandos como punto débil.', icon: '🌀' },
   dragon: { name: 'Ender Dragon', color: '#e040ff', hp: 300, desc: 'Vuela en círculos, pica en picado y lanza aliento. Destruye sus 4 cristales para poder herirlo.', icon: '🐉', make: (s, h, p, arena) => new EnderDragon(s, h, p, arena), up: 16 },
@@ -708,4 +994,12 @@ Object.assign(BOSS_INFO, {
   herobrine: { name: 'Herobrine', color: '#ffffff', hp: 400, desc: 'Ojos blancos, teletransportes a tu espalda, rayos y oscuridad. Con poca vida levita. El jefe final.', icon: '👤', make: (s, h, p) => new Herobrine(s, h, p), ground: true, dist: 14 },
   slimeking: { name: 'Rey Slime', color: '#60e060', hp: 260, desc: 'Gigantesco, salta y aplasta con ondas expansivas. Se divide en slimes al perder vida.', icon: '🟢', make: (s, h, p) => new SlimeKing(s, h, p), ground: true, dist: 18 },
 });
-export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking'];
+Object.assign(BOSS_INFO, {
+  blazeking: { name: 'Rey Blaze', color: '#ff9a20', hp: 280, desc: 'Señor del fuego del Nether: abanicos de bolas de fuego, ondas de llamas que hay que saltar y blazes de refuerzo.', icon: '🔥', make: (s, h, p) => new BlazeKing(s, h, p), up: 8, dist: 20 },
+  piglinking: { name: 'Rey Piglin', color: '#e8c040', hp: 340, desc: 'Hacha gigante, saltos que parten el suelo, torbellino de oro y una guardia de piglins.', icon: '🪓', make: (s, h, p) => new PiglinKing(s, h, p), ground: true, dist: 16 },
+  endertitan: { name: 'Enderman Titán', color: '#c060ff', hp: 380, desc: 'Gigantesco: se teletransporta, barre con los brazos y lanza rocas. ¡No le mires a los ojos!', icon: '🕴', make: (s, h, p) => new EnderTitan(s, h, p), ground: true, dist: 24 },
+  voidlord: { name: 'Señor del Vacío', color: '#a050ff', hp: 300, desc: 'Abre grietas que dañan y elevan, dispara un láser con carga y su gravedad te arrastra en la fase final.', icon: '🌀', make: (s, h, p) => new VoidLord(s, h, p), up: 6, dist: 20 },
+  creepertitan: { name: 'Creeper Titán', color: '#60e060', hp: 320, desc: 'Se hincha y explota con un radio colosal. Tras estallar queda aturdido: es tu momento.', icon: '💥', make: (s, h, p) => new CreeperTitan(s, h, p), ground: true, dist: 30 },
+  colossus: { name: 'Gólem Colosal', color: '#d0d0e0', hp: 420, desc: 'Puñetazos devastadores, golpes al suelo que lanzan ondas de choque y rocas. Furia roja en la fase 2.', icon: '🗿', make: (s, h, p) => new IronColossus(s, h, p), ground: true, dist: 22 },
+});
+export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking', 'colossus', 'creepertitan', 'blazeking', 'piglinking', 'endertitan', 'voidlord'];

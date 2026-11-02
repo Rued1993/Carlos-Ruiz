@@ -18,10 +18,10 @@ npm run build    # versión de producción en dist/
   - **El End:** isla flotante de piedra del End, 10 pilares de obsidiana con cristales, endermans y el **Ender Dragon** al entrar; al vencerlo se abre el portal de salida.
   - **Portales:** obsidiana (8 adoquines + 1 diamante = 2) en un marco 4x5, y se enciende con el **encendedor** (hierro + carbón). Para el End: 12 marcos (8 obsidiana + 1 diamante = 4) con **ojos de Ender** (perla + carbón). También puedes viajar al instante desde el panel **B**.
 - **Varias partidas guardadas:** cada mundo con nombre, semilla opcional, miniatura, nivel y tiempo jugado; autoguardado, guardado manual, renombrar, borrar y **exportar/importar** a archivo `.mcw`. Las partidas antiguas se migran solas.
-- **10 jefes** (panel **B** para invocarlos al instante): Tormenta Wither, Ender Dragon, Wither, Warden, Guardián Ancestral, **Devastador, Invocador, Ghast Gigante, Herobrine y Rey Slime**, cada uno con fases y mecánicas propias (cristales que curan, bolas de fuego que se devuelven a golpes, colmillos y vex, ondas expansivas…).
-- **Misiones (M):** 22 misiones; derrota a los 10 jefes para el logro final.
+- **16 jefes** (panel **B** para invocarlos al instante): Tormenta Wither, Ender Dragon, Wither, Warden, Guardián Ancestral, Devastador, Invocador, Ghast Gigante, Herobrine, Rey Slime y los nuevos **Gólem Colosal, Creeper Titán** (Overworld), **Rey Blaze, Rey Piglin** (Nether) y **Enderman Titán, Señor del Vacío** (End). Cada uno con fases y mecánicas propias: ondas de choque que hay que saltar, explosiones colosales, grietas del vacío, bolas de fuego que se devuelven a golpes, cristales que curan…
+- **Misiones (M):** misiones de aprendizaje, caza, dimensiones y jefes; derrota a los 16 jefes para el logro final.
 - **Gráficos hiperrealistas** (4 calidades en el menú de pausa): iluminación física con **sombras reales** de sol y luna, texturas HD con **mapas de relieve**, tonemapping cinematográfico, **bloom**, corrección de color, MSAA, antorchas con luz emisiva, agua con oleaje y reflejos del sol, tinte de vegetación por clima, cielo con degradado y niebla.
-- **Mobs:** cerdo, vaca, oveja, gallina, zombi, esqueleto (arco), araña, creeper, enderman y slime.
+- **Mobs:** cerdo, vaca, oveja, gallina, zombi, esqueleto (arco), araña, creeper, enderman y slime. **Nether:** piglin zombificado, blaze, cubo de magma, esqueleto Wither, Ghast y Hoglin. **End:** enderman, Shulker (balas que te hacen levitar), Endermite y Phantom.
 - **Supervivencia, crafteo, horno, antorchas, clima con tormentas y rayos, minimapa, XP y efectos de estado.**
 - **Creativo:** bloques infinitos, vuelo y paleta con todo.
 

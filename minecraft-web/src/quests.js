@@ -20,6 +20,9 @@ export const QUESTS = [
   { id: 'd_nether', group: 'Dimensiones', title: 'Una puerta al infierno', desc: 'Entra al Nether (marco 4x5 de obsidiana + encendedor)', ev: 'dim', target: 'nether', n: 1, reward: [[I.GOLD, 8], [I.DIAMOND, 4]], xp: 80 },
   { id: 'k_blaze', group: 'Dimensiones', title: 'Fuego cruzado', desc: 'Derrota a 2 blazes', ev: 'kill', target: 'blaze', n: 2, reward: [[I.DIAMOND, 4]], xp: 40 },
   { id: 'k_piglin', group: 'Dimensiones', title: 'Oro maldito', desc: 'Derrota a 3 piglins zombificados', ev: 'kill', target: 'piglin', n: 3, reward: [[I.GOLD, 8]], xp: 35 },
+  { id: 'k_wskel', group: 'Dimensiones', title: 'Huesos negros', desc: 'Derrota a 2 esqueletos Wither', ev: 'kill', target: 'witherskeleton', n: 2, reward: [[I.DIAMOND, 4]], xp: 50 },
+  { id: 'k_ghast', group: 'Dimensiones', title: 'Lágrimas de fuego', desc: 'Derrota a un Ghast', ev: 'kill', target: 'ghast', n: 1, reward: [[I.GOLD, 10]], xp: 50 },
+  { id: 'k_shulker', group: 'Dimensiones', title: 'Caja sorpresa', desc: 'Derrota a 2 shulkers', ev: 'kill', target: 'shulker', n: 2, reward: [[I.PEARL, 2]], xp: 60 },
   { id: 'd_end', group: 'Dimensiones', title: 'El fin de todo', desc: 'Entra al End (12 marcos con ojo de Ender)', ev: 'dim', target: 'end', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   // Jefes
   { id: 'b_storm', group: 'Jefes', title: 'Domador de la tormenta', desc: 'Derrota a la Tormenta Wither', ev: 'boss', target: 'storm', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
@@ -32,7 +35,13 @@ export const QUESTS = [
   { id: 'b_ghast', group: 'Jefes', title: 'Devuélvesela', desc: 'Derrota al Ghast Gigante', ev: 'boss', target: 'ghast', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   { id: 'b_slime', group: 'Jefes', title: 'Aplastado', desc: 'Derrota al Rey Slime', ev: 'boss', target: 'slimeking', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   { id: 'b_hero', group: 'Jefes', title: 'Más allá del mito', desc: 'Derrota a Herobrine', ev: 'boss', target: 'herobrine', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 16]], xp: 250 },
-  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 10 jefes de Minecraft', ev: 'bossall', target: null, n: 10, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
+  { id: 'b_colossus', group: 'Jefes', title: 'Hierro contra hierro', desc: 'Derrota al Gólem Colosal', ev: 'boss', target: 'colossus', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 160 },
+  { id: 'b_creepert', group: 'Jefes', title: 'Silencio… colosal', desc: 'Derrota al Creeper Titán', ev: 'boss', target: 'creepertitan', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 160 },
+  { id: 'b_blazek', group: 'Jefes', title: 'Rey de las llamas', desc: 'Derrota al Rey Blaze', ev: 'boss', target: 'blazeking', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 160 },
+  { id: 'b_piglink', group: 'Jefes', title: 'Corona de oro', desc: 'Derrota al Rey Piglin', ev: 'boss', target: 'piglinking', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 10]], xp: 180 },
+  { id: 'b_endert', group: 'Jefes', title: 'No mires a los ojos', desc: 'Derrota al Enderman Titán', ev: 'boss', target: 'endertitan', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 12]], xp: 200 },
+  { id: 'b_voidl', group: 'Jefes', title: 'Al borde del vacío', desc: 'Derrota al Señor del Vacío', ev: 'boss', target: 'voidlord', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 12]], xp: 200 },
+  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 16 jefes de Minecraft', ev: 'bossall', target: null, n: 16, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
 ];
 
 export class Quests {

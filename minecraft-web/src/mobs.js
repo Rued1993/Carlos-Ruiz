@@ -103,7 +103,7 @@ export const MOB_TYPES = {
     drops: () => (Math.random() < 0.65 ? [[I.PEARL, 1]] : []),
   },
   slime: {
-    hw: 0.42, h: 0.85, hp: 8, speed: 0, hostile: true, name: 'Slime', xp: 2,
+    hw: 0.42, h: 0.85, hp: 8, speed: 0, hostile: true, name: 'Slime', hopper: true, xp: 2,
     build(g, o) {
       const m = new THREE.MeshLambertMaterial({ color: 0x60e060, emissive: 0x104010, transparent: true, opacity: 0.8 });
       const b = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.84, 0.84), m); b.position.y = 0.42; g.add(b);
@@ -139,6 +139,79 @@ export const MOB_TYPES = {
       part(g, 0.2, 0.25, 0.2, 0xffa020, 0, 0.9, 0);
     },
     drops: () => (Math.random() < 0.8 ? [[I.COAL, 1 + Math.floor(Math.random() * 2)]] : []),
+  },
+  magmacube: {
+    hw: 0.5, h: 1.0, hp: 18, speed: 0, hostile: true, name: 'Cubo de magma', hopper: true, xp: 5,
+    build(g, o) {
+      const m = new THREE.MeshLambertMaterial({ color: 0xb03410, emissive: 0x7a2000 }), core = new THREE.MeshBasicMaterial({ color: 0xffa020 });
+      const b = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), m); b.position.y = 0.5; g.add(b);
+      for (const [x, y, z] of [[0, 0.7, 0.51], [0.3, 0.3, 0.51], [-0.3, 0.45, 0.51], [0.51, 0.5, 0.2], [-0.51, 0.5, -0.1]]) part(g, 0.3, 0.12, 0.05, 0xffa020, x, y, z);
+      part(g, 0.15, 0.12, 0.04, 0x201000, -0.22, 0.65, 0.52); part(g, 0.15, 0.12, 0.04, 0x201000, 0.22, 0.65, 0.52); part(g, 0.4, 0.1, 0.04, core, 0, 0.35, 0.52);
+    },
+    drops: () => (Math.random() < 0.6 ? [[I.COAL, 1]] : []),
+  },
+  witherskeleton: {
+    hw: 0.35, h: 2.4, hp: 30, speed: 2.9, hostile: true, name: 'Esqueleto Wither', damage: 6, reach: 1.7, effect: ['poison', 5], xp: 9,
+    build(g, o) {
+      const bone = 0x232323, dk = 0x0e0e0e;
+      o.legs = [limb(g, 0.2, 1.1, 0.2, bone, -0.14, 1.1, 0), limb(g, 0.2, 1.1, 0.2, bone, 0.14, 1.1, 0)];
+      part(g, 0.56, 0.95, 0.24, bone, 0, 1.6, 0); for (const y of [1.3, 1.55, 1.8]) part(g, 0.58, 0.07, 0.26, dk, 0, y, 0);
+      o.arms = [limb(g, 0.16, 1.0, 0.16, bone, -0.38, 2.05, 0), limb(g, 0.16, 1.0, 0.16, bone, 0.38, 2.05, 0)];
+      o.arms[0].rotation.x = o.arms[1].rotation.x = -1.2;
+      part(g, 0.1, 0.7, 0.06, 0x3a3a3a, 0.45, 1.5, 0.5); part(g, 0.3, 0.06, 0.06, 0x3a3a3a, 0.45, 1.85, 0.5);
+      o.head = part(g, 0.58, 0.58, 0.58, bone, 0, 2.2, 0);
+      part(g, 0.12, 0.1, 0.02, 0xc0c0c0, -0.14, 2.25, 0.3); part(g, 0.12, 0.1, 0.02, 0xc0c0c0, 0.14, 2.25, 0.3); part(g, 0.24, 0.05, 0.02, 0x050505, 0, 2.05, 0.3);
+    },
+    drops: () => [[I.COAL, 1 + Math.floor(Math.random() * 2)]],
+  },
+  ghast: {
+    hw: 1.2, h: 2.6, hp: 14, speed: 1.6, hostile: true, name: 'Ghast', fly: true, flyKind: 'ghast', xp: 10,
+    build(g, o) {
+      const w = lam(0xf4f4f4);
+      part(g, 2.4, 2.4, 2.4, 0xf4f4f4, 0, 1.4, 0);
+      o.eyeL = part(g, 0.6, 0.15, 0.05, 0x403838, -0.5, 1.6, 1.22); o.eyeR = part(g, 0.6, 0.15, 0.05, 0x403838, 0.5, 1.6, 1.22); part(g, 0.4, 0.2, 0.05, 0x403838, 0, 0.95, 1.22);
+      for (const x of [-0.8, 0, 0.8]) for (const z of [-0.8, 0, 0.8]) part(g, 0.3, 1.4 + Math.abs(x * z), 0.3, 0xdcdcdc, x, 0.1, z);
+    },
+    drops: () => [[I.COAL, 1 + Math.floor(Math.random() * 2)], ...(Math.random() < 0.4 ? [[I.GOLD, 1]] : [])],
+  },
+  hoglin: {
+    hw: 0.6, h: 1.5, hp: 32, speed: 3.2, hostile: true, name: 'Hoglin', damage: 7, reach: 1.9, xp: 8,
+    build(g, o) {
+      part(g, 1.0, 0.95, 1.5, 0x8a5a3a, 0, 1.0, 0); part(g, 0.7, 0.4, 0.9, 0x5a3a28, 0, 1.55, -0.1); // melena
+      o.head = part(g, 0.85, 0.75, 0.8, 0x9a6a4a, 0, 0.95, 1.0); part(g, 0.5, 0.35, 0.3, 0xc08a6a, 0, 0.8, 1.45);
+      for (const x of [-0.3, 0.3]) { part(g, 0.1, 0.35, 0.1, 0xf0e8d0, x, 1.15, 1.5).rotation.x = -0.4; part(g, 0.14, 0.12, 0.04, 0x101010, x * 0.9, 1.12, 1.42); part(g, 0.2, 0.28, 0.12, 0x7a4a30, x * 1.7, 1.3, 0.85).rotation.z = x * 1.5; }
+      o.legs = [[-0.35, 0.55], [0.35, 0.55], [-0.35, -0.55], [0.35, -0.55]].map(([x, z]) => limb(g, 0.3, 0.55, 0.3, 0x6a4028, x, 0.55, z));
+    },
+    drops: () => [[I.PORK, 2 + Math.floor(Math.random() * 3)]],
+  },
+  shulker: {
+    hw: 0.5, h: 1.0, hp: 22, speed: 0, hostile: true, name: 'Shulker', static: true, shulker: true, xp: 8,
+    build(g, o) {
+      part(g, 1.0, 0.5, 1.0, 0x7a4a8a, 0, 0.25, 0);
+      o.lid = new THREE.Group(); o.lid.position.set(0, 0.5, -0.5); g.add(o.lid);
+      const lm = lam(0x9d6cae), box = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 1.0), lm); box.position.set(0, 0.25, 0.5); o.lid.add(box);
+      o.eye = part(g, 0.3, 0.3, 0.3, 0xf0f0a0, 0, 0.55, 0); o.eye.material.emissive = new THREE.Color(0x707040);
+    },
+    drops: () => (Math.random() < 0.35 ? [[I.PEARL, 1]] : []),
+  },
+  endermite: {
+    hw: 0.22, h: 0.35, hp: 8, speed: 4.6, hostile: true, name: 'Endermite', damage: 2, reach: 0.9, xp: 3,
+    build(g, o) {
+      part(g, 0.32, 0.26, 0.26, 0x5a2a7a, 0, 0.14, 0.2); part(g, 0.4, 0.3, 0.3, 0x6a3a8a, 0, 0.16, -0.05); part(g, 0.26, 0.22, 0.26, 0x4a2068, 0, 0.12, -0.3);
+      part(g, 0.06, 0.06, 0.03, 0xe070ff, -0.07, 0.2, 0.34); part(g, 0.06, 0.06, 0.03, 0xe070ff, 0.07, 0.2, 0.34);
+    },
+    drops: () => [],
+  },
+  phantom: {
+    hw: 0.6, h: 0.6, hp: 18, speed: 3, hostile: true, name: 'Phantom', fly: true, flyKind: 'phantom', xp: 7,
+    build(g, o) {
+      const c = 0x3e4f86;
+      part(g, 0.5, 0.35, 1.1, c, 0, 0.3, 0); part(g, 0.3, 0.2, 0.3, c, 0, 0.3, 0.7);
+      part(g, 0.12, 0.1, 0.04, 0x70ff70, -0.12, 0.34, 0.86); part(g, 0.12, 0.1, 0.04, 0x70ff70, 0.12, 0.34, 0.86);
+      o.wings = [-1, 1].map((s) => { const g2 = new THREE.Group(); g2.position.set(s * 0.25, 0.4, 0.1); g.add(g2); const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 0.8), lam(0x31406e)); m.position.x = s * 0.75; g2.add(m); return { g: g2, s }; });
+      part(g, 0.2, 0.15, 0.9, c, 0, 0.28, -0.9);
+    },
+    drops: () => [],
   },
   zombie: {
     hw: 0.3, h: 1.8, hp: 20, speed: 2.5, hostile: true, name: 'Zombi', damage: 3,
@@ -189,6 +262,7 @@ export class Mob {
   }
   materials() { const out = []; this.group.traverse((o) => { if (o.material) Array.isArray(o.material) ? out.push(...o.material) : out.push(o.material); }); return out; }
   hit(dmg, fromX, fromZ) {
+    if (this.def.shulker && (this.lid || 0) < 0.4) dmg *= 0.3;
     this.hp -= dmg; this.flash = 0.3; this.provoked = true; this.aggro = true;
     const dx = this.pos.x - fromX, dz = this.pos.z - fromZ, l = Math.hypot(dx, dz) || 1;
     this.vel.x = (dx / l) * 6; this.vel.z = (dz / l) * 6; this.vel.y = 5;
@@ -253,6 +327,8 @@ export class MobManager {
       }
       if (m.def.enderman && m.aggro && mode === 'survival' && !player.dead) hostile = true;
       let target = null, speed = m.def.speed;
+      if (m.type === 'hoglin' && hostile && dist < 10) speed *= 1.9;
+      if (m.def.static) hostile = hostile && true;
 
       if (hostile && dist < 26 && Math.abs(dy) < 14) {
         target = Math.atan2(-dx, -dz); // yaw hacia el jugador
@@ -283,8 +359,8 @@ export class MobManager {
       const inWater = w.isLiquid(Math.floor(m.pos.x), Math.floor(m.pos.y + 0.2), Math.floor(m.pos.z));
       const fx = -Math.sin(m.yaw), fz = -Math.cos(m.yaw);
       if (moving && m.knock === undefined) { m.vel.x += (fx * speed - m.vel.x) * Math.min(1, dt * 8); m.vel.z += (fz * speed - m.vel.z) * Math.min(1, dt * 8); }
-      else if (m.type !== 'slime' || m.onGround) { m.vel.x *= Math.max(0, 1 - dt * 6); m.vel.z *= Math.max(0, 1 - dt * 6); }
-      if (m.type === 'slime') { // salta a trompicones
+      else if (!m.def.hopper || m.onGround) { m.vel.x *= Math.max(0, 1 - dt * 6); m.vel.z *= Math.max(0, 1 - dt * 6); }
+      if (m.def.hopper) { // salta a trompicones
         moving = false; m.hopT = (m.hopT === undefined ? 0.5 : m.hopT) - dt;
         if (m.onGround && m.hopT <= 0 && hostile) { m.hopT = 1.0 + Math.random() * 0.8; m.vel.y = 7.5; m.vel.x = (dx / (dist || 1)) * 3.4; m.vel.z = (dz / (dist || 1)) * 3.4; m.yaw = Math.atan2(-dx, -dz); }
       }
@@ -299,12 +375,21 @@ export class MobManager {
       }
 
       // Ataque del zombi y del piglin
-      if ((m.type === 'zombie' || m.type === 'piglin') && hostile && dist < 1.2 && Math.abs(dy) < 1.6 && m.cool <= 0) {
-        m.cool = 1; this.hooks.hurtPlayer(m.def.damage, (dx / (dist || 1)) * 5, (dz / (dist || 1)) * 5);
+      if ((m.type === 'zombie' || m.type === 'piglin' || m.type === 'witherskeleton' || m.type === 'hoglin' || m.type === 'endermite') && hostile && dist < (m.def.reach || 1.2) && Math.abs(dy) < 1.8 && m.cool <= 0) {
+        m.cool = m.type === 'endermite' ? 0.8 : 1; this.hooks.hurtPlayer(m.def.damage, (dx / (dist || 1)) * (m.type === 'hoglin' ? 9 : 5), (dz / (dist || 1)) * (m.type === 'hoglin' ? 9 : 5));
+        if (m.def.effect) this.hooks.effect(m.def.effect[0], m.def.effect[1]);
       }
       // Araña y enderman: cuerpo a cuerpo
-      if ((m.type === 'spider' || m.type === 'slime' || m.def.enderman) && hostile && dist < (m.type === 'spider' ? 1.7 : m.type === 'slime' ? 1.3 : 1.5) && Math.abs(dy) < 1.8 && m.cool <= 0) {
-        m.cool = m.type === 'spider' ? 0.9 : 1; this.hooks.hurtPlayer(m.type === 'spider' || m.type === 'slime' ? 2 : 6, (dx / (dist || 1)) * 4, (dz / (dist || 1)) * 4);
+      if ((m.type === 'spider' || m.def.hopper || m.def.enderman) && hostile && dist < (m.type === 'spider' ? 1.7 : m.def.hopper ? 1.3 : 1.5) && Math.abs(dy) < 1.8 && m.cool <= 0) {
+        m.cool = m.type === 'spider' ? 0.9 : 1; this.hooks.hurtPlayer(m.type === 'spider' || m.type === 'slime' ? 2 : m.type === 'magmacube' ? 3 : 6, (dx / (dist || 1)) * 4, (dz / (dist || 1)) * 4);
+        if (m.type === 'magmacube') this.hooks.effect('burn', 3);
+      }
+      // Shulker: abre la tapa y lanza balas que te hacen levitar
+      if (m.def.shulker) {
+        m.lid = m.lid === undefined ? 0 : m.lid; const open = hostile && dist < 18 ? 1 : 0; m.lid += (open - m.lid) * Math.min(1, dt * 4);
+        m.parts.lid.rotation.x = -m.lid * 1.1;
+        if (open && m.lid > 0.8 && m.cool <= 0 && !player.dead) { m.cool = 3.2; this.shootArrow(new THREE.Vector3(m.pos.x, m.pos.y + 0.7, m.pos.z), new THREE.Vector3(dx, dy + 0.9, dz).normalize(), false, 'bullet'); }
+        m.vel.x = m.vel.z = 0;
       }
       // Esqueleto: dispara flechas
       if (m.def.ranged && hostile && dist < 22 && m.cool <= 0) {
@@ -346,12 +431,15 @@ export class MobManager {
 
     // Flechas
     for (let i = this.arrows.length - 1; i >= 0; i--) {
-      const a = this.arrows[i]; a.life -= dt; a.vel.y -= (a.fire ? 0 : 7) * dt;
+      const a = this.arrows[i]; a.life -= dt; a.vel.y -= (a.fire || a.bullet ? 0 : 7) * dt;
+      if (a.bullet) { const tp = new THREE.Vector3(player.pos.x, player.pos.y + 1, player.pos.z).sub(a.mesh.position).normalize().multiplyScalar(5); a.vel.lerp(tp, Math.min(1, dt * 2.2)); }
       a.mesh.position.addScaledVector(a.vel, dt);
       a.mesh.lookAt(a.mesh.position.clone().add(a.vel));
       const p = a.mesh.position, hit = Math.hypot(p.x - player.pos.x, p.y - (player.pos.y + 0.9), p.z - player.pos.z) < 0.75;
-      if (hit && !player.dead) { this.hooks.hurtPlayer(a.fire ? 3 : 4, a.vel.x * 0.25, a.vel.z * 0.25); if (a.fire) this.hooks.effect('burn', 4); }
-      if (hit || a.life <= 0 || w.isSolid(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) { this.scene.remove(a.mesh); this.arrows.splice(i, 1); }
+      const stop = hit || a.life <= 0 || w.isSolid(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+      if (a.big && stop) { this.hooks.explode(p.x, p.y, p.z, 2.6, 0.4); if (Math.hypot(p.x - player.pos.x, p.y - player.pos.y, p.z - player.pos.z) < 4.5) this.hooks.effect('burn', 4); }
+      else if (hit && !player.dead) { this.hooks.hurtPlayer(a.bullet ? 3 : a.fire ? 3 : 4, a.vel.x * 0.25, a.vel.z * 0.25); if (a.fire) this.hooks.effect('burn', 4); if (a.bullet) this.hooks.effect('levitate', 5); }
+      if (stop) { this.scene.remove(a.mesh); this.arrows.splice(i, 1); }
     }
 
     // Aparición
@@ -359,7 +447,10 @@ export class MobManager {
     if (this.spawnT <= 0) { this.spawnT = 1.5; this.trySpawn(player, mode, day); }
   }
 
-  flyMob(m, dt, player, hostile, dx, dz, dy, dist) { // blaze: flota a distancia y dispara ráfagas de bolas de fuego
+  flyMob(m, dt, player, hostile, dx, dz, dy, dist) {
+    const kind = m.def.flyKind;
+    if (kind === 'ghast' || kind === 'phantom') return this.flyMob2(m, dt, player, hostile, dx, dz, dy, dist, kind);
+    // blaze: flota a distancia y dispara ráfagas de bolas de fuego
     const w = this.world, want = hostile ? 9 : 0;
     let tx = 0, tz = 0;
     if (hostile && dist > 12) { tx = dx / (dist || 1); tz = dz / (dist || 1); } else if (hostile && dist < 6) { tx = -dx / (dist || 1); tz = -dz / (dist || 1); }
@@ -376,10 +467,47 @@ export class MobManager {
     }
   }
 
-  shootArrow(o, dir, fire = false) {
-    const mesh = fire ? new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xff8a20 })) : new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.8), new THREE.MeshLambertMaterial({ color: 0x8a6a3a, emissive: 0x201408 }));
+  // Ghast (bola de fuego explosiva con aviso) y Phantom (vuela en círculos y se lanza en picado)
+  flyMob2(m, dt, player, hostile, dx, dz, dy, dist, kind) {
+    const w = this.world; let tx, ty, tz;
+    const move = (px, py, pz, k) => { m.vel.x += (px - m.vel.x) * Math.min(1, dt * k); m.vel.y += (py - m.vel.y) * Math.min(1, dt * k); m.vel.z += (pz - m.vel.z) * Math.min(1, dt * k); };
+    if (kind === 'ghast') {
+      const want = 18; tx = tz = 0;
+      if (hostile && dist > want + 3) { tx = dx / dist; tz = dz / dist; } else if (hostile && dist < want - 6) { tx = -dx / dist; tz = -dz / dist; }
+      ty = hostile ? player.pos.y + 7 + Math.sin(m.age) * 1.2 : m.pos.y;
+      move(tx * m.def.speed, (ty - m.pos.y) * 0.8, tz * m.def.speed, 2);
+      if (hostile) {
+        m.yaw = Math.atan2(-dx, -dz);
+        if (m.tele > 0) { m.tele -= dt; m.flash = 0.12; if (m.tele <= 0) { const o = new THREE.Vector3(m.pos.x, m.pos.y + 1.4, m.pos.z), dv = new THREE.Vector3(player.pos.x + player.vel.x * 0.4, player.pos.y + 1, player.pos.z + player.vel.z * 0.4).sub(o).normalize(); this.shootArrow(o, dv, true, 'big'); } }
+        else if (m.cool <= 0 && dist < 42 && !w.raycast(new THREE.Vector3(m.pos.x, m.pos.y + 1.4, m.pos.z), new THREE.Vector3(dx, dy, dz).normalize(), dist)) { m.cool = 4.8; m.tele = 0.9; this.hooks.sound('hiss'); }
+      }
+    } else { // phantom
+      if (!hostile) { move(Math.cos(m.age) * 1.5, Math.sin(m.age * 0.7) * 0.5, Math.sin(m.age) * 1.5, 2); }
+      else {
+        m.swoop = m.swoop === undefined ? 3 : m.swoop - dt;
+        if (!m.diving && m.swoop <= 0) { m.diving = true; m.diveT = 1.9; m.swoop = 4 + Math.random() * 3; }
+        if (m.diving) {
+          const to = new THREE.Vector3(player.pos.x - m.pos.x, player.pos.y + 1 - m.pos.y, player.pos.z - m.pos.z), d3 = to.length() || 1;
+          move((to.x / d3) * 11, (to.y / d3) * 11, (to.z / d3) * 11, 6); m.diveT -= dt;
+          if (d3 < 1.7 && m.cool <= 0 && !player.dead) { m.cool = 1.2; this.hooks.hurtPlayer(4, to.x * 1.5, to.z * 1.5); m.diving = false; }
+          if (m.diveT <= 0) m.diving = false;
+        } else {
+          const a = m.age * 0.9; tx = player.pos.x + Math.cos(a) * 9; tz = player.pos.z + Math.sin(a) * 9; ty = player.pos.y + 8;
+          move((tx - m.pos.x) * 0.7, (ty - m.pos.y) * 0.9, (tz - m.pos.z) * 0.7, 2);
+        }
+        m.yaw = Math.atan2(-m.vel.x, -m.vel.z);
+      }
+      if (m.parts.wings) m.parts.wings.forEach((wg) => (wg.g.rotation.z = wg.s * Math.sin(m.age * 9) * 0.5));
+    }
+    const nx = m.pos.x + m.vel.x * dt, ny = m.pos.y + m.vel.y * dt, nz = m.pos.z + m.vel.z * dt;
+    if (!w.isSolid(Math.floor(nx), Math.floor(ny + 0.5), Math.floor(nz))) m.pos.set(nx, ny, nz); else { m.vel.x *= -0.3; m.vel.z *= -0.3; m.diving = false; }
+  }
+
+  shootArrow(o, dir, fire = false, kind = null) {
+    const big = kind === 'big', bullet = kind === 'bullet';
+    const mesh = bullet ? new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), new THREE.MeshBasicMaterial({ color: 0xf4f0a0 })) : fire ? new THREE.Mesh(new THREE.BoxGeometry(big ? 1.1 : 0.4, big ? 1.1 : 0.4, big ? 1.1 : 0.4), new THREE.MeshBasicMaterial({ color: big ? 0xffd070 : 0xff8a20 })) : new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.8), new THREE.MeshLambertMaterial({ color: 0x8a6a3a, emissive: 0x201408 }));
     mesh.position.copy(o); this.scene.add(mesh);
-    this.arrows.push({ mesh, vel: dir.normalize().multiplyScalar(fire ? 15 : 22), life: fire ? 6 : 4, fire });
+    this.arrows.push({ mesh, vel: dir.normalize().multiplyScalar(bullet ? 5 : big ? 12 : fire ? 15 : 22), life: bullet ? 8 : fire ? 7 : 4, fire, big, bullet });
     this.hooks.sound('shoot', 0.5);
   }
 
@@ -387,13 +515,19 @@ export class MobManager {
   trySpawnDim(player, mode) {
     if (mode !== 'survival') return;
     const w = this.world, hostile = this.list.length;
-    if (hostile >= (this.dim === 'nether' ? 12 : 7)) return;
+    if (hostile >= (this.dim === 'nether' ? 14 : 10)) return;
     const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 18;
     const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);
     for (let y = Math.min(CH - 6, Math.floor(player.pos.y) + 22); y > 4; y--) {
       if (w.isSolid(x, y - 1, z) && !w.isLiquid(x, y - 1, z) && !w.isSolid(x, y, z) && !w.isSolid(x, y + 1, z) && !w.isLiquid(x, y, z)) {
-        if (this.dim === 'nether') { const r = Math.random(); this.add(r < 0.55 ? 'piglin' : 'blaze', x + 0.5, r < 0.55 ? y : y + 2, z + 0.5); }
-        else this.add('enderman', x + 0.5, y, z + 0.5);
+        const r = Math.random();
+        if (this.dim === 'nether') {
+          const t = r < 0.26 ? 'piglin' : r < 0.4 ? 'blaze' : r < 0.58 ? 'magmacube' : r < 0.72 ? 'witherskeleton' : r < 0.86 ? 'hoglin' : 'ghast';
+          this.add(t, x + 0.5, t === 'blaze' ? y + 2 : t === 'ghast' ? y + 8 : y, z + 0.5);
+        } else {
+          const t = r < 0.34 ? 'enderman' : r < 0.58 ? 'shulker' : r < 0.78 ? 'endermite' : 'phantom';
+          this.add(t, x + 0.5, t === 'phantom' ? y + 8 : y, z + 0.5);
+        }
         return;
       }
     }
