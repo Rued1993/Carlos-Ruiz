@@ -1192,10 +1192,11 @@ function fitPanels() {
   document.querySelectorAll('.screen:not(#overlay)').forEach((sc) => {
     const p = sc.firstElementChild; if (!p || sc.classList.contains('hidden')) return;
     p.style.zoom = ''; p.style.maxHeight = '';
-    const w = p.scrollWidth, h = p.scrollHeight, list = h > innerHeight * 1.5; // listas largas (jefes, misiones…): no se encogen por alto, hacen scroll
-    const k = Math.max(0.5, Math.min(1, (innerWidth - 12) / w, list ? 1 : (innerHeight - 12) / h));
+    if (innerWidth < 300 || innerHeight < 200) return; // medidas raras (p. ej. cambiando de ventana): no tocar
+    const w = p.scrollWidth, h = p.scrollHeight;
+    if (h > innerHeight * 1.5) return; // listas largas (jefes, misiones…): tamaño normal, la altura la limita el CSS y se hace scroll
+    const k = Math.max(0.5, Math.min(1, (innerWidth - 12) / w, (innerHeight - 12) / h));
     if (k < 0.999) p.style.zoom = k.toFixed(3);
-    p.style.maxHeight = Math.floor((innerHeight - 12) / k) + 'px'; // el panel nunca supera la pantalla: el resto se recorre con scroll
   });
 }
 new MutationObserver(() => requestAnimationFrame(fitPanels)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
@@ -1271,6 +1272,18 @@ document.addEventListener('visibilitychange', () => {
   else if (!document.hidden) keepAwake();
 });
 addEventListener('beforeunload', () => { if (world && state !== 'menu') saveGame(); });
+// Al volver de otra app/ventana: recalcula el tamaño y quita cualquier zoom accidental de la página
+const VP = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+function resetZoom() {
+  const m = document.querySelector('meta[name=viewport]'); if (!m) return;
+  m.setAttribute('content', VP.replace('maximum-scale=1', 'maximum-scale=1.0001')); setTimeout(() => m.setAttribute('content', VP), 60);
+}
+function refit() { resize(); applyTouchMode(); fitPanels(); if (window.visualViewport && visualViewport.scale > 1.01) resetZoom(); }
+for (const ev of ['pageshow', 'focus', 'orientationchange']) addEventListener(ev, () => { refit(); setTimeout(refit, 300); setTimeout(refit, 1000); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { refit(); setTimeout(refit, 300); setTimeout(refit, 1000); } });
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (visualViewport.scale > 1.01) resetZoom(); });
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   if (composer) composer.setSize(innerWidth, innerHeight);

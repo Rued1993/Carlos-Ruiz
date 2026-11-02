@@ -1,6 +1,6 @@
-# Minecraft Web
+# VoxelLands
 
-Juego de bloques estilo Minecraft que corre en el navegador (JavaScript + Three.js + Vite). Sin imágenes ni sonidos externos: texturas, iconos y audio se generan por código.
+Juego de bloques (voxels) que corre en el navegador (JavaScript + Three.js + Vite). Sin imágenes ni sonidos externos: texturas, iconos y audio se generan por código.
 
 ## Ejecutar
 

@@ -55,7 +55,7 @@ export const QUESTS = [
   { id: 'p_brew', group: 'Aprendiz', title: 'Alquimista', desc: 'Prepara una poción de curación en el soporte de pociones', ev: 'craft', target: 180, n: 1, reward: [[I.GOLD, 4]], xp: 60 },
   { id: 'p_ench', group: 'Aprendiz', title: 'Mago', desc: 'Encanta un objeto en la mesa de encantamientos', ev: 'enchant', target: 'x', n: 1, reward: [[I.LAPIS, 6]], xp: 80 },
   { id: 'p_lapis', group: 'Aprendiz', title: 'Azul profundo', desc: 'Consigue 6 lapislázuli', ev: 'collect', target: I.LAPIS, n: 6, reward: [[I.DIAMOND, 2]], xp: 40 },
-  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 19 jefes (Minecraft y crossovers)', ev: 'bossall', target: null, n: 19, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
+  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 19 jefes (y crossovers)', ev: 'bossall', target: null, n: 19, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
 ];
 
 export class Quests {

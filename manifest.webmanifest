@@ -1,7 +1,7 @@
 {
-  "name": "Minecraft Web",
-  "short_name": "MC Web",
-  "description": "Juego de bloques estilo Minecraft: supervivencia, dimensiones, jefes, One Block y multijugador.",
+  "name": "VoxelLands",
+  "short_name": "VoxelLands",
+  "description": "Juego de bloques y supervivencia: supervivencia, dimensiones, jefes, One Block y multijugador.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
