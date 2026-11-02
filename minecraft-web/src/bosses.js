@@ -30,11 +30,17 @@ class BossBase {
   raycast(o, d, maxDist) {
     const b = this.hitbox, s = this.scale, p = this.pos;
     const t = rayBox(o, d, { x: p.x - b.hx * s, y: p.y + (b.oy - b.hy) * s, z: p.z - b.hz * s }, { x: p.x + b.hx * s, y: p.y + (b.oy + b.hy) * s, z: p.z + b.hz * s });
-    return t >= 0 && t <= maxDist ? { dist: t, crit: false } : null;
+    let best = t >= 0 && t <= maxDist ? { dist: t, crit: false } : null;
+    for (const tg of this.targets || []) { // objetivos extra: vex, bolas de fuego reflejables...
+      const q = tg.pos, h = tg.half, tt = rayBox(o, d, { x: q.x - h, y: q.y - h, z: q.z - h }, { x: q.x + h, y: q.y + h, z: q.z + h });
+      if (tt >= 0 && tt <= maxDist && (!best || tt < best.dist)) best = { dist: tt, crit: false, target: tg };
+    }
+    return best;
   }
   damageMul() { return 1; }
   hit(dmg, crit, info) {
     if (this.dead) return;
+    if (info && info.target && info.target.onHit) { info.target.onHit(); return; }
     this.hp -= dmg * this.damageMul(); this.flash = 0.15;
     this.h.burst(this.pos.x + rnd(-1, 1), this.pos.y + this.hitbox.oy * this.scale + rnd(-1, 1), this.pos.z + rnd(-1, 1), this.burstColor || [0.6, 0.2, 0.8], 8, 4);
     if (this.hp <= 0) return this.die();
@@ -73,6 +79,16 @@ class BossBase {
       const q = this.proj[i], o = q.o; q.life -= dt;
       q.mesh.position.addScaledVector(q.vel, dt); q.mesh.rotation.x += dt * 4; q.mesh.rotation.y += dt * 3;
       const p = q.mesh.position;
+      if (q.reflected) { // devuelta al jefe
+        const c = V(this.pos.x, this.pos.y + this.hitbox.oy * this.scale, this.pos.z);
+        if (p.distanceTo(c) < (this.hitbox.hx + 0.8) * this.scale || q.life <= 0) {
+          this.h.explode(p.x, p.y, p.z, 2, 0); this.h.burst(p.x, p.y, p.z, [1, 0.6, 0.2], 24, 6);
+          this.scene.remove(q.mesh); this.proj.splice(i, 1);
+          if (p.distanceTo(c) < (this.hitbox.hx + 0.8) * this.scale) { this.h.toast('¡Rebotada! Gran golpe'); this.hit(q.o.reflectDmg || 70, true); if (this.dead) return; }
+          continue;
+        }
+        continue;
+      }
       const near = Math.hypot(p.x - player.pos.x, p.y - (player.pos.y + 0.9), p.z - player.pos.z) < 1.4;
       if (near || q.life <= 0 || world.isSolid(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) {
         this.h.explode(p.x, p.y, p.z, o.radius || 2.2, o.ds || 0.5);
@@ -392,6 +408,290 @@ export class ElderGuardian extends BossBase {
   }
 }
 
+
+// ===================================================================== DEVASTADOR (Ravager)
+export class Ravager extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'DEVASTADOR', type: 'ravager', maxHp: 280, hitbox: { hx: 1.4, hy: 1.5, hz: 1.9, oy: 1.4 }, scale: 1.5, burstColor: [0.5, 0.4, 0.3] });
+    this.vel = V(); this.state = 'stalk'; this.timer = 4; this.dirx = 0; this.dirz = 1; this.hitDone = false; this.walk = 0; this.stunMul = 1;
+    const dk = this.mat(0x4a4540), dk2 = this.mat(0x5e564e), bone = this.mat(0xd8d4c4), red = this.mat(0xb02020, 0x300808);
+    this.box(2.2, 1.7, 3.1, dk, 0, 1.9, 0); this.box(1.6, 0.9, 1.6, dk2, 0, 3.0, -0.6); // joroba
+    this.neck = this.group(0, 2.3, 1.4); this.box(1.0, 1.0, 1.2, dk2, 0, 0.1, 0.4, this.neck);
+    this.head = this.group(0, 0.2, 1.2, this.neck); this.box(1.7, 1.45, 1.6, dk, 0, 0, 0.5, this.head);
+    for (const x of [-1, 1]) { this.box(0.25, 1.0, 0.25, bone, x * 0.7, 1.0, 0.2, this.head).rotation.z = -x * 0.3; this.box(0.2, 0.6, 0.2, bone, x * 0.55, -0.55, 1.2, this.head); this.box(0.3, 0.2, 0.1, red, x * 0.45, 0.2, 1.32, this.head); }
+    this.legs = [[-0.8, 1.2], [0.8, 1.2], [-0.8, -1.2], [0.8, -1.2]].map(([x, z]) => { const g = this.group(x, 1.2, z); this.box(0.8, 1.2, 0.8, dk2, 0, -0.6, 0, g); return g; });
+    this.hw = 1.2; this.hh = 3.2; this.h.toast('¡El Devastador ruge! Esquiva sus embestidas');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Devastador se enfurece!'); this.timer = 1; }
+  damageMul() { return this.state === 'stun' ? 1.7 : 1; }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.timer -= dt;
+    let speed = 0;
+    if (this.state === 'stalk') {
+      speed = k === 1 ? 3.6 : 4.8; this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 4);
+      if (this.timer <= 0 && !player.dead && dist < 40) { this.state = 'windup'; this.timer = 1.0; this.h.sound('roar', 0.9); }
+    } else if (this.state === 'windup') {
+      this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 6);
+      this.neck.rotation.x = -0.6 * Math.min(1, (1.0 - this.timer) * 2);
+      if (this.timer <= 0) {
+        this.state = 'charge'; this.timer = 1.9; this.hitDone = false; this.dirx = dx / dist; this.dirz = dz / dist; this.yaw = Math.atan2(this.dirx, this.dirz);
+        if (dist < 9 && !player.dead) this.h.hurtPlayer(4, this.dirx * 10, this.dirz * 10); // onda del rugido
+      }
+    } else if (this.state === 'charge') {
+      speed = 15; this.vel.x = this.dirx * speed; this.vel.z = this.dirz * speed; this.neck.rotation.x = 0.5;
+      if (dist < 3.4 && !this.hitDone && !player.dead && Math.abs(player.pos.y - this.pos.y) < 3.5) { this.hitDone = true; this.h.hurtPlayer(11, this.dirx * 12, this.dirz * 12); }
+      // arrasa lo que encuentra
+      const bx = Math.floor(this.pos.x + this.dirx * 2.2), bz = Math.floor(this.pos.z + this.dirz * 2.2), by = Math.floor(this.pos.y);
+      for (let ax = -1; ax <= 1; ax++) for (let az = -1; az <= 1; az++) for (let ay = 0; ay < 3; ay++) { const id = world.getBlock(bx + ax, by + ay, bz + az); if (id && id !== B.BEDROCK && id !== B.STONE && id !== B.COBBLE) world.setBlock(bx + ax, by + ay, bz + az, 0); }
+      if (this.timer <= 0) { this.state = 'stun'; this.timer = 2.2; this.h.sound('hit', 1); this.h.burst(this.pos.x, this.pos.y + 2, this.pos.z, [0.8, 0.8, 0.3], 14, 4); }
+    } else if (this.state === 'stun') {
+      this.neck.rotation.x = 0.9; if (this.timer <= 0) { this.state = 'stalk'; this.timer = k === 1 ? 5 : 3; this.neck.rotation.x = 0; }
+    }
+    if (this.state !== 'charge') { this.vel.x += ((dx / dist) * speed - this.vel.x) * Math.min(1, dt * 5); this.vel.z += ((dz / dist) * speed - this.vel.z) * Math.min(1, dt * 5); }
+    if (this.state === 'stun' || this.state === 'windup') { this.vel.x *= 0.85; this.vel.z *= 0.85; }
+    const body = { pos: this.pos, vel: this.vel, hw: this.hw, h: this.hh };
+    const r = moveBody(world, body, dt);
+    if ((r.hitX || r.hitZ) && r.onGround && this.state !== 'stun') this.vel.y = 10;
+    this.walk += dt * Math.hypot(this.vel.x, this.vel.z) * 1.6;
+    const sw = Math.sin(this.walk) * 0.5; this.legs.forEach((l, i) => (l.rotation.x = i % 2 ? -sw : sw));
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+  }
+}
+
+// ===================================================================== INVOCADOR (Evoker)
+export class Evoker extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'INVOCADOR', type: 'evoker', maxHp: 220, hitbox: { hx: 0.9, hy: 1.4, hz: 0.9, oy: 1.6 }, scale: 1.7, burstColor: [0.9, 0.8, 0.2] });
+    this.fangT = 3; this.vexT = 7; this.tpT = 6; this.vex = []; this.fangs = []; this.targets = [];
+    const robe = this.mat(0x6c6c70), trim = this.mat(0xd8b830), skin = this.mat(0xd9a88a), dk = this.mat(0x303034);
+    this.box(0.95, 1.6, 0.65, robe, 0, 1.0, 0); this.box(1.0, 0.18, 0.7, trim, 0, 0.25, 0); this.box(0.98, 0.14, 0.68, trim, 0, 1.0, 0);
+    this.head = this.group(0, 2.05, 0); this.box(0.55, 0.65, 0.55, skin, 0, 0.15, 0, this.head); this.box(0.14, 0.28, 0.16, skin, 0, 0.05, 0.34, this.head);
+    for (const x of [-1, 1]) { this.box(0.16, 0.08, 0.04, this.mat(0xffffff, 0, true), x * 0.14, 0.25, 0.28, this.head); this.box(0.2, 0.05, 0.05, dk, x * 0.14, 0.34, 0.28, this.head); }
+    this.arms = this.box(1.0, 0.3, 0.45, robe, 0, 1.5, 0.4); this.armL = this.group(-0.62, 1.7, 0.1); this.armR = this.group(0.62, 1.7, 0.1);
+    for (const g of [this.armL, this.armR]) this.box(0.28, 0.9, 0.28, robe, 0, -0.45, 0, g);
+    this.arms.visible = true;
+    this.h.toast('El Invocador alza los brazos… ¡cuidado con los colmillos y los vex!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Invocador desata un círculo de colmillos!'); this.fangT = 1; }
+  raycast(o, d, m) { this.targets = this.vex.map((v) => ({ pos: v.pos, half: 0.7, onHit: () => this.killVex(v) })); return super.raycast(o, d, m); }
+  killVex(v) { this.h.burst(v.pos.x, v.pos.y, v.pos.z, [0.5, 0.7, 1], 14, 4); this.h.sound('hit', 1); this.scene.remove(v.mesh); this.vex.splice(this.vex.indexOf(v), 1); }
+  spawnFang(x, z, delay, world, player) {
+    const top = world.topY(Math.floor(x), Math.floor(z)); if (top < 0) return;
+    const g = new THREE.Group(); const m = new THREE.MeshLambertMaterial({ color: 0xf0e8c0, emissive: 0x403818 });
+    for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.5 - i * 0.14, 0.7, 0.5 - i * 0.14), m); b.position.y = 0.35 + i * 0.6; g.add(b); }
+    g.position.set(x, top + 1, z); g.scale.y = 0.01; g.visible = false; this.scene.add(g);
+    this.fangs.push({ x, z, y: top + 1, g, t: -delay, hit: false });
+  }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, hd = Math.hypot(dx, dz) || 1;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 5);
+    const want = 13; if (hd > want + 2) { this.pos.x += (dx / hd) * 3.5 * dt; this.pos.z += (dz / hd) * 3.5 * dt; } else if (hd < want - 4) { this.pos.x -= (dx / hd) * 3 * dt; this.pos.z -= (dz / hd) * 3 * dt; }
+    this.pos.y += (player.pos.y + 3.2 - this.pos.y) * Math.min(1, dt * 1.2);
+    this.root.position.set(this.pos.x, this.pos.y + Math.sin(this.t * 1.7) * 0.35, this.pos.z); this.root.rotation.y = this.yaw;
+    const cast = this.fangT < 1 || this.vexT < 1; this.armL.rotation.x = this.armR.rotation.x = cast ? -2.4 + Math.sin(this.t * 14) * 0.2 : 0; this.arms.visible = !cast;
+    // teletransporte
+    this.tpT -= dt;
+    if (this.tpT <= 0) {
+      this.tpT = k === 1 ? 8 : 5; this.h.burst(this.pos.x, this.pos.y + 1.5, this.pos.z, [0.9, 0.9, 0.3], 22, 5);
+      const a = Math.random() * Math.PI * 2, d = 11 + Math.random() * 4; this.pos.set(player.pos.x + Math.cos(a) * d, player.pos.y + 3 + Math.random() * 2, player.pos.z + Math.sin(a) * d);
+      this.h.burst(this.pos.x, this.pos.y + 1.5, this.pos.z, [0.9, 0.9, 0.3], 22, 5); this.h.sound('pop', 1);
+    }
+    // colmillos en línea hacia el jugador (fase 2: además un círculo a su alrededor)
+    this.fangT -= dt;
+    if (this.fangT <= 0 && !player.dead) {
+      this.fangT = k === 1 ? 4.2 : 3; this.h.sound('shoot', 0.8);
+      for (let i = 1; i <= 12; i++) this.spawnFang(this.pos.x + (dx / hd) * i * 1.4 + Math.sin(i) * 0.2, this.pos.z + (dz / hd) * i * 1.4, i * 0.07, world, player);
+      if (k === 2) for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; this.spawnFang(player.pos.x + Math.cos(a) * 3, player.pos.z + Math.sin(a) * 3, 0.9, world, player); }
+    }
+    for (let i = this.fangs.length - 1; i >= 0; i--) {
+      const f = this.fangs[i]; f.t += dt;
+      if (f.t >= 0) {
+        f.g.visible = true; f.g.scale.y = Math.min(1, f.t * 6);
+        if (!f.hit && f.t > 0.12 && Math.hypot(f.x - player.pos.x, f.z - player.pos.z) < 1.2 && Math.abs(f.y - player.pos.y) < 2.2 && !player.dead) { f.hit = true; this.h.hurtPlayer(6, 0, 0); }
+        if (f.t > 1.1) { this.scene.remove(f.g); this.fangs.splice(i, 1); }
+      }
+    }
+    // vex
+    this.vexT -= dt;
+    if (this.vexT <= 0 && !player.dead) {
+      this.vexT = k === 1 ? 10 : 7; this.h.sound('pop', 1);
+      const n = k === 1 ? 3 : 5;
+      for (let i = 0; i < n; i++) {
+        const mesh = new THREE.Group(); const m = new THREE.MeshLambertMaterial({ color: 0x8fb0e0, emissive: 0x203050, transparent: true, opacity: 0.85 });
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.5), m), w1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.4), m), w2 = w1.clone();
+        w1.position.set(-0.55, 0.2, -0.1); w2.position.set(0.55, 0.2, -0.1); mesh.add(b, w1, w2);
+        for (const x of [-0.1, 0.1]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), new THREE.MeshBasicMaterial({ color: 0xff2020 })); e.position.set(x, 0.15, 0.27); mesh.add(e); }
+        const pos2 = V(this.pos.x + rnd(-2, 2), this.pos.y + 1 + rnd(0, 2), this.pos.z + rnd(-2, 2)); mesh.position.copy(pos2); this.scene.add(mesh);
+        this.vex.push({ mesh, pos: pos2, w1, w2, life: 28, cool: 1 });
+      }
+    }
+    for (let i = this.vex.length - 1; i >= 0; i--) {
+      const v = this.vex[i]; v.life -= dt; v.cool -= dt;
+      const to = V(player.pos.x, player.pos.y + 1, player.pos.z).sub(v.pos), d = to.length();
+      v.pos.addScaledVector(to.normalize(), 6.2 * dt); v.pos.y += Math.sin(this.t * 6 + i) * dt * 1.5;
+      v.mesh.position.copy(v.pos); v.mesh.rotation.y = Math.atan2(to.x, to.z); v.w1.rotation.z = Math.sin(this.t * 25) * 0.7; v.w2.rotation.z = -v.w1.rotation.z;
+      if (d < 1.2 && v.cool <= 0 && !player.dead) { v.cool = 0.9; this.h.hurtPlayer(3, 0, 0); }
+      if (v.life <= 0) { this.scene.remove(v.mesh); this.vex.splice(i, 1); }
+    }
+  }
+  dispose() { for (const v of this.vex) this.scene.remove(v.mesh); for (const f of this.fangs) this.scene.remove(f.g); this.vex = []; this.fangs = []; super.dispose(); }
+}
+
+// ===================================================================== GHAST GIGANTE
+export class GiantGhast extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'GHAST GIGANTE', type: 'ghast', maxHp: 200, hitbox: { hx: 2.2, hy: 2.2, hz: 2.2, oy: 0 }, scale: 1.8, burstColor: [1, 1, 1] });
+    this.fireT = 3; this.tele = 0; this.theta = Math.random() * 6; this.targets = [];
+    const w = this.mat(0xf2f2f2), w2 = this.mat(0xdcdcdc), dark = this.mat(0x403838);
+    this.box(4, 4, 4, w, 0, 0, 0);
+    this.eyeL = this.box(0.9, 0.25, 0.1, dark, -0.9, 0.2, 2.03); this.eyeR = this.box(0.9, 0.25, 0.1, dark, 0.9, 0.2, 2.03);
+    this.mouth = this.box(0.7, 0.35, 0.1, dark, 0, -0.9, 2.03);
+    this.tents = [];
+    for (const x of [-1.4, 0, 1.4]) for (const z of [-1.4, 0, 1.4]) { const L = 2.2 + Math.abs(x * z) * 0.5 + (x === 0 && z === 0 ? 0.6 : 0); const t = this.box(0.55, L, 0.55, w2, x, -2 - L / 2, z); this.tents.push({ m: t, base: -2 - L / 2, ph: Math.random() * 6 }); }
+    this.redEye = this.mat(0xff2020, 0, true);
+    this.h.toast('¡Un Ghast gigante! Golpea sus bolas de fuego para devolvérselas');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : 2; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Ghast llora de rabia y dispara más rápido!'); }
+  raycast(o, d, m) { this.targets = this.proj.filter((p) => !p.reflected).map((p) => ({ pos: p.mesh.position, half: 1.25, onHit: () => this.reflect(p) })); return super.raycast(o, d, m); }
+  reflect(q) {
+    q.reflected = true; q.o = { ...q.o, reflectDmg: 70 }; q.life = 6;
+    q.vel = V(this.pos.x, this.pos.y, this.pos.z).sub(q.mesh.position).normalize().multiplyScalar(22); this.h.sound('hit', 1);
+  }
+  tick(dt, player) {
+    const k = this.phase;
+    this.theta += dt * (0.18 + 0.05 * k);
+    const R = 22, tx = player.pos.x + Math.cos(this.theta) * R, tz = player.pos.z + Math.sin(this.theta) * R, ty = player.pos.y + 11;
+    const f = Math.min(1, dt * 0.7); this.pos.x += (tx - this.pos.x) * f; this.pos.z += (tz - this.pos.z) * f; this.pos.y += (ty - this.pos.y) * f;
+    this.yaw += wrap(Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z) - this.yaw) * Math.min(1, dt * 3);
+    this.root.position.set(this.pos.x, this.pos.y + Math.sin(this.t) * 0.7, this.pos.z); this.root.rotation.y = this.yaw;
+    this.tents.forEach((t, i) => { t.m.rotation.z = Math.sin(this.t * 1.6 + t.ph) * 0.18; t.m.rotation.x = Math.cos(this.t * 1.3 + t.ph) * 0.18; });
+    // disparo con aviso: abre los ojos y la boca
+    this.fireT -= dt;
+    if (this.fireT <= 0 && this.tele <= 0 && !player.dead) { this.tele = 1.1; this.h.sound('hiss', 0.7); }
+    if (this.tele > 0) {
+      this.tele -= dt; this.eyeL.material = this.eyeR.material = this.redEye; this.eyeL.scale.y = this.eyeR.scale.y = 2.2; this.mouth.scale.set(1.6, 3.4, 1);
+      if (this.tele <= 0) {
+        this.fireT = k === 1 ? 3.6 : 2.2;
+        const from = V(this.pos.x, this.pos.y, this.pos.z), dir = V(player.pos.x + player.vel.x * 0.5, player.pos.y + 1, player.pos.z + player.vel.z * 0.5).sub(from);
+        this.shootProj(from, dir, { speed: 13, size: 2, color: 0xffe0a0, emissive: 0xff6010, radius: 3.6, ds: 0.6, effect: ['burn', 5], life: 9 });
+      }
+    } else { this.eyeL.material = this.eyeR.material = this.mouth.material; this.eyeL.scale.y = this.eyeR.scale.y = 1; this.mouth.scale.set(1, 1, 1); }
+  }
+}
+
+// ===================================================================== HEROBRINE
+export class Herobrine extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'HEROBRINE', type: 'herobrine', maxHp: 400, hitbox: { hx: 0.5, hy: 1.0, hz: 0.5, oy: 1.0 }, scale: 1.35, burstColor: [1, 1, 1] });
+    this.vel = V(); this.hw = 0.4; this.hh = 2.4; this.tpT = 5; this.boltT = 4; this.walk = 0; this.meleeT = 0; this.minionT = 8;
+    const skin = this.mat(0xe0ac8c), shirt = this.mat(0x2aa5b8), pants = this.mat(0x3a3f9c), white = this.mat(0xffffff, 0, true);
+    this.head = this.group(0, 1.5, 0); this.box(0.5, 0.5, 0.5, skin, 0, 0.25, 0, this.head);
+    this.box(0.5, 0.14, 0.5, this.mat(0x3a2412), 0, 0.46, 0, this.head);
+    for (const x of [-1, 1]) this.box(0.16, 0.1, 0.06, white, x * 0.13, 0.3, 0.26, this.head);
+    this.box(0.5, 0.75, 0.25, shirt, 0, 1.125, 0);
+    this.legL = this.group(-0.125, 0.75, 0); this.box(0.25, 0.75, 0.25, pants, 0, -0.375, 0, this.legL); this.legR = this.group(0.125, 0.75, 0); this.box(0.25, 0.75, 0.25, pants, 0, -0.375, 0, this.legR);
+    this.armL = this.group(-0.36, 1.48, 0); this.box(0.22, 0.72, 0.22, skin, 0, -0.36, 0, this.armL); this.armR = this.group(0.36, 1.48, 0); this.box(0.22, 0.72, 0.22, skin, 0, -0.36, 0, this.armR);
+    this.aura = new THREE.PointLight(0xffffff, 0, 14); this.root.add(this.aura); this.aura.position.y = 1.5;
+    this.h.toast('Una figura de ojos blancos te observa…'); this.h.sound('roar', 0.6);
+  }
+  phaseFor(r) { return r > 0.6 ? 1 : r > 0.25 ? 2 : 3; }
+  onPhase(p) {
+    this.h.sound('roar', 1);
+    if (p === 2) { this.h.toast('Las luces se apagan…'); this.tpT = 1; }
+    if (p === 3) { this.h.toast('¡HEROBRINE LEVITA! Cuidado con sus rayos'); this.vel.y = 6; }
+  }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 6);
+    this.h.darkness(k >= 2 ? 0.55 + Math.sin(this.t * 5) * 0.1 : 0.15);
+    // persigue despacio; en fase 3 levita
+    const speed = k === 1 ? 3.4 : 4.4;
+    if (k < 3) {
+      this.vel.x += ((dx / dist) * speed * (dist > 2.4 ? 1 : 0) - this.vel.x) * Math.min(1, dt * 6); this.vel.z += ((dz / dist) * speed * (dist > 2.4 ? 1 : 0) - this.vel.z) * Math.min(1, dt * 6);
+      const r = moveBody(world, { pos: this.pos, vel: this.vel, hw: this.hw, h: this.hh }, dt);
+      if ((r.hitX || r.hitZ) && r.onGround) this.vel.y = 9;
+    } else {
+      const ty = player.pos.y + 5, want = 14; this.pos.y += (ty - this.pos.y) * Math.min(1, dt * 1.5);
+      if (dist > want) { this.pos.x += (dx / dist) * 5 * dt; this.pos.z += (dz / dist) * 5 * dt; } else if (dist < want - 4) { this.pos.x -= (dx / dist) * 4 * dt; this.pos.z -= (dz / dist) * 4 * dt; }
+    }
+    this.walk += dt * Math.hypot(this.vel.x, this.vel.z) * 2.4; const sw = Math.sin(this.walk) * 0.8;
+    this.legL.rotation.x = sw; this.legR.rotation.x = -sw; this.armL.rotation.x = -sw; this.armR.rotation.x = k === 3 ? -1.4 : sw;
+    this.root.position.set(this.pos.x, this.pos.y + (k === 3 ? Math.sin(this.t * 2) * 0.4 : 0), this.pos.z); this.root.rotation.y = this.yaw;
+    this.aura.intensity = k >= 3 ? 3 + Math.sin(this.t * 12) : 0;
+    // se teletransporta a tu espalda
+    this.tpT -= dt;
+    if (this.tpT <= 0 && !player.dead) {
+      this.tpT = k === 1 ? 6.5 : k === 2 ? 4 : 5;
+      this.h.burst(this.pos.x, this.pos.y + 1, this.pos.z, [1, 1, 1], 24, 5);
+      const look = player.lookDir(), l = Math.hypot(look.x, look.z) || 1, bx = Math.floor(player.pos.x - (look.x / l) * 4), bz = Math.floor(player.pos.z - (look.z / l) * 4), top = world.topY(bx, bz);
+      if (k < 3 && top > 0) { this.pos.set(bx + 0.5, top + 1, bz + 0.5); this.vel.set(0, 0, 0); }
+      else this.pos.set(bx + 0.5, player.pos.y + 5, bz + 0.5);
+      this.h.burst(this.pos.x, this.pos.y + 1, this.pos.z, [1, 1, 1], 24, 5); this.h.sound('pop', 1);
+    }
+    // golpe cuerpo a cuerpo
+    this.meleeT -= dt;
+    if (dist < 2.6 && Math.abs(player.pos.y - this.pos.y) < 2.5 && this.meleeT <= 0 && !player.dead && k < 3) { this.meleeT = 1.1; this.h.hurtPlayer(k === 1 ? 8 : 11, (dx / dist) * 7, (dz / dist) * 7); this.h.sound('hit', 1); }
+    // rayos (con aviso de partículas)
+    this.boltT -= dt;
+    if (this.boltT <= 0 && !player.dead) {
+      this.boltT = k === 1 ? 6 : k === 2 ? 3.8 : 2.4;
+      const tx = player.pos.x, tz = player.pos.z; this.h.burst(tx, player.pos.y + 0.5, tz, [1, 1, 0.6], 18, 2);
+      setTimeout(() => { if (!this.dead) this.h.strikeNear(tx, tz); }, 900);
+      if (k === 3) { const from = V(this.pos.x, this.pos.y + 2, this.pos.z), dir = V(player.pos.x, player.pos.y + 1, player.pos.z).sub(from); this.shootProj(from, dir, { speed: 18, size: 0.9, color: 0xffffff, emissive: 0xffffff, radius: 2.2, ds: 0.45, effect: ['burn', 3] }); }
+    }
+    if (k >= 2) { this.minionT -= dt; if (this.minionT <= 0) { this.minionT = 11; if (this.h.minions() < 5) this.h.spawnMinion('zombie'); } }
+  }
+  dispose() { this.h.darkness(0); super.dispose(); }
+}
+
+// ===================================================================== REY SLIME
+export class SlimeKing extends BossBase {
+  constructor(scene, hooks, pos) {
+    super(scene, hooks, pos, { name: 'REY SLIME', type: 'slimeking', maxHp: 260, hitbox: { hx: 2.6, hy: 2.6, hz: 2.6, oy: 2.6 }, scale: 1.4, burstColor: [0.4, 1, 0.4] });
+    this.vel = V(); this.hw = 3.2; this.hh = 5.4; this.jumpT = 2.5; this.onGround = false; this.splitAt = [0.75, 0.5, 0.25]; this.squash = 1;
+    const outer = new THREE.MeshLambertMaterial({ color: 0x60e060, emissive: 0x104010, transparent: true, opacity: 0.72 }); this.flashMats.push(outer);
+    const inner = this.mat(0x2f9a2f, 0x083008);
+    this.slime = this.group(0, 0, 0);
+    this.box(5, 5, 5, outer, 0, 2.6, 0, this.slime); this.box(2.2, 2.2, 2.2, inner, 0, 2.6, 0, this.slime);
+    const dk = this.mat(0x103010, 0, true);
+    for (const x of [-1, 1]) this.box(0.7, 0.7, 0.2, dk, x * 1.2, 3.1, 2.55, this.slime); this.box(1.5, 0.3, 0.2, dk, 0, 1.8, 2.55, this.slime);
+    const gold = this.mat(0xf0c030, 0x302000);
+    this.box(3.4, 0.6, 3.4, gold, 0, 5.4, 0, this.slime);
+    for (const [x, z] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4], [0, 1.6], [0, -1.6]]) this.box(0.5, 0.9, 0.5, gold, x, 6.0, z, this.slime);
+    this.h.toast('El Rey Slime salta hacia ti. ¡Se divide al perder vida!');
+  }
+  phaseFor(r) { return r > 0.5 ? 1 : r > 0.25 ? 2 : 3; }
+  onPhase() { this.h.sound('roar', 1); this.h.toast('¡El Rey Slime salta más rápido!'); }
+  onHit() { const r = this.hp / this.maxHp; while (this.splitAt.length && r < this.splitAt[0]) { this.splitAt.shift(); for (let i = 0; i < 4; i++) this.h.spawnMinion('slime'); this.h.toast('¡Se divide en slimes!'); } }
+  tick(dt, player, world) {
+    const k = this.phase, dx = player.pos.x - this.pos.x, dz = player.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 1;
+    this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 4);
+    this.jumpT -= dt;
+    if (this.onGround) {
+      this.vel.x *= 0.8; this.vel.z *= 0.8;
+      if (this.jumpT <= 0 && !player.dead) { this.jumpT = k === 1 ? 2.6 : k === 2 ? 1.8 : 1.2; const sp = Math.min(dist, 22) / 1.35 * 0.95; this.vel.y = 17; this.vel.x = (dx / dist) * sp; this.vel.z = (dz / dist) * sp; this.onGround = false; this.squash = 1.4; this.h.sound('pop', 1); }
+    }
+    const r = moveBody(world, { pos: this.pos, vel: this.vel, hw: this.hw, h: this.hh }, dt, 34);
+    if (r.onGround && !this.onGround) { // aterriza: onda expansiva
+      this.onGround = true; this.squash = 0.6; this.h.sound('explode', 0.7);
+      const rad = k === 1 ? 8 : 11, d2 = Math.hypot(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+      this.h.burst(this.pos.x, this.pos.y + 0.3, this.pos.z, [0.4, 1, 0.4], 36, 8);
+      if (d2 < rad && Math.abs(player.pos.y - this.pos.y) < 3 && !player.dead) this.h.hurtPlayer(k === 1 ? 8 : 12, (player.pos.x - this.pos.x) / (d2 || 1) * 9, (player.pos.z - this.pos.z) / (d2 || 1) * 9);
+      const cx = Math.floor(this.pos.x), cz = Math.floor(this.pos.z), cy = Math.floor(this.pos.y) - 1; // cráter
+      for (let ax = -3; ax <= 3; ax++) for (let az = -3; az <= 3; az++) if (ax * ax + az * az <= 9 && world.getBlock(cx + ax, cy, cz + az) && world.getBlock(cx + ax, cy, cz + az) !== B.BEDROCK && Math.random() < 0.6) world.setBlock(cx + ax, cy, cz + az, 0);
+    }
+    if ((r.hitX || r.hitZ)) { this.vel.x *= -0.2; this.vel.z *= -0.2; }
+    this.squash += (1 - this.squash) * Math.min(1, dt * 8);
+    this.slime.scale.set(1 / Math.sqrt(this.squash), this.squash, 1 / Math.sqrt(this.squash));
+    this.root.position.copy(this.pos); this.root.rotation.y = this.yaw;
+    if (dist < 3.2 && Math.abs(player.pos.y - this.pos.y) < 4 && !player.dead && (this.contactT = (this.contactT || 0) - dt) <= 0) { this.contactT = 1.0; this.h.hurtPlayer(5, (dx / dist) * 6, (dz / dist) * 6); }
+  }
+}
+
 export const BOSS_INFO = {
   storm: { name: 'Tormenta Wither', color: '#b060ff', hp: 360, desc: 'Colosal masa con tres cabezas. Rayo tractor, cráneos explosivos y un bloque de comandos como punto débil.', icon: '🌀' },
   dragon: { name: 'Ender Dragon', color: '#e040ff', hp: 300, desc: 'Vuela en círculos, pica en picado y lanza aliento. Destruye sus 4 cristales para poder herirlo.', icon: '🐉', make: (s, h, p) => new EnderDragon(s, h, p), up: 16 },
@@ -399,4 +699,11 @@ export const BOSS_INFO = {
   warden: { name: 'Warden', color: '#3be8c8', hp: 360, desc: 'Ciego pero letal. Golpes devastadores y explosión sónica a distancia. Oscurece la pantalla.', icon: '👁', make: (s, h, p) => new WardenBoss(s, h, p), up: 0, ground: true },
   guardian: { name: 'Guardián Ancestral', color: '#70fff0', hp: 240, desc: 'Su láser carga y causa fatiga de minería. Sus espinas devuelven daño al golpearlo.', icon: '🐟', make: (s, h, p) => new ElderGuardian(s, h, p), up: 6 },
 };
-export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian'];
+Object.assign(BOSS_INFO, {
+  ravager: { name: 'Devastador', color: '#b09070', hp: 280, desc: 'Bestia blindada que ruge y embiste arrasando todo. Tras cada embestida queda aturdido: ¡ataca entonces!', icon: '🐗', make: (s, h, p) => new Ravager(s, h, p), ground: true, dist: 16 },
+  evoker: { name: 'Invocador', color: '#e0c040', hp: 220, desc: 'Hechicero que se teletransporta, lanza hileras de colmillos y llama a vex voladores (se pueden golpear).', icon: '🧙', make: (s, h, p) => new Evoker(s, h, p), up: 4, dist: 14 },
+  ghast: { name: 'Ghast Gigante', color: '#f4f4f4', hp: 200, desc: 'Flota llorando y escupe enormes bolas de fuego. ¡Golpéalas para devolvérselas y hacerle un daño brutal!', icon: '👻', make: (s, h, p) => new GiantGhast(s, h, p), up: 14, dist: 26 },
+  herobrine: { name: 'Herobrine', color: '#ffffff', hp: 400, desc: 'Ojos blancos, teletransportes a tu espalda, rayos y oscuridad. Con poca vida levita. El jefe final.', icon: '👤', make: (s, h, p) => new Herobrine(s, h, p), ground: true, dist: 14 },
+  slimeking: { name: 'Rey Slime', color: '#60e060', hp: 260, desc: 'Gigantesco, salta y aplasta con ondas expansivas. Se divide en slimes al perder vida.', icon: '🟢', make: (s, h, p) => new SlimeKing(s, h, p), ground: true, dist: 18 },
+});
+export const BOSS_ORDER = ['storm', 'dragon', 'wither', 'warden', 'guardian', 'ravager', 'evoker', 'ghast', 'herobrine', 'slimeking'];

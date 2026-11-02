@@ -102,6 +102,15 @@ export const MOB_TYPES = {
     },
     drops: () => (Math.random() < 0.65 ? [[I.PEARL, 1]] : []),
   },
+  slime: {
+    hw: 0.42, h: 0.85, hp: 8, speed: 0, hostile: true, name: 'Slime', xp: 2,
+    build(g, o) {
+      const m = new THREE.MeshLambertMaterial({ color: 0x60e060, emissive: 0x104010, transparent: true, opacity: 0.8 });
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.84, 0.84), m); b.position.y = 0.42; g.add(b);
+      part(g, 0.4, 0.4, 0.4, 0x2f9a2f, 0, 0.42, 0); part(g, 0.14, 0.14, 0.05, 0x103010, -0.2, 0.55, 0.43); part(g, 0.14, 0.14, 0.05, 0x103010, 0.2, 0.55, 0.43);
+    },
+    drops: () => [],
+  },
   zombie: {
     hw: 0.3, h: 1.8, hp: 20, speed: 2.5, hostile: true, name: 'Zombi', damage: 3,
     build(g, o) {
@@ -244,7 +253,11 @@ export class MobManager {
       const inWater = w.isLiquid(Math.floor(m.pos.x), Math.floor(m.pos.y + 0.2), Math.floor(m.pos.z));
       const fx = -Math.sin(m.yaw), fz = -Math.cos(m.yaw);
       if (moving && m.knock === undefined) { m.vel.x += (fx * speed - m.vel.x) * Math.min(1, dt * 8); m.vel.z += (fz * speed - m.vel.z) * Math.min(1, dt * 8); }
-      else { m.vel.x *= Math.max(0, 1 - dt * 6); m.vel.z *= Math.max(0, 1 - dt * 6); }
+      else if (m.type !== 'slime' || m.onGround) { m.vel.x *= Math.max(0, 1 - dt * 6); m.vel.z *= Math.max(0, 1 - dt * 6); }
+      if (m.type === 'slime') { // salta a trompicones
+        moving = false; m.hopT = (m.hopT === undefined ? 0.5 : m.hopT) - dt;
+        if (m.onGround && m.hopT <= 0 && hostile) { m.hopT = 1.0 + Math.random() * 0.8; m.vel.y = 7.5; m.vel.x = (dx / (dist || 1)) * 3.4; m.vel.z = (dz / (dist || 1)) * 3.4; m.yaw = Math.atan2(-dx, -dz); }
+      }
       m.moving = moving;
       if (inWater) { m.vel.y = Math.max(m.vel.y, 0) + 14 * dt; m.vel.y = Math.min(m.vel.y, 2.5); }
 
@@ -257,8 +270,8 @@ export class MobManager {
         m.cool = 1; this.hooks.hurtPlayer(m.def.damage, (dx / (dist || 1)) * 5, (dz / (dist || 1)) * 5);
       }
       // Araña y enderman: cuerpo a cuerpo
-      if ((m.type === 'spider' || m.def.enderman) && hostile && dist < (m.type === 'spider' ? 1.7 : 1.5) && Math.abs(dy) < 1.8 && m.cool <= 0) {
-        m.cool = m.type === 'spider' ? 0.9 : 1; this.hooks.hurtPlayer(m.type === 'spider' ? 2 : 6, (dx / (dist || 1)) * 4, (dz / (dist || 1)) * 4);
+      if ((m.type === 'spider' || m.type === 'slime' || m.def.enderman) && hostile && dist < (m.type === 'spider' ? 1.7 : m.type === 'slime' ? 1.3 : 1.5) && Math.abs(dy) < 1.8 && m.cool <= 0) {
+        m.cool = m.type === 'spider' ? 0.9 : 1; this.hooks.hurtPlayer(m.type === 'spider' || m.type === 'slime' ? 2 : 6, (dx / (dist || 1)) * 4, (dz / (dist || 1)) * 4);
       }
       // Esqueleto: dispara flechas
       if (m.def.ranged && hostile && dist < 22 && m.cool <= 0) {

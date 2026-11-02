@@ -21,7 +21,12 @@ export const QUESTS = [
   { id: 'b_wither', group: 'Jefes', title: 'Más allá de los huesos', desc: 'Derrota al Wither', ev: 'boss', target: 'wither', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   { id: 'b_warden', group: 'Jefes', title: 'Silencio absoluto', desc: 'Derrota al Warden', ev: 'boss', target: 'warden', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   { id: 'b_guardian', group: 'Jefes', title: 'La mirada del océano', desc: 'Derrota al Guardián Ancestral', ev: 'boss', target: 'guardian', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
-  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 5 jefes de Minecraft', ev: 'bossall', target: null, n: 5, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
+  { id: 'b_ravager', group: 'Jefes', title: 'Contra la embestida', desc: 'Derrota al Devastador', ev: 'boss', target: 'ravager', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_evoker', group: 'Jefes', title: 'Colmillos y vex', desc: 'Derrota al Invocador', ev: 'boss', target: 'evoker', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_ghast', group: 'Jefes', title: 'Devuélvesela', desc: 'Derrota al Ghast Gigante', ev: 'boss', target: 'ghast', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_slime', group: 'Jefes', title: 'Aplastado', desc: 'Derrota al Rey Slime', ev: 'boss', target: 'slimeking', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_hero', group: 'Jefes', title: 'Más allá del mito', desc: 'Derrota a Herobrine', ev: 'boss', target: 'herobrine', n: 1, reward: [[I.STAR, 2], [I.DIAMOND, 16]], xp: 250 },
+  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 10 jefes de Minecraft', ev: 'bossall', target: null, n: 10, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
 ];
 
 export class Quests {

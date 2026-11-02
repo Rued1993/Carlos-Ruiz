@@ -53,7 +53,13 @@ const materials = {
 const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
+const STORMY = new Set(['storm', 'dragon', 'wither', 'herobrine']);
 const LOOT = {
+  ravager: [[I.STAR, 1], [I.DIAMOND, 8], [I.GOLD, 10]],
+  evoker: [[I.STAR, 1], [I.DIAMOND, 6], [I.GOLD, 8], [I.PEARL, 1]],
+  ghast: [[I.STAR, 1], [I.DIAMOND, 6], [I.COAL, 16]],
+  herobrine: [[I.STAR, 3], [I.DIAMOND, 16], [I.GOLD, 16], [I.PEARL, 2]],
+  slimeking: [[I.STAR, 1], [I.DIAMOND, 6], [I.GOLD, 6]],
   storm: [[I.STAR, 1], [B.COMMAND, 1], [I.DIAMOND, 8], [I.GOLD, 12]],
   dragon: [[I.STAR, 2], [I.PEARL, 4], [I.DIAMOND, 12], [I.GOLD, 10]],
   wither: [[I.STAR, 1], [I.DIAMOND, 6], [I.GOLD, 10]],
@@ -222,13 +228,13 @@ function spawnBossOf(type, x, y, z) {
   const inf = BOSS_INFO[type], pos = new THREE.Vector3(x, y, z);
   boss = type === 'storm' ? new WitherStorm(scene, bossHooks, pos) : inf.make(scene, bossHooks, pos);
   setBossBar(type);
-  if (type === 'storm' || type === 'dragon' || type === 'wither') { weather.set('storm'); weather.boss = true; weather.timer = 9999; }
+  if (STORMY.has(type)) { weather.set('storm'); weather.boss = true; weather.timer = 9999; }
   sound('roar');
 }
 function summonBoss(type) {
   if (boss || ritual) { ui.toast('Ya hay un jefe activo'); return false; }
   const inf = BOSS_INFO[type], look = player.lookDir(), l = Math.hypot(look.x, look.z) || 1, fx = look.x / l, fz = look.z / l;
-  const dist = type === 'warden' ? 12 : type === 'guardian' ? 16 : type === 'wither' ? 20 : 26;
+  const dist = inf.dist || (type === 'warden' ? 12 : type === 'guardian' ? 16 : type === 'wither' ? 20 : 26);
   const x = player.pos.x + fx * dist, z = player.pos.z + fz * dist;
   let y;
   if (inf.ground) { const t = world.topY(Math.floor(x), Math.floor(z)); y = t > 0 ? t + 1 : player.pos.y; }
@@ -673,7 +679,7 @@ function frame(now) {
     player.push.x = player.push.y = player.push.z = 0;
     if (ritual) updateRitual(dt);
     if (boss) {
-      if (boss.type === 'storm' || boss.type === 'dragon' || boss.type === 'wither') { weather.timer = 9999; weather.boss = true; }
+      if (STORMY.has(boss.type)) { weather.timer = 9999; weather.boss = true; }
       boss.update(dt, player, world);
       if (boss) {
         $('bossbar').classList.remove('hidden');
@@ -701,7 +707,7 @@ function frame(now) {
       $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${WEATHER_NAMES[weather.state]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
       $('xpFill').style.width = (xpPts / xpNeed(xpLevel)) * 100 + '%'; $('xpLvl').textContent = xpLevel;
       $('xp').style.visibility = mode === 'survival' ? 'visible' : 'hidden';
-      const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`);
+      const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`);
       $('effects').innerHTML = ef.join('');
       $('darkness').style.opacity = darkTarget;
     }
