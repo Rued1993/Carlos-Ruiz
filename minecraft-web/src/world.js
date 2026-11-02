@@ -29,6 +29,7 @@ for (const f of FACES) {
   }
 }
 const AO = [0.5, 0.68, 0.84, 1];
+const BANDS = [B.TERRA_ORANGE, B.TERRA_RED, B.TERRA_YELLOW, B.TERRA_ORANGE, B.TERRA_WHITE, B.TERRA_BROWN, B.TERRA_ORANGE];
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // Terreno: continentes, océanos profundos, cordilleras, colinas y ríos
@@ -51,12 +52,17 @@ export function terrainInfo(x, z, seed) {
   }
   h = Math.max(6, Math.min(CH - 8, Math.floor(h)));
   const t = fbm(x * 0.0035, z * 0.0035, seed + 500, 2), hm = fbm(x * 0.004, z * 0.004, seed + 900, 2);
+  // Biomas nuevos: mesa (badlands), cerezo y pantano
+  const bd = fbm(x * 0.003 + 90, z * 0.003 - 40, seed + 720, 2), chn = fbm(x * 0.0042 - 30, z * 0.0042 + 70, seed + 740, 2), swn = fbm(x * 0.0038 + 10, z * 0.0038 + 60, seed + 760, 2);
   let biome;
-  if (h <= SEA - 1) biome = 'ocean';
+  if (cont >= 0.4 && m <= 0.3 && h > SEA - 1 && t >= 0.34 && t <= 0.64 && swn > 0.54 && h <= SEA + 9) { biome = 'swamp'; h = SEA + Math.floor((fbm(x * 0.07, z * 0.07, seed + 13, 2) - 0.45) * 12); }
+  else if (cont >= 0.4 && m <= 0.3 && h > SEA - 1 && t > 0.64 && hm <= 0.55 && bd > 0.5) { biome = 'badlands'; h = SEA + 6 + 4 * Math.floor(hills * 5.5); }
+  else if (h <= SEA - 1) biome = 'ocean';
   else if (m > 0.3) biome = 'mountains';
   else if (t < 0.34) biome = 'snow';
   else if (t > 0.64) biome = hm > 0.55 ? 'jungle' : 'desert';
   else biome = t > 0.55 && hm > 0.6 ? 'jungle' : 'plains';
+  if (biome === 'plains' && chn > 0.6 && m <= 0.3) biome = 'cherry';
   return { h, biome, m, t, hm };
 }
 export const terrainHeight = (x, z, seed) => terrainInfo(x, z, seed).h;
@@ -118,7 +124,9 @@ export class World {
         const wx = x0 + lx, wz = z0 + lz;
         const info = terrainInfo(wx, wz, seed), h = info.h, biome = info.biome;
         let top = B.GRASS, sub = B.DIRT;
-        if (biome === 'ocean' || h <= SEA + 1) { top = B.SAND; sub = B.SAND; }
+        if (biome === 'swamp') { top = h > SEA ? B.GRASS : B.MUD; sub = B.MUD; }
+        else if (biome === 'badlands') { top = B.RED_SAND; sub = B.TERRA_ORANGE; }
+        else if (biome === 'ocean' || h <= SEA + 1) { top = B.SAND; sub = B.SAND; }
         else if (biome === 'desert') { top = B.SAND; sub = B.SAND; }
         else if (biome === 'snow') top = B.SNOW;
         else if (biome === 'mountains') {
@@ -127,6 +135,7 @@ export class World {
         for (let y = 0; y <= h && y < CH; y++) {
           let b = B.STONE;
           if (y === h) b = top;
+          else if (biome === 'badlands' && y >= h - 14 && y > SEA - 3) b = BANDS[Math.floor(y / 2 + ((wx >> 5) & 1)) % BANDS.length]; // vetas de colores en los acantilados
           else if (y >= h - 3) b = sub;
           else {
             const r = hash2(wx * 31 + y, wz * 17 - y, seed + 77 + y);
@@ -134,6 +143,7 @@ export class World {
             else if (y < 32 && r > 0.95 && r < 0.958) b = B.LAPIS_ORE;
             else if (y < 48 && r > 0.975 && r < 0.99) b = B.IRON_ORE;
             else if (y < 28 && r > 0.99 && r < 0.996) b = B.GOLD_ORE;
+            else if (biome === 'badlands' && y < 60 && r > 0.935 && r < 0.95) b = B.GOLD_ORE;
             else if (y < 16 && r > 0.996) b = B.DIAMOND_ORE;
           }
           if (y === 0 || (y === 1 && hash2(wx, wz, seed + 3) < 0.5)) b = B.BEDROCK;
@@ -163,18 +173,25 @@ export class World {
         const r = hash2(tx, tz, seed + 99);
         if (r > 0.06) continue;
         const info = terrainInfo(tx, tz, seed), h = info.h, biome = info.biome;
-        if (h <= SEA + 1 || biome === 'ocean' || biome === 'mountains') continue;
+        if (h <= (biome === 'swamp' ? SEA : SEA + 1) || biome === 'ocean' || biome === 'mountains') continue;
         if (villages.some((v) => Math.abs(v.x - tx) < 26 && Math.abs(v.z - tz) < 26) || structs.some((s) => Math.abs(s.x - tx) < 14 && Math.abs(s.z - tz) < 14)) continue;
+        if (biome === 'badlands') { if (r < 0.003) { const ch = 1 + Math.floor(hash2(tx, tz, seed + 6) * 3); for (let t = 1; t <= ch; t++) put(tx, h + t, tz, B.CACTUS, false); } continue; }
         if (biome === 'desert') {
           if (r < 0.004) { const ch = 1 + Math.floor(hash2(tx, tz, seed + 6) * 3); for (let t = 1; t <= ch; t++) put(tx, h + t, tz, B.CACTUS, false); }
           continue;
         }
         const forest = fbm(tx * 0.012, tz * 0.012, seed + 800, 2) > 0.58;
-        const density = biome === 'jungle' ? 0.055 : forest ? 0.03 : biome === 'snow' ? 0.007 : 0.005;
+        const density = biome === 'jungle' ? 0.055 : biome === 'swamp' ? 0.045 : biome === 'cherry' ? 0.028 : forest ? 0.03 : biome === 'snow' ? 0.007 : 0.005;
         if (r > density) continue;
-        const jungle = biome === 'jungle';
-        const trunk = jungle ? 8 + Math.floor(hash2(tx, tz, seed + 5) * 6) : 4 + Math.floor(hash2(tx, tz, seed + 5) * 3);
-        const rad0 = jungle ? 3 : 2;
+        if (biome === 'cherry') { // cerezo: tronco algo torcido y copa ancha rosa
+          const tr = 4 + Math.floor(hash2(tx, tz, seed + 5) * 3);
+          for (let dy = -1; dy <= 1; dy++) { const rad = dy === 1 ? 2 : 3; for (let dz = -rad; dz <= rad; dz++) for (let dx = -rad; dx <= rad; dx++) { if (Math.abs(dx) === rad && Math.abs(dz) === rad) continue; put(tx + dx, h + tr + dy, tz + dz, B.CHERRY_LEAVES, true); } }
+          for (let t = 1; t <= tr; t++) put(tx, h + t, tz, B.CHERRY_LOG, false);
+          continue;
+        }
+        const jungle = biome === 'jungle', swampT = biome === 'swamp';
+        const trunk = swampT ? 4 + Math.floor(hash2(tx, tz, seed + 5) * 2) : jungle ? 8 + Math.floor(hash2(tx, tz, seed + 5) * 6) : 4 + Math.floor(hash2(tx, tz, seed + 5) * 3);
+        const rad0 = jungle || swampT ? 3 : 2;
         for (let dy = -2; dy <= 1; dy++) {
           const rad = dy <= -1 ? rad0 : rad0 - 1;
           for (let dz = -rad; dz <= rad; dz++)
@@ -821,11 +838,13 @@ export class World {
       return this.getBlock(wx, wy, wz);
     };
     // Tinte de vegetación por clima (seco/amarillento, húmedo/verde, frío/azulado)
-    const tint = new Float32Array(CS * CS * 3);
+    const tint = new Float32Array(CS * CS * 3), bio = [];
+    for (let q = 0; q < 16; q++) bio.push(terrainInfo(x0 + (q & 3) * 4 + 2, z0 + (q >> 2) * 4 + 2, this.seed).biome);
     for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
       const wx = x0 + lx, wz = z0 + lz, hm = fbm(wx * 0.004, wz * 0.004, this.seed + 900, 2), t = fbm(wx * 0.0035, wz * 0.0035, this.seed + 500, 2);
       const w = smoothstep(0.35, 0.7, hm), cold = smoothstep(0.42, 0.28, t), i = (lz * CS + lx) * 3;
       tint[i] = (1.15 * (1 - w) + 0.78 * w) * (1 - 0.18 * cold); tint[i + 1] = 1.0 * (1 - w) + 1.1 * w; tint[i + 2] = (0.6 * (1 - w) + 0.8 * w) + 0.3 * cold;
+      if (bio[(lz >> 2) * 4 + (lx >> 2)] === 'swamp') { tint[i] *= 0.62; tint[i + 1] *= 0.78; tint[i + 2] *= 0.55; } // pantano: verde oscuro y turbio
     }
     const eps = 0.0015;
     const cell = [0, 0, 0], tmp = [0, 0, 0];
@@ -915,7 +934,7 @@ export class World {
             const tile = TILE_INDEX[f.top ? def.tiles[0] : f.bottom ? def.tiles[1] : def.tiles[2]];
             const [ta, tb] = f.tan;
             let cr = 1, cg = 1, cb = 1;
-            if (id === B.LEAVES || (id === B.GRASS && f.top)) { const ti = (lz * CS + lx) * 3; cr = tint[ti]; cg = tint[ti + 1]; cb = tint[ti + 2]; }
+            if (id === B.LEAVES || (id === B.GRASS && f.top)) { /* hojas y hierba reciben el tinte del clima */ const ti = (lz * CS + lx) * 3; cr = tint[ti]; cg = tint[ti + 1]; cb = tint[ti + 2]; }
             const centerL = (ny < CH ? this.skyLit(nx, ny, nz) : 1);
             const centerB = bAt(nx, ny, nz);
             // AO y luz por vértice
@@ -950,7 +969,7 @@ export class World {
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
               L.col.push(v * cr, v * cg, v * cb);
               L.bl.push(def.glow ? 1 : f.shade * AO[ao[ci]] * bg[ci]);
-              L.sw.push(id === B.LEAVES ? 1 : id === B.WATER || id === B.LAVA ? 2 : 0); L.sk.push(lg[ci]);
+              L.sw.push(id === B.LEAVES || id === B.CHERRY_LEAVES ? 1 : id === B.WATER || id === B.LAVA ? 2 : 0); L.sk.push(lg[ci]);
             }
             if (ao[0] + ao[3] > ao[1] + ao[2]) L.ind.push(n, n + 1, n + 3, n, n + 3, n + 2);
             else L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);

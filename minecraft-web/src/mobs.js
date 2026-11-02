@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { moveBody } from './entities.js';
 import { B, I, OPAQUE, LIQUID } from './blocks.js';
-import { CH } from './world.js';
+import { CH, biomeAt } from './world.js';
 import { CLEAN, clean } from './flavor.js';
 import { restyleMob } from './restyle.js';
 
@@ -707,7 +707,7 @@ export class MobManager {
     if (day < 0.3) { // noche: superficie
       const [x, z] = pickColumn(20, 36); const top = w.topY(x, z);
       if (top > 0 && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z) && OPAQUE[w.getBlock(x, top, z)])
-        this.add(HOSTILE_NIGHT[Math.floor(Math.random() * HOSTILE_NIGHT.length)], x + 0.5, top + 1, z + 0.5);
+        this.add(this.world.dim === 'overworld' && Math.random() < 0.5 && biomeAt(x, z, this.world.seed) === 'swamp' ? 'slime' : HOSTILE_NIGHT[Math.floor(Math.random() * HOSTILE_NIGHT.length)], x + 0.5, top + 1, z + 0.5);
     } else if (hostile < 4) { // cuevas: bajo la superficie, siempre
       const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 14;
       const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);

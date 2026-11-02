@@ -8,7 +8,8 @@ const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', '
   'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command',
   'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal',
   'purpur', 'end_bricks', 'chest_top', 'chest_side', 'chest_open',
-  'sandstone', 'mossy_cobble', 'ancient_debris_top', 'ancient_debris_side', 'gold_block', 'brew_top', 'brew_side', 'ench_top', 'ench_side', 'lapis_ore'];
+  'sandstone', 'mossy_cobble', 'ancient_debris_top', 'ancient_debris_side', 'gold_block', 'brew_top', 'brew_side', 'ench_top', 'ench_side', 'lapis_ore',
+  'red_sand', 'terra_orange', 'terra_red', 'terra_yellow', 'terra_white', 'terra_brown', 'cherry_log_side', 'cherry_log_top', 'cherry_leaves', 'cherry_planks', 'mud'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -110,6 +111,17 @@ const painters = {
   ancient_debris_top: (x, y) => { const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)); return d > 5.5 ? jitter([92, 66, 58], 8, x, y, 124) : d > 3 ? jitter([126, 92, 80], 8, x, y, 125) : jitter([70, 48, 44], 8, x, y, 126); },
   ancient_debris_side: (x, y) => { const band = y % 5 === 2; return jitter(band ? [70, 48, 44] : [112, 80, 70], 9, x, y, 127); },
   gold_block: (x, y) => { const edge = x < 1 || y < 1 || x > 14 || y > 14, hl = (x === 2 && y < 6) || (y === 2 && x < 6); return hl ? [255, 252, 200] : edge ? jitter([200, 150, 20], 6, x, y, 128) : jitter([250, 214, 60], 10, x, y, 129); },
+  red_sand: (x, y) => jitter([192, 100, 46], 13, x, y, 150),
+  terra_orange: (x, y) => jitter(y % 5 === 4 ? [176, 90, 44] : [192, 104, 54], 7, x, y, 151),
+  terra_red: (x, y) => jitter(y % 5 === 4 ? [128, 48, 34] : [146, 62, 44], 7, x, y, 152),
+  terra_yellow: (x, y) => jitter(y % 5 === 4 ? [190, 142, 52] : [208, 164, 70], 7, x, y, 153),
+  terra_white: (x, y) => jitter(y % 5 === 4 ? [196, 168, 150] : [214, 190, 172], 6, x, y, 154),
+  terra_brown: (x, y) => jitter(y % 5 === 4 ? [96, 64, 48] : [112, 78, 58], 7, x, y, 155),
+  cherry_log_side: (x, y) => jitter([104, 66, 68], 9, x, 0, 156).map((c) => c - (x % 4 === 0 ? 16 : 0)),
+  cherry_log_top: (x, y) => { const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)); return jitter(d % 4 < 2 ? [238, 176, 188] : [214, 146, 160], 8, x, y, 157); },
+  cherry_leaves: (x, y) => { const sp = hash2(x >> 1, y >> 1, 158) > 0.72; return jitter(sp ? [252, 214, 226] : [236, 150, 184], 22, x, y, 159); },
+  cherry_planks: (x, y) => jitter([228, 176, 170], 8, x, y, 160).map((c) => (y % 4 === 3 ? c - 30 : c)),
+  mud: (x, y) => { const wet = hash2(x >> 1, y >> 1, 161) > 0.8; return jitter(wet ? [48, 38, 34] : [66, 52, 44], 9, x, y, 162); },
   lapis_ore: ore([38, 76, 190], 140),
   brew_top: (x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 2.2) return [250, 190, 40]; if (d < 4.6) return jitter([70, 70, 74], 6, x, y, 141); return x < 1 || y < 1 || x > 14 || y > 14 ? jitter([40, 40, 44], 6, x, y, 142) : stone(x, y).map((c) => c - 30); },
   brew_side: (x, y) => { if (y > 11) return stone(x, y).map((c) => c - 25); const rod = x >= 7 && x <= 8; if (rod) return jitter([250, 180, 40], 12, x, y, 143); const bottle = (x >= 2 && x <= 4 && y >= 5) || (x >= 11 && x <= 13 && y >= 5); if (bottle) return [215, 235, 245, 255]; return [0, 0, 0, 0]; },

@@ -1,6 +1,6 @@
 // Service worker de VoxelLands: funciona sin conexión tras la primera visita.
 // Estrategia: red primero (siempre la versión más nueva si hay conexión) y caché como respaldo.
-const CACHE = 'mcweb-v11';
+const CACHE = 'mcweb-v12';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Precarga el HTML y los archivos de /assets/ que referencian (el JS principal y el worker de chunks)

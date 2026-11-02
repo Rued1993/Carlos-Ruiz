@@ -11,6 +11,7 @@ export const B = {
   PURPUR: 34, END_BRICKS: 35, CHEST: 36, CHEST_OPEN: 37,
   SANDSTONE: 38, MOSSY_COBBLE: 39, ANCIENT_DEBRIS: 40, GOLD_BLOCK: 41,
   BREWING: 85, ENCH_TABLE: 86, LAPIS_ORE: 87,
+  RED_SAND: 88, TERRA_ORANGE: 89, TERRA_RED: 90, TERRA_YELLOW: 91, TERRA_WHITE: 92, TERRA_BROWN: 93, CHERRY_LOG: 94, CHERRY_LEAVES: 95, CHERRY_PLANKS: 96, MUD: 97,
 };
 export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, ELYTRA: 109,
   DONUT: 160, DUFF: 161, SENZU: 162, DBALL: 163, NETHERITE: 170, SCRAP: 171, LEATHER: 172, BOTTLE: 173, WART: 174, BLAZE_POWDER: 175, MAGMA_CREAM: 176, LAPIS: 177, BOOK: 178, CHICKEN: 155, COOKED_CHICKEN: 156 };
@@ -60,6 +61,16 @@ block(B.SANDSTONE, 'Arenisca', ['sandstone', 'sandstone', 'sandstone'], 0.8, 'pi
 block(B.MOSSY_COBBLE, 'Adoquín musgoso', ['mossy_cobble', 'mossy_cobble', 'mossy_cobble'], 2, 'pick', 1);
 block(B.ANCIENT_DEBRIS, 'Restos antiguos', ['ancient_debris_top', 'ancient_debris_top', 'ancient_debris_side'], 30, 'pick', 4);
 block(B.GOLD_BLOCK, 'Bloque de oro', ['gold_block', 'gold_block', 'gold_block'], 3, 'pick', 3);
+block(B.RED_SAND, 'Arena roja', ['red_sand', 'red_sand', 'red_sand'], 0.5, 'shovel');
+block(B.TERRA_ORANGE, 'Terracota naranja', ['terra_orange', 'terra_orange', 'terra_orange'], 1.2, 'pick', 1);
+block(B.TERRA_RED, 'Terracota roja', ['terra_red', 'terra_red', 'terra_red'], 1.2, 'pick', 1);
+block(B.TERRA_YELLOW, 'Terracota amarilla', ['terra_yellow', 'terra_yellow', 'terra_yellow'], 1.2, 'pick', 1);
+block(B.TERRA_WHITE, 'Terracota blanca', ['terra_white', 'terra_white', 'terra_white'], 1.2, 'pick', 1);
+block(B.TERRA_BROWN, 'Terracota marrón', ['terra_brown', 'terra_brown', 'terra_brown'], 1.2, 'pick', 1);
+block(B.CHERRY_LOG, 'Tronco de cerezo', ['cherry_log_top', 'cherry_log_top', 'cherry_log_side'], 2, 'axe');
+block(B.CHERRY_LEAVES, 'Hojas de cerezo', ['cherry_leaves', 'cherry_leaves', 'cherry_leaves'], 0.2);
+block(B.CHERRY_PLANKS, 'Tablones de cerezo', ['cherry_planks', 'cherry_planks', 'cherry_planks'], 2, 'axe');
+block(B.MUD, 'Barro', ['mud', 'mud', 'mud'], 0.5, 'shovel');
 block(B.BREWING, 'Soporte de pociones', ['brew_top', 'brew_top', 'brew_side'], 1.5, 'pick', 1);
 block(B.ENCH_TABLE, 'Mesa de encantamientos', ['ench_top', 'obsidian', 'ench_side'], 5, 'pick', 3);
 block(B.LAPIS_ORE, 'Mena de lapislázuli', ['lapis_ore', 'lapis_ore', 'lapis_ore'], 3, 'pick', 2);
@@ -253,6 +264,9 @@ STAIR_MATS.forEach((mat, m) => recipe(['M  ', 'MM ', 'MMM'], { M: mat }, STAIR_I
 recipe(['PSP', 'PSP'], { P: B.PLANKS, S: I.STICK }, FENCE, 3);
 recipe(['PP', 'PP', 'PP'], { P: B.PLANKS }, DOOR_LO, 3);
 recipe(['L'], { L: B.LOG }, B.PLANKS, 4);
+recipe(['L'], { L: B.CHERRY_LOG }, B.CHERRY_PLANKS, 4);
+recipe(['PP', 'PP'], { P: B.CHERRY_PLANKS }, B.TABLE);
+recipe(['SS', 'SS'], { S: B.RED_SAND }, B.TERRA_ORANGE, 4);
 recipe(['P', 'P'], { P: B.PLANKS }, I.STICK, 4);
 recipe(['PP', 'PP'], { P: B.PLANKS }, B.TABLE);
 recipe(['SS', 'SS'], { S: B.SAND }, B.GLASS, 4);
@@ -268,9 +282,9 @@ recipe(['DGD', 'GCG', 'DGD'], { D: I.DIAMOND, G: I.GOLD, C: I.COAL }, B.COMMAND)
 // Fundición: entrada -> [salida, cantidad]; combustible -> segundos de llama
 export const SMELT = {
   [B.IRON_ORE]: [I.IRON, 1], [B.GOLD_ORE]: [I.GOLD, 1], [B.COBBLE]: [B.STONE, 1], [B.SAND]: [B.GLASS, 1],
-  [B.LOG]: [I.COAL, 1], [I.PORK]: [I.COOKED_PORK, 1], [I.BEEF]: [I.STEAK, 1], [I.CHICKEN]: [I.COOKED_CHICKEN, 1], [B.ANCIENT_DEBRIS]: [I.SCRAP, 1],
+  [B.LOG]: [I.COAL, 1], [B.CHERRY_LOG]: [I.COAL, 1], [B.MUD]: [B.TERRA_BROWN, 1], [I.PORK]: [I.COOKED_PORK, 1], [I.BEEF]: [I.STEAK, 1], [I.CHICKEN]: [I.COOKED_CHICKEN, 1], [B.ANCIENT_DEBRIS]: [I.SCRAP, 1],
 };
-export const FUEL = { [I.COAL]: 80, [B.LOG]: 15, [B.PLANKS]: 15, [B.TABLE]: 15, [I.STICK]: 5 };
+export const FUEL = { [I.COAL]: 80, [B.LOG]: 15, [B.CHERRY_LOG]: 15, [B.CHERRY_PLANKS]: 15, [B.PLANKS]: 15, [B.TABLE]: 15, [I.STICK]: 5 };
 export const SMELT_TIME = 8;
 
 export function info(id) { return BLOCKS[id] || ITEMS[id]; }
@@ -332,6 +346,7 @@ export function dropOf(blockId, slot) {
     case B.COAL_ORE: return [I.COAL, 1];
     case B.DIAMOND_ORE: return [I.DIAMOND, 1];
     case B.LEAVES: return Math.random() < 0.1 ? [I.APPLE, 1] : null;
+    case B.CHERRY_LEAVES: return Math.random() < 0.05 ? [I.APPLE, 1] : null;
     case B.CHEST_OPEN: return [B.CHEST, 1];
     case B.GOLD_BLOCK: return [I.GOLD, 9];
     case B.LAPIS_ORE: return [I.LAPIS, 4 + Math.floor(Math.random() * 5)];

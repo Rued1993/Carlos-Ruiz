@@ -192,6 +192,7 @@ const xpNeed = (l) => 6 + l * 4;
 function addXp(n) { xpPts += n; while (xpPts >= xpNeed(xpLevel)) { xpPts -= xpNeed(xpLevel); xpLevel++; if (ui) ui.toast('¡Nivel ' + xpLevel + '!'); sound('pop'); } }
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1, ambient, pads = null, padActive = false;
 let dims = {}, dim = 'overworld', extraSaved = { nether: new Map(), end: new Map() }, portalT = 0, travelCool = 0, dragonSpawned = false;
+const BIOME_NAMES = { plains: 'Llanura', desert: 'Desierto', jungle: 'Selva', snow: 'Tundra', mountains: 'Montañas', ocean: 'Océano', swamp: 'Pantano', badlands: 'Mesa', cherry: 'Cerezos' };
 const DIM_NAMES = { overworld: 'Overworld', nether: clean('El Nether'), end: clean('El End') };
 const fkey = (x, y, z) => (dim === 'overworld' ? '' : dim + ':') + x + ',' + y + ',' + z;
 const mouse = { left: false, right: false };
@@ -258,9 +259,9 @@ function explode(x, y, z, r, ds = 1) {
 
 // ---------- One Block ----------
 const OB_PHASES = [
-  { name: 'Llanura', until: 30, blocks: [B.GRASS, B.GRASS, B.DIRT, B.DIRT, B.LOG, B.LOG, B.LEAVES, B.SAND], mobs: ['pig', 'cow', 'chicken', 'sheep'] },
+  { name: 'Llanura', until: 30, blocks: [B.GRASS, B.GRASS, B.DIRT, B.DIRT, B.LOG, B.LOG, B.LEAVES, B.SAND, B.CHERRY_LOG, B.CHERRY_LEAVES, B.MUD], mobs: ['pig', 'cow', 'chicken', 'sheep'] },
   { name: 'Bosque y cueva', until: 90, blocks: [B.STONE, B.STONE, B.COBBLE, B.LOG, B.PLANKS, B.COAL_ORE, B.COAL_ORE, B.IRON_ORE, B.GRAVEL || B.SAND, B.DIRT], mobs: ['zombie', 'skeleton', 'spider', 'pig', 'creeper'] },
-  { name: 'Desierto y nieve', until: 170, blocks: [B.SAND, B.SANDSTONE, B.SANDSTONE, B.CACTUS, B.SNOW, B.SNOW, B.IRON_ORE, B.GOLD_ORE, B.GLASS], mobs: ['zombie', 'skeleton', 'creeper', 'villager', 'crewmate'] },
+  { name: 'Desierto y nieve', until: 170, blocks: [B.SAND, B.RED_SAND, B.TERRA_ORANGE, B.TERRA_YELLOW, B.SANDSTONE, B.SANDSTONE, B.CACTUS, B.SNOW, B.SNOW, B.IRON_ORE, B.GOLD_ORE, B.GLASS], mobs: ['zombie', 'skeleton', 'creeper', 'villager', 'crewmate'] },
   { name: 'Mina profunda', until: 270, blocks: [B.STONE, B.STONE, B.COBBLE, B.MOSSY_COBBLE, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.GOLD_BLOCK, B.BRICKS], mobs: ['zombie', 'skeleton', 'creeper', 'spider', 'slime', 'saibaman'] },
   { name: 'Nether', until: 400, blocks: [B.NETHERRACK, B.NETHERRACK, B.SOUL_SAND, B.GLOWSTONE, B.NETHER_BRICKS, B.ANCIENT_DEBRIS, B.OBSIDIAN, B.GOLD_ORE], mobs: ['piglin', 'blaze', 'magmacube', 'witherskeleton', 'hoglin', 'impostor'] },
   { name: 'El End', until: 550, blocks: [B.END_STONE, B.END_STONE, B.PURPUR, B.END_BRICKS, B.OBSIDIAN, B.DIAMOND_ORE, B.CHEST], mobs: ['enderman', 'endermite', 'shulker', 'phantom', 'saibaman'] },
@@ -541,6 +542,11 @@ function drawMinimap() {
   if (boss) { const pulse = 3 + Math.sin(performance.now() / 150) * 1.2; const bx = boss.pos.x, bz = boss.pos.z, cx = Math.max(6, Math.min(122, (bx - px + 32) * 2)), cy = Math.max(6, Math.min(122, (bz - pz + 32) * 2)); mmCtx.fillStyle = '#d050ff'; mmCtx.fillRect(cx - pulse, cy - pulse, pulse * 2, pulse * 2); mmCtx.strokeStyle = '#fff'; mmCtx.strokeRect(cx - pulse, cy - pulse, pulse * 2, pulse * 2); }
   mmCtx.save(); mmCtx.translate(64 + (player.pos.x - px) * 2, 64 + (player.pos.z - pz) * 2); mmCtx.rotate(-player.yaw + Math.PI);
   mmCtx.fillStyle = '#fff'; mmCtx.strokeStyle = '#000'; mmCtx.beginPath(); mmCtx.moveTo(0, 6); mmCtx.lineTo(4.5, -4.5); mmCtx.lineTo(0, -2); mmCtx.lineTo(-4.5, -4.5); mmCtx.closePath(); mmCtx.fill(); mmCtx.stroke(); mmCtx.restore();
+}
+let bioT = 0;
+function trackBiome(dt) { // misiones de exploración de biomas
+  bioT -= dt; if (bioT > 0 || dim !== 'overworld' || kind === 'oneblock') return; bioT = 2;
+  quests.event('biome', terrainInfo(Math.floor(player.pos.x), Math.floor(player.pos.z), seed).biome, 1);
 }
 function updateTracker() {
   $('tracker').innerHTML = quests.active(3).map((q) => `<div class="qt"><b>${q.title}</b>${q.desc} (${quests.progress[q.id] || 0}/${q.n})<div class="qb"><i style="width:${((quests.progress[q.id] || 0) / q.n) * 100}%"></i></div></div>`).join('');
@@ -1503,7 +1509,7 @@ function frame(now) {
       $('info').textContent = `${fps} FPS · ${mode === 'creative' ? 'Creativo' : 'Supervivencia'}\nXYZ ${player.pos.x.toFixed(1)} ${player.pos.y.toFixed(1)} ${player.pos.z.toFixed(1)}\n` +
         `Bioma: ${biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z), seed)} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nMobs: ${mobs.list.length} · Clima: ${WEATHER_NAMES[weather.state]}${snowing ? ' (nieve)' : ''} · Viento ${(weather.wind.s * 20).toFixed(0)} km/h${player.flying ? ' · [VUELO]' : ''}`;
       $('cam').textContent = '📷 ' + CAM_NAMES[camMode] + '  [V]';
-      $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${dim === 'overworld' ? WEATHER_NAMES[weather.state] : DIM_NAMES[dim]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
+      $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${dim === 'overworld' ? WEATHER_NAMES[weather.state] + ' · ' + BIOME_NAMES[terrainInfo(Math.floor(player.pos.x), Math.floor(player.pos.z), seed).biome] : DIM_NAMES[dim]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
       $('xpFill').style.width = (xpPts / xpNeed(xpLevel)) * 100 + '%'; $('xpLvl').textContent = xpLevel;
       $('xp').style.visibility = mode === 'survival' ? 'visible' : 'hidden';
       const ef = []; for (const [k, lab, col] of [['speed', '⚡ Rapidez', '#6cf'], ['strength', '💪 Fuerza', '#f66'], ['regen', '❤ Regeneración', '#f8c'], ['fire', '🛡 Res. fuego', '#fa4'], ['jump', '⇧ Salto', '#7e7'], ['night', '👁 Visión nocturna', '#99f']]) if (player.effects[k] > 0) ef.push(`<span style="border-color:${col}">${lab} ${Math.ceil(player.effects[k])}s</span>`); if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`); if (player.effects.levitate > 0) ef.push(`<span style="border-color:#fff">☁ Levitación ${Math.ceil(player.effects.levitate)}s</span>`);
@@ -1511,6 +1517,7 @@ function frame(now) {
       $('darkness').style.opacity = darkTarget;
     }
     mmT -= dt; if (mmT <= 0) { mmT = 0.4; drawMinimap(); }
+    trackBiome(dt);
     trackT -= dt; if (trackT <= 0) { trackT = 0.5; updateTracker(); }
     playedSec += dt;
     saveT += dt; if (saveT > 25) { saveT = 0; thumbReq = true; }
