@@ -34,7 +34,7 @@ export class Sky {
   constructor(scene, camera, materials) {
     this.scene = scene; this.camera = camera; this.materials = materials;
     this.time = 0.08; // 0 = amanecer, 0.25 mediodía, 0.5 atardecer, 0.75 medianoche
-    this.daylight = 1; this.wet = 0; this.flash = 0; this.cloudX = 0; this.cloudZ = 0;
+    this.dim = 'overworld'; this.daylight = 1; this.wet = 0; this.flash = 0; this.cloudX = 0; this.cloudZ = 0;
     this.root = new THREE.Group(); scene.add(this.root);
     // Cúpula del cielo con degradado horizonte -> cénit
     this.domeMat = new THREE.ShaderMaterial({
@@ -97,7 +97,34 @@ export class Sky {
     }
   }
 
+  // Nether y End: sin ciclo día/noche; cielo, niebla y luz fijos
+  updateOther(dt, playerPos, fogRadius, underwater) {
+    const nether = this.dim === 'nether';
+    this.daylight = 0; this.wet = 0; this.flash = 0;
+    const hor = nether ? new THREE.Color(0x5a1408) : new THREE.Color(0x1c0f2e), top = nether ? new THREE.Color(0x1c0503) : new THREE.Color(0x04020a);
+    if (underwater && nether) { hor.set(0xa83808); top.set(0x601800); }
+    this.sky.copy(nether ? new THREE.Color(0x3a0c06) : new THREE.Color(0x120a1c)); if (underwater && nether) this.sky.set(0xa83808);
+    this.scene.background = this.sky; this.scene.fog.color.copy(this.sky);
+    this.scene.fog.near = underwater ? 0.5 : fogRadius * (nether ? 0.18 : 0.5);
+    this.scene.fog.far = underwater ? (nether ? 5 : 18) : fogRadius * (nether ? 0.75 : 1.1);
+    this.domeMat.uniforms.hor.value.copy(hor); this.domeMat.uniforms.top.value.copy(top);
+    this.root.position.copy(this.camera.position);
+    this.sun.visible = this.moon.visible = this.glow.visible = false; this.clouds.visible = this.clouds2.visible = false;
+    this.stars.visible = !nether; this.starMat.opacity = nether ? 0 : 1; this.starMat.size = 2.4; this.stars.rotation.y += dt * 0.01;
+    this.hemi.color.set(nether ? 0xff8a5a : 0xa890ff); this.hemi.groundColor.set(nether ? 0x6a2008 : 0x281c40); this.hemi.intensity = nether ? 1.9 : 1.1;
+    this.sunLight.color.set(nether ? 0xff6a30 : 0x9a80ff); this.sunLight.intensity = nether ? 0.35 : 0.7; this.sunLight.castShadow = false;
+    this.lightDir.set(0.3, 1, 0.2).normalize();
+    this.sunLight.target.position.copy(playerPos); this.sunLight.position.set(playerPos.x + 30, playerPos.y + 100, playerPos.z + 20);
+  }
+
+  setDimension(dim) {
+    this.dim = dim;
+    const ow = dim === 'overworld';
+    this.sun.visible = this.moon.visible = this.glow.visible = ow; this.clouds.visible = ow; this.stars.visible = true; this.starMat.size = 1.6;
+  }
+
   update(dt, playerPos, fogRadius, underwater, wind = { x: 0, z: 0, s: 0.12 }) {
+    if (this.dim !== 'overworld') return this.updateOther(dt, playerPos, fogRadius, underwater);
     this.time = (this.time + dt / DAY_LENGTH) % 1;
     const a = this.time * Math.PI * 2;
     const sinA = Math.sin(a), cosA = Math.cos(a);

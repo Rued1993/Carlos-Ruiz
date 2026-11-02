@@ -13,6 +13,10 @@ npm run build    # versión de producción en dist/
 ## Qué incluye
 
 - **Mundo enorme (128 de alto, sin límites):** océanos profundos, cordilleras de hasta ~120 bloques con cumbres nevadas, ríos, selva, bosques, desierto, tundra, cuevas, minerales y **pueblos** con casas, pozo y caminos. Distancia de render hasta 16 chunks.
+- **Dimensiones:**
+  - **El Nether:** cavernas inmensas, mar de lava, piedra luminosa, arena de almas, brasas flotando, **piglins zombificados** y **blazes**. 1 bloque = 8 del Overworld.
+  - **El End:** isla flotante de piedra del End, 10 pilares de obsidiana con cristales, endermans y el **Ender Dragon** al entrar; al vencerlo se abre el portal de salida.
+  - **Portales:** obsidiana (8 adoquines + 1 diamante = 2) en un marco 4x5, y se enciende con el **encendedor** (hierro + carbón). Para el End: 12 marcos (8 obsidiana + 1 diamante = 4) con **ojos de Ender** (perla + carbón). También puedes viajar al instante desde el panel **B**.
 - **Varias partidas guardadas:** cada mundo con nombre, semilla opcional, miniatura, nivel y tiempo jugado; autoguardado, guardado manual, renombrar, borrar y **exportar/importar** a archivo `.mcw`. Las partidas antiguas se migran solas.
 - **10 jefes** (panel **B** para invocarlos al instante): Tormenta Wither, Ender Dragon, Wither, Warden, Guardián Ancestral, **Devastador, Invocador, Ghast Gigante, Herobrine y Rey Slime**, cada uno con fases y mecánicas propias (cristales que curan, bolas de fuego que se devuelven a golpes, colmillos y vex, ondas expansivas…).
 - **Misiones (M):** 22 misiones; derrota a los 10 jefes para el logro final.
@@ -58,5 +62,5 @@ npm run build    # versión de producción en dist/
 - [ ] Agua que fluye, lava
 - [ ] Cultivos, camas, armaduras y arcos
 - [ ] Minas, templos y más estructuras
-- [ ] Dimensiones (Nether y End)
+- [ ] Fortalezas del Nether, ciudades del End y elitros
 - [ ] Multijugador

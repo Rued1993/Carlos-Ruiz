@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LIQUID } from './blocks.js';
+import { LIQUID, B } from './blocks.js';
 
 const HALF_W = 0.3, HEIGHT = 1.8, EYE = 1.62;
 const GRAVITY = 28, JUMP = 8.6, WALK = 4.4, SPRINT = 7, FLY = 12;
@@ -18,7 +18,8 @@ export class Player {
     this.fallStart = null; this.foodTimer = 0; this.regenTimer = 0; this.airTimer = 0; this.starveTimer = 0;
     this.invuln = 0; this.dead = false;
     this.stepDist = 0;
-    this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null };
+    this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null, onVoid: null };
+    this.inLava = false;
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
     this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
@@ -66,6 +67,9 @@ export class Player {
     const fx = Math.floor(this.pos.x), fz = Math.floor(this.pos.z);
     const wasWater = this.inWater;
     this.inWater = w.isLiquid(fx, Math.floor(this.pos.y + 0.3), fz);
+    this.inLava = w.getBlock(fx, Math.floor(this.pos.y + 0.3), fz) === B.LAVA || w.getBlock(fx, Math.floor(this.pos.y + 1.2), fz) === B.LAVA;
+    if (this.inLava && this.mode === 'survival') { this.effects.burn = Math.max(this.effects.burn, 6); this.damage(4); }
+    const onSoul = w.getBlock(fx, Math.floor(this.pos.y - 0.15), fz) === B.SOUL_SAND;
     this.headUnder = w.isLiquid(fx, Math.floor(this.pos.y + EYE), fz);
     if (this.inWater && !wasWater && this.vel.y < -4 && this.events.onSplash) this.events.onSplash();
 
@@ -74,6 +78,7 @@ export class Player {
     const sprinting = k.has('ShiftLeft') && fwd > 0 && !(this.mode === 'survival' && this.food <= 6);
     let speed = this.flying ? FLY : (sprinting ? SPRINT : WALK);
     if (this.inWater && !this.flying) speed *= 0.6;
+    if (onSoul && !this.flying) speed *= 0.55;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     let dx = -sin * fwd + cos * strafe, dz = -cos * fwd - sin * strafe;
     const len = Math.hypot(dx, dz);
@@ -128,12 +133,12 @@ export class Player {
       this.stepDist += Math.hypot(this.pos.x - px0, this.pos.z - pz0);
       if (this.stepDist > (sprinting ? 2.2 : 1.7)) { this.stepDist = 0; if (this.events.onStep) this.events.onStep(); }
     }
-    if (this.pos.y < -30) { this.pos.y = 70; this.vel.set(0, 0, 0); this.damage(4); }
+    if (this.pos.y < -30) { if (this.events.onVoid) this.events.onVoid(); else { this.pos.y = 70; this.vel.set(0, 0, 0); this.damage(4); } }
 
     // Efectos de estado
     if (this.effects.fatigue > 0) this.effects.fatigue -= dt;
     if (this.effects.burn > 0) {
-      if (this.inWater) this.effects.burn = 0;
+      if (this.inWater && !this.inLava) this.effects.burn = 0;
       else { this.effects.burn -= dt; this.burnT += dt; if (this.burnT >= 0.8) { this.burnT = 0; if (this.mode === 'survival') this.damage(1); } }
     }
     if (this.effects.poison > 0) {

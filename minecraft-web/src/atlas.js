@@ -5,7 +5,8 @@ import { hash2 } from './noise.js';
 const T = 16;
 const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', 'log_top', 'leaves', 'planks', 'cobble',
   'water', 'glass', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'bedrock', 'snow', 'snow_side',
-  'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command'];
+  'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command',
+  'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -85,6 +86,18 @@ const painters = {
     if (chev) return [42, 18, 4, 255];
     return jitter([196, 114, 58], 18, x, y, 75);
   },
+  obsidian: (x, y) => { const s = hash2(x, y, 80) > 0.93; return s ? jitter([90, 40, 150], 20, x, y, 81) : jitter([22, 14, 36], 10, x, y, 82); },
+  netherrack: (x, y) => { const vein = hash2(Math.floor(x / 2), Math.floor(y / 3), 83) > 0.8; return jitter(vein ? [150, 60, 55] : [112, 40, 42], 22, x, y, 84); },
+  soul_sand: (x, y) => { const pit = (x % 5 === 1 || x % 5 === 2) && (y % 5 === 1 || y % 5 === 2) && hash2(Math.floor(x / 5), Math.floor(y / 5), 85) > 0.45; return jitter(pit ? [48, 36, 30] : [88, 70, 56], 12, x, y, 86); },
+  glowstone: (x, y) => { const b = hash2(Math.floor(x / 3), Math.floor(y / 3), 87); return jitter(b > 0.55 ? [255, 226, 140] : [206, 150, 74], 22, x, y, 88); },
+  lava: (x, y) => { const n = hash2(Math.floor(x / 2), Math.floor(y / 2), 89); return jitter(n > 0.7 ? [255, 214, 70] : n > 0.35 ? [248, 140, 24] : [214, 80, 14], 14, x, y, 90); },
+  nether_bricks: (x, y) => { const mortar = y % 4 === 3 || (x + (Math.floor(y / 4) % 2) * 4) % 8 === 7; return mortar ? jitter([28, 12, 16], 6, x, y, 91) : jitter([62, 24, 30], 12, x, y, 92); },
+  end_stone: (x, y) => jitter([222, 222, 156], 16, x, y, 93).map((c, i) => (hash2(x >> 1, y >> 1, 94) > 0.85 ? c - 24 : c)),
+  end_frame_top: (x, y) => { const edge = x < 2 || y < 2 || x > 13 || y > 13; return edge ? jitter([50, 100, 84], 10, x, y, 95) : jitter([96, 150, 124], 10, x, y, 96); },
+  end_frame_side: (x, y) => (y < 4 ? jitter([60, 112, 94], 10, x, y, 97) : jitter([218, 218, 150], 14, x, y, 98)),
+  end_frame_eye: (x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 2.3) return [14, 20, 18]; if (d < 4.4) return [96, 216, 150]; return x < 2 || y < 2 || x > 13 || y > 13 ? jitter([50, 100, 84], 10, x, y, 95) : jitter([96, 150, 124], 10, x, y, 96); },
+  portal: (x, y) => { const v = Math.sin(x * 0.9 + y * 0.45) * 0.5 + Math.sin(y * 0.8 - x * 0.3) * 0.5; return [90 + v * 50 + hash2(x, y, 99) * 30, 20 + v * 14, 190 + v * 40, 175]; },
+  end_portal: (x, y) => { const star = hash2(x, y, 100) > 0.9; return star ? [150, 255, 230, 255] : [6, 16, 22 + hash2(x, y, 101) * 20, 240]; },
   furnace_top: (x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? jitter([70, 70, 70], 8, x, y, 71) : stone(x, y).map((c) => c - 20)),
   furnace_front: (x, y) => {
     const edge = x === 0 || y === 0 || x === 15;

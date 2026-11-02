@@ -11,7 +11,8 @@ import { Weather, WEATHER_NAMES } from './weather.js';
 import { WitherStorm } from './boss.js';
 import { BOSS_INFO, BOSS_ORDER } from './bosses.js';
 import { Quests, QUESTS } from './quests.js';
-import { World, terrainHeight, terrainInfo, biomeAt, SEA, CH } from './world.js';
+import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from './world.js';
+import { Ambient } from './ambient.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
 import { Sky } from './sky.js';
@@ -159,7 +160,10 @@ let xpLevel = 0, xpPts = 0, darkTarget = 0, mmT = 0, trackT = 0, wBudget = 2;
 let worldId = null, worldName = 'Mundo', playedSec = 0, createdAt = 0, thumbData = null, thumbReq = false, lastSaved = 0;
 const xpNeed = (l) => 6 + l * 4;
 function addXp(n) { xpPts += n; while (xpPts >= xpNeed(xpLevel)) { xpPts -= xpNeed(xpLevel); xpLevel++; if (ui) ui.toast('¡Nivel ' + xpLevel + '!'); sound('pop'); } }
-let world, player, inv, sky, mobs, drops, particles, ui, seed = 1;
+let world, player, inv, sky, mobs, drops, particles, ui, seed = 1, ambient;
+let dims = {}, dim = 'overworld', extraSaved = { nether: new Map(), end: new Map() }, portalT = 0, travelCool = 0, dragonSpawned = false;
+const DIM_NAMES = { overworld: 'Overworld', nether: 'El Nether', end: 'El End' };
+const fkey = (x, y, z) => (dim === 'overworld' ? '' : dim + ':') + x + ',' + y + ',' + z;
 const mouse = { left: false, right: false };
 const mining = { key: '', progress: 0 };
 let swing = 0, breakCool = 0, placeCool = 0, attackCool = 0, lastHeld = -2, saveT = 0, hudT = 0;
@@ -224,13 +228,14 @@ function explode(x, y, z, r, ds = 1) {
 // ---------- Interacción ----------
 function breakBlock(hit) {
   const id = world.getBlock(hit.x, hit.y, hit.z);
-  if (id === AIR || id === B.BEDROCK) return;
+  if (id === AIR || BLOCKS[id].hardness === Infinity) return;
   const held = inv.held();
   world.setBlock(hit.x, hit.y, hit.z, AIR);
   if (id === B.FURNACE) {
-    const key = hit.x + ',' + hit.y + ',' + hit.z, f = furnaces.get(key);
+    const key = fkey(hit.x, hit.y, hit.z), f = furnaces.get(key);
     if (f) { for (const sl of f.slots) if (sl) drops.spawn(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, sl.id, sl.n); furnaces.delete(key); }
   }
+  if (id === B.OBSIDIAN) removeAdjacentPortals(hit.x, hit.y, hit.z);
   if (id === B.COAL_ORE || id === B.IRON_ORE || id === B.GOLD_ORE || id === B.DIAMOND_ORE) addXp(id === B.DIAMOND_ORE ? 8 : 3);
   particles.blockBreak(hit.x, hit.y, hit.z, id);
   sound('break');
@@ -249,12 +254,14 @@ function useItem() {
   swing = Math.max(swing, 0.001);
   if (hit && hit.id === B.TABLE && !player.keys.has('ShiftLeft')) { openInventory(3); return; }
   if (hit && hit.id === B.FURNACE && !player.keys.has('ShiftLeft')) {
-    const key = hit.x + ',' + hit.y + ',' + hit.z;
+    const key = fkey(hit.x, hit.y, hit.z);
     if (!furnaces.has(key)) furnaces.set(key, { slots: [null, null, null], burn: 0, burnMax: 1, cook: 0 });
     openInventory('furnace', furnaces.get(key)); return;
   }
+  if (hit && hit.id === B.END_FRAME) { useEyeOnFrame(hit); return; }
   const held = inv.held();
   if (!held) return;
+  if (held.id === I.LIGHTER) { if (hit) lightPortal(hit); return; }
   const food = ITEMS[held.id] && ITEMS[held.id].food;
   if (food) {
     if (mode === 'survival' && player.food < 20) { player.eat(food); inv.consumeHeld(1); sound('eat'); ui.renderHotbar(); }
@@ -283,9 +290,9 @@ function setBossBar(type) {
   $('bossFill').style.background = `linear-gradient(${inf.color}, #25103a)`;
   $('bossbar').style.setProperty('--bc', inf.color);
 }
-function spawnBossOf(type, x, y, z) {
+function spawnBossOf(type, x, y, z, arena) {
   const inf = BOSS_INFO[type], pos = new THREE.Vector3(x, y, z);
-  boss = type === 'storm' ? new WitherStorm(scene, bossHooks, pos) : inf.make(scene, bossHooks, pos);
+  boss = type === 'storm' ? new WitherStorm(scene, bossHooks, pos) : inf.make(scene, bossHooks, pos, arena);
   setBossBar(type);
   if (STORMY.has(type)) { weather.set('storm'); weather.boss = true; weather.timer = 9999; }
   sound('roar');
@@ -298,7 +305,8 @@ function summonBoss(type) {
   let y;
   if (inf.ground) { const t = world.topY(Math.floor(x), Math.floor(z)); y = t > 0 ? t + 1 : player.pos.y; }
   else y = player.pos.y + (inf.up === undefined ? 10 : inf.up) + (type === 'storm' ? 10 : 0);
-  spawnBossOf(type, x, y, z);
+  if (type === 'dragon' && dim === 'end') { spawnBossOf('dragon', 0.5, 100, 0.5, { cx: 0, cy: 64, cz: 0, pillars: endPillars() }); dragonSpawned = true; }
+  else spawnBossOf(type, x, y, z);
   ui.toast('¡' + inf.name + ' ha sido invocado!');
   return true;
 }
@@ -348,6 +356,7 @@ function renderQuests() {
 $('bossCards').addEventListener('click', (e) => { const t = e.target.closest('[data-boss]'); if (t && state === 'panel') { closePanel(true); summonBoss(t.dataset.boss); } });
 $('mobBtns').addEventListener('click', (e) => { const t = e.target.closest('[data-mob]'); if (t && state === 'panel') { summonMob(t.dataset.mob); ui.toast(MOB_TYPES[t.dataset.mob].name + ' invocado'); } });
 $('bDespawn').onclick = () => { despawnBoss(); };
+$('dimBtns').addEventListener('click', (e) => { const t = e.target.closest('[data-dim]'); if (t && state === 'panel') { closePanel(true); changeDimension(t.dataset.dim); } });
 
 // ---------- Minimapa ----------
 const mmCtx = $('minimap').getContext('2d'), mmImg = mmCtx.createImageData(64, 64), mmCol = {};
@@ -355,10 +364,12 @@ for (const d of Object.values(BLOCKS)) { const c = tileColor(d.tiles[0]); mmCol[
 function drawMinimap() {
   const px = Math.floor(player.pos.x), pz = Math.floor(player.pos.z), data = mmImg.data;
   for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) {
-    const x = px + i - 32, z = pz + j - 32, top = world.topY(x, z), o = (j * 64 + i) * 4;
+    const x = px + i - 32, z = pz + j - 32, o = (j * 64 + i) * 4;
+    let top = world.topY(x, z);
+    if (dim !== 'overworld' && top >= 0) { top = Math.min(CH - 3, Math.floor(player.pos.y) + 6); while (top > 0 && !world.isSolid(x, top, z) && world.getBlock(x, top, z) !== B.LAVA) top--; }
     let c;
     if (top < 0) c = [20, 20, 30];
-    else if (top < SEA && world.getBlock(x, SEA, z) === B.WATER) c = [38 + top, 84 + top, 190];
+    else if (dim === 'overworld' && top < SEA && world.getBlock(x, SEA, z) === B.WATER) c = [38 + top, 84 + top, 190];
     else {
       const base = mmCol[world.getBlock(x, top, z)] || [90, 90, 90], f = Math.max(0.6, Math.min(1.25, 0.9 + (top - player.pos.y) * 0.012));
       c = [base[0] * f, base[1] * f, base[2] * f];
@@ -375,6 +386,163 @@ function drawMinimap() {
 }
 function updateTracker() {
   $('tracker').innerHTML = quests.active(3).map((q) => `<div class="qt"><b>${q.title}</b>${q.desc} (${quests.progress[q.id] || 0}/${q.n})<div class="qb"><i style="width:${((quests.progress[q.id] || 0) / q.n) * 100}%"></i></div></div>`).join('');
+}
+
+
+// ===================================================================== DIMENSIONES Y PORTALES
+function makeWorld(name, saved) {
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const w = new World(g, materials, name === 'overworld' ? seed : name === 'nether' ? seed + 500 : seed + 900, saved || new Map(), name);
+  w.group = g; return w;
+}
+function loadAround(w, ax, az, r = 3) {
+  return new Promise((resolve) => { const tick = () => { const pend = w.update(ax, az, r, 12); if (pend > 0) setTimeout(tick, 0); else resolve(); }; tick(); });
+}
+
+// Marco de portal: celda de aire dentro de un rectángulo de obsidiana (mín. 2x3). Devuelve las celdas interiores.
+function findPortalFrame(px, py, pz) {
+  for (const axis of [0, 2]) {
+    const d = axis === 0 ? [1, 0, 0] : [0, 0, 1], at = (i, j) => world.getBlock(px + d[0] * i, py + j, pz + d[2] * i);
+    let b = 0; while (b > -22 && at(0, b - 1) === AIR) b--; if (at(0, b - 1) !== B.OBSIDIAN) continue;
+    let t = 0; while (t < 22 && at(0, t + 1) === AIR) t++; if (at(0, t + 1) !== B.OBSIDIAN) continue;
+    let l = 0; while (l > -22 && at(l - 1, 0) === AIR) l--; if (at(l - 1, 0) !== B.OBSIDIAN) continue;
+    let r = 0; while (r < 22 && at(r + 1, 0) === AIR) r++; if (at(r + 1, 0) !== B.OBSIDIAN) continue;
+    if (t - b + 1 < 3 || r - l + 1 < 2) continue;
+    let ok = true;
+    for (let i = l; i <= r && ok; i++) for (let j = b; j <= t; j++) if (at(i, j) !== AIR) { ok = false; break; }
+    for (let i = l; i <= r && ok; i++) if (at(i, b - 1) !== B.OBSIDIAN || at(i, t + 1) !== B.OBSIDIAN) ok = false;
+    for (let j = b; j <= t && ok; j++) if (at(l - 1, j) !== B.OBSIDIAN || at(r + 1, j) !== B.OBSIDIAN) ok = false;
+    if (!ok) continue;
+    const cells = []; for (let i = l; i <= r; i++) for (let j = b; j <= t; j++) cells.push([px + d[0] * i, py + j, pz + d[2] * i]);
+    return cells;
+  }
+  return null;
+}
+function lightPortal(hit) {
+  if (dim === 'end') { ui.toast('El fuego no prende aquí'); return false; }
+  const cx = hit.x + hit.normal[0], cy = hit.y + hit.normal[1], cz = hit.z + hit.normal[2];
+  const cells = world.getBlock(cx, cy, cz) === AIR ? findPortalFrame(cx, cy, cz) : null;
+  if (!cells) { ui.toast('Marco de obsidiana no válido (mínimo 2x3 interior)'); return false; }
+  for (const [x, y, z] of cells) world.setBlock(x, y, z, B.NETHER_PORTAL);
+  sound('hiss'); sound('craft'); ui.toast('¡El portal del Nether se activa!');
+  if (mode === 'survival') { const h = inv.held(); h.d = (h.d || 0) + 1; if (h.d >= 64) inv.slots[inv.selected] = null; ui.renderHotbar(); }
+  return true;
+}
+function removeAdjacentPortals(x, y, z) {
+  const stack = [[x, y, z]], seen = new Set();
+  while (stack.length) {
+    const [cx, cy, cz] = stack.pop();
+    for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+      const nx = cx + dx, ny = cy + dy, nz = cz + dz, k = nx + ',' + ny + ',' + nz;
+      if (seen.has(k)) continue; seen.add(k);
+      if (world.getBlock(nx, ny, nz) === B.NETHER_PORTAL) { world.setBlock(nx, ny, nz, AIR); stack.push([nx, ny, nz]); }
+    }
+  }
+}
+function useEyeOnFrame(hit) {
+  const held = inv.held();
+  if (!held || held.id !== I.EYE) { ui.toast('Necesitas un Ojo de Ender'); return; }
+  world.setBlock(hit.x, hit.y, hit.z, B.END_FRAME_EYE); sound('place');
+  if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
+  const ring = []; for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (Math.max(Math.abs(a), Math.abs(b)) === 2 && !(Math.abs(a) === 2 && Math.abs(b) === 2)) ring.push([a, b]);
+  for (const [rx, rz] of ring) {
+    const cx = hit.x - rx, cz = hit.z - rz;
+    if (ring.every(([a, b]) => world.getBlock(cx + a, hit.y, cz + b) === B.END_FRAME_EYE)) {
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) world.setBlock(cx + a, hit.y, cz + b, B.END_PORTAL);
+      sound('roar'); ui.toast('¡El portal del End se abre!'); return;
+    }
+  }
+}
+function buildNetherPortal(bx, floorY, bz) { // marco 4x5 sobre una plataforma; el suelo del marco queda a ras de suelo
+  for (let x = bx - 2; x <= bx + 5; x++) for (let z = bz - 2; z <= bz + 4; z++) {
+    const cur = world.getBlock(x, floorY, z); if (cur === AIR || LIQUID[cur] || !SOLID[cur]) world.setBlock(x, floorY, z, B.OBSIDIAN);
+    for (let y = floorY + 1; y <= floorY + 6; y++) if (world.getBlock(x, y, z) !== AIR) world.setBlock(x, y, z, AIR);
+  }
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 5; j++) {
+    const corner = (i === 0 || i === 3) && (j === 0 || j === 4), border = i === 0 || i === 3 || j === 0 || j === 4;
+    if (corner) continue;
+    world.setBlock(bx + i, floorY + j, bz, border ? B.OBSIDIAN : B.NETHER_PORTAL);
+  }
+  world.setBlock(bx - 1, floorY + 1, bz + 2, B.TORCH); world.setBlock(bx + 4, floorY + 1, bz + 2, B.TORCH);
+}
+function findExistingPortal(ax, az) {
+  let best = null, bd = 1e9;
+  const y0 = dim === 'nether' ? 20 : 2, y1 = dim === 'nether' ? CH - 6 : CH - 2;
+  for (let x = ax - 24; x <= ax + 24; x++) for (let z = az - 24; z <= az + 24; z++) {
+    if (!world.chunks.has(((Math.floor(x / 16) + 32768) * 65536) + (Math.floor(z / 16) + 32768))) continue;
+    for (let y = y0; y <= y1; y++) if (world.getBlock(x, y, z) === B.NETHER_PORTAL) { const d = Math.hypot(x - ax, z - az); if (d < bd) { bd = d; best = [x, y, z]; } }
+  }
+  return best;
+}
+function standBesidePortal(p) { // busca una celda libre y con suelo junto al portal
+  const [px, py, pz] = p; let y = py; while (world.getBlock(px, y - 1, pz) === B.NETHER_PORTAL) y--;
+  for (const [dx, dz] of [[0, 2], [0, -2], [2, 0], [-2, 0], [0, 1], [0, -1], [1, 0], [-1, 0], [2, 2], [-2, -2]]) {
+    const x = px + dx, z = pz + dz;
+    for (const yy of [y, y + 1, y - 1]) if (world.isSolid(x, yy - 1, z) && !world.isSolid(x, yy, z) && !world.isSolid(x, yy + 1, z) && !LIQUID[world.getBlock(x, yy, z)] && world.getBlock(x, yy, z) !== B.NETHER_PORTAL) return new THREE.Vector3(x + 0.5, yy, z + 0.5);
+  }
+  return new THREE.Vector3(px + 0.5, y + 1, pz + 2.5);
+}
+function buildEndExit() {
+  const ty = world.topY(0, 0); if (ty < 0) return;
+  for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) {
+    const ring = Math.max(Math.abs(a), Math.abs(b)) === 2;
+    if (ring && Math.abs(a) === 2 && Math.abs(b) === 2) continue;
+    world.setBlock(a, ty + 1, b, ring ? B.BEDROCK : B.END_PORTAL);
+  }
+  for (const [a, b] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) world.setBlock(a, ty + 2, b, B.TORCH);
+  ui.toast('Se abre el portal de salida en el centro de la isla');
+}
+
+async function changeDimension(target, opts = {}) {
+  if (!world || state === 'loading' || (target === dim && !opts.force)) return;
+  const from = dim;
+  state = 'loading'; player.keys.clear(); mouse.left = mouse.right = false;
+  $('travelTxt').textContent = 'Viajando a ' + DIM_NAMES[target] + '…'; $('travel').classList.remove('hidden');
+  await new Promise((r) => setTimeout(r, 40));
+  if (boss) { boss.dispose(); boss = null; weather.boss = false; darkTarget = 0; $('bossbar').classList.add('hidden'); }
+  ritual = null; mobs.clear(); drops.clear();
+  let ax, az;
+  if (opts.arrive) { ax = Math.floor(opts.arrive.x); az = Math.floor(opts.arrive.z); }
+  else if (target === 'end') { ax = 0; az = 30; }
+  else if (target === 'nether') { ax = Math.floor(player.pos.x / 8); az = Math.floor(player.pos.z / 8); }
+  else if (from === 'nether') { ax = Math.floor(player.pos.x * 8); az = Math.floor(player.pos.z * 8); }
+  else { ax = Math.floor(player.spawn.x); az = Math.floor(player.spawn.z); }
+  if (!dims[target]) dims[target] = makeWorld(target, target === 'nether' ? extraSaved.nether : target === 'end' ? extraSaved.end : new Map());
+  world.group.visible = false; world = dims[target]; world.group.visible = true; dim = target;
+  player.world = world; drops.world = world; particles.world = world; mobs.world = world; mobs.dim = target;
+  sky.setDimension(target); darkTarget = 0;
+  await loadAround(world, ax, az, 3);
+  let pos;
+  if (target === 'end') { const ty = world.topY(ax, az); pos = new THREE.Vector3(0.5, (ty > 0 ? ty : 64) + 1, 30.5); }
+  else if (opts.respawn) pos = groundSpawn(ax, az);
+  else {
+    const found = findExistingPortal(ax, az);
+    if (found) pos = standBesidePortal(found);
+    else {
+      let floorY;
+      if (target === 'overworld') { const ty = world.topY(ax, az); floorY = Math.max(ty > 0 ? ty : SEA, SEA); }
+      else { floorY = 64; for (let y = 100; y > 36; y--) { const b0 = world.getBlock(ax, y, az); if (world.isSolid(ax, y, az) && b0 !== B.LAVA && !world.isSolid(ax, y + 1, az) && !world.isSolid(ax, y + 2, az) && !LIQUID[world.getBlock(ax, y + 1, az)]) { floorY = y; break; } } }
+      buildNetherPortal(ax, floorY, az);
+      pos = new THREE.Vector3(ax + 1.5, floorY + 1, az + 2.5);
+    }
+  }
+  player.pos.copy(pos); player.vel.set(0, 0, 0); player.fallStart = null; player.yaw = Math.PI; // mirando al portal
+  state = 'play'; $('travel').classList.add('hidden'); travelCool = 3; portalT = 0;
+  ui.toast('Has llegado a ' + DIM_NAMES[target]); quests.event('dim', target);
+  if (target === 'end' && !dragonSpawned && !quests.bosses.has('dragon')) { dragonSpawned = true; setTimeout(() => { if (dim === 'end' && !boss) spawnBossOf('dragon', 0.5, 100, 0.5, { cx: 0, cy: 64, cz: 0, pillars: endPillars() }); }, 1500); }
+  thumbReq = true;
+}
+function updatePortals(dt) {
+  travelCool = Math.max(0, travelCool - dt);
+  const px = Math.floor(player.pos.x), pz = Math.floor(player.pos.z), b1 = world.getBlock(px, Math.floor(player.pos.y + 0.2), pz), b2 = world.getBlock(px, Math.floor(player.pos.y + 1.2), pz);
+  const kind = b1 === B.NETHER_PORTAL || b2 === B.NETHER_PORTAL ? 'nether' : b1 === B.END_PORTAL || b2 === B.END_PORTAL ? 'end' : null;
+  const need = mode === 'creative' ? 0.6 : 3;
+  if (kind && travelCool <= 0 && state === 'play') {
+    portalT += dt;
+    if (portalT >= need) { portalT = 0; changeDimension(kind === 'nether' ? (dim === 'nether' ? 'overworld' : 'nether') : (dim === 'end' ? 'overworld' : 'end')); }
+  } else portalT = Math.max(0, portalT - dt * 2);
+  const fx = $('portalfx'); fx.style.opacity = Math.min(1, portalT / need) * 0.9;
+  fx.style.background = kind === 'end' ? 'radial-gradient(ellipse at center, rgba(20,60,70,.5), rgba(2,10,14,.95))' : '';
 }
 
 function startRitual(x, y, z) {
@@ -529,11 +697,12 @@ function onDeath() {
 // ---------- Guardado ----------
 async function saveGame() {
   if (!world || !worldId) return false;
-  const meta = { v: 2, gen: 2, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
+  const meta = { v: 3, gen: 2, dim, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
     hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON(), quests: quests.toJSON(), xp: { l: xpLevel, p: xpPts } };
-  const entries = [...world.unsaved].filter((k) => world.chunks.has(k)).map((k) => [k, new Uint8Array(world.chunks.get(k))]);
+  const entries = [];
+  for (const [dn, w] of Object.entries(dims)) for (const k of w.unsaved) if (w.chunks.has(k)) entries.push([dn === 'overworld' ? k : (dn === 'nether' ? 'n:' : 'e:') + k, new Uint8Array(w.chunks.get(k))]);
   const ok = await save.saveWorld(worldId, meta, entries, { name: worldName, mode, seed, created: createdAt, played: Math.floor(playedSec), level: xpLevel, thumb: thumbData });
-  if (ok) { world.unsaved.clear(); lastSaved = Date.now(); }
+  if (ok) { for (const w of Object.values(dims)) w.unsaved.clear(); lastSaved = Date.now(); }
   return ok;
 }
 function captureThumb() {
@@ -547,19 +716,26 @@ async function saveWithFeedback() {
 }
 
 // ---------- Arranque de partida ----------
-async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played }) {
+async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, played, nether, end }) {
   state = 'loading'; mode = md; seed = sd;
   worldId = id; worldName = name || 'Mundo'; createdAt = created || Date.now(); playedSec = played || 0; thumbData = null;
   showOverlay('menu'); $('msg').textContent = 'Generando mundo…';
   $('menuBody').classList.add('hidden');
 
   furnaces.clear();
-  world = new World(scene, materials, seed, saved);
+  for (const w of Object.values(dims)) { scene.remove(w.group); }
+  dims = {}; extraSaved = { nether: nether || new Map(), end: end || new Map() }; dragonSpawned = false; portalT = 0; travelCool = 0;
+  dim = (meta && meta.dim) || 'overworld';
+  dims.overworld = makeWorld('overworld', saved);
+  if (dim !== 'overworld') dims[dim] = makeWorld(dim, extraSaved[dim]);
+  world = dims[dim]; world.group.visible = true;
   inv = new Inventory();
   player = new Player(world, camera);
   player.mode = mode;
   if (!model) model = new PlayerModel(scene);
   sky = new Sky(scene, camera, materials);
+  sky.setDimension(dim);
+  if (!ambient) ambient = new Ambient(scene);
   applyQuality();
   weather = new Weather(scene, {
     world: () => world, sky: () => sky, sound: (n, v) => audio.play(n, v),
@@ -583,6 +759,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
     done: () => {
       const type = boss ? boss.type : 'storm';
       quests.event('boss', type); addXp(100); sound('craft');
+      if (type === 'dragon' && dim === 'end') setTimeout(buildEndExit, 1200);
       boss = null; weather.boss = false; darkTarget = 0;
       if (weather.state === 'storm') weather.set('rain');
       $('bossbar').classList.add('hidden');
@@ -593,6 +770,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   drops = new Drops(scene, world);
   particles = new Particles(scene, world);
   mobs = new MobManager(scene, world, {
+    effect: (n, s) => { if (mode === 'survival') player.effects[n] = Math.max(player.effects[n] || 0, s); },
     killed: (type, xp) => { quests.event('kill', type); addXp(xp); },
     tp: (x, y, z) => { particles.burst(x, y, z, [0.7, 0.2, 1], 14, 3); sound('pop'); },
     hurtPlayer: (d, kx, kz) => player.damage(d, kx, kz),
@@ -607,6 +785,8 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   player.events.onLand = (d) => sound(d > 3 ? 'hurt' : 'place');
   player.events.onSplash = () => sound('splash');
   player.events.onDeath = onDeath;
+  player.events.onVoid = () => { if (dim === 'end') { player.damage(6); const ty = world.topY(0, 30); player.pos.set(0.5, (ty > 0 ? ty : 64) + 1, 30.5); player.vel.set(0, 0, 0); ui.toast('Caíste al vacío…'); } else { player.pos.y = 70; player.vel.set(0, 0, 0); player.damage(4); } };
+  mobs.dim = dim;
 
   let cx, cz;
   if (meta) {
@@ -628,7 +808,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, openPanel, closePanel, addXp, terrainInfo, get xp() { return [xpLevel, xpPts]; } };
+  window.__game = { get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, get xp() { return [xpLevel, xpPts]; } };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -699,7 +879,7 @@ $('bExport').onclick = async () => {
   const blob = await save.exportWorld(worldId), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = worldName.replace(/[^\w\-]+/g, '_') + '.mcw'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 };
-$('bRespawn').onclick = () => { audio.unlock(); player.respawn(); state = 'play'; showOverlay(null); ui.renderStats(); canvas.requestPointerLock(); };
+$('bRespawn').onclick = async () => { audio.unlock(); showOverlay(null); if (dim !== 'overworld') { state = 'play'; await changeDimension('overworld', { respawn: true }); } player.respawn(); if (dim === 'overworld') { const g = groundSpawn(Math.floor(player.spawn.x), Math.floor(player.spawn.z)); player.pos.copy(g); } state = 'play'; ui.renderStats(); canvas.requestPointerLock(); };
 $('bCam').onclick = () => setCamMode((camMode + 1) % 3);
 $('bQuality').onclick = () => { settings.quality = (settings.quality + 1) % QUALITY.length; saveSettings(); applyQuality(); ui && ui.toast('Gráficos: ' + QUALITY[settings.quality].name); };
 $('bPSummon').onclick = () => { showOverlay(null); state = 'play'; openPanel('summon'); };
@@ -729,13 +909,15 @@ function frame(now) {
     applyCamera();
     tickFurnaces(dt);
     const cx = Math.floor(player.pos.x), cz = Math.floor(player.pos.z);
-    const snowing = biomeAt(cx, cz, seed) === 'snow';
-    weather.update(dt, player, camera, snowing, player.headUnder);
-    const exposed = world.skyLit(cx, Math.floor(player.pos.y + 1.6), cz);
+    const ow = dim === 'overworld', snowing = ow && biomeAt(cx, cz, seed) === 'snow';
+    if (ow) weather.update(dt, player, camera, snowing, player.headUnder); else { weather.rain.visible = weather.snow.visible = false; weather.wind.x = weather.wind.z = 0; weather.wind.s = 0.12; weather.intensity = 0; }
+    const exposed = ow ? world.skyLit(cx, Math.floor(player.pos.y + 1.6), cz) : 0;
     player.wind.x = weather.wind.x * 1.4 * exposed * (weather.state === 'clear' ? 0 : 1); player.wind.z = weather.wind.z * 1.4 * exposed * (weather.state === 'clear' ? 0 : 1);
     gameU.uTime.value += dt; gameU.uWind.value = 0.25 + weather.wind.s * 2.2;
-    audio.setAmbient(weather.intensity * (0.25 + 0.75 * exposed) * (player.headUnder ? 0.2 : 1), weather.wind.s * (0.3 + 0.7 * exposed) * (weather.state === 'clear' ? 0.25 : 1), weather.t * 0.4);
+    if (!ow) audio.setAmbient(0, 0.18, weather.t * 0.2); else audio.setAmbient(weather.intensity * (0.25 + 0.75 * exposed) * (player.headUnder ? 0.2 : 1), weather.wind.s * (0.3 + 0.7 * exposed) * (weather.state === 'clear' ? 0.25 : 1), weather.t * 0.4);
     sky.update(dt, camera.position, radius * 16, player.headUnder, weather.wind);
+    ambient.update(dt, camera, dim);
+    updatePortals(dt);
     const pend = world.update(player.pos.x, player.pos.z, radius, wBudget);
     wBudget = pend > 40 ? 4 : 2;
     player.push.x = player.push.y = player.push.z = 0;
@@ -766,7 +948,7 @@ function frame(now) {
       $('info').textContent = `${fps} FPS · ${mode === 'creative' ? 'Creativo' : 'Supervivencia'}\nXYZ ${player.pos.x.toFixed(1)} ${player.pos.y.toFixed(1)} ${player.pos.z.toFixed(1)}\n` +
         `Bioma: ${biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z), seed)} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nMobs: ${mobs.list.length} · Clima: ${WEATHER_NAMES[weather.state]}${snowing ? ' (nieve)' : ''} · Viento ${(weather.wind.s * 20).toFixed(0)} km/h${player.flying ? ' · [VUELO]' : ''}`;
       $('cam').textContent = '📷 ' + CAM_NAMES[camMode] + '  [V]';
-      $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${WEATHER_NAMES[weather.state]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
+      $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${dim === 'overworld' ? WEATHER_NAMES[weather.state] : DIM_NAMES[dim]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
       $('xpFill').style.width = (xpPts / xpNeed(xpLevel)) * 100 + '%'; $('xpLvl').textContent = xpLevel;
       $('xp').style.visibility = mode === 'survival' ? 'visible' : 'hidden';
       const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`);
@@ -811,7 +993,7 @@ requestAnimationFrame(frame);
       audio.unlock(); $('msg').textContent = 'Cargando mundo…';
       const data = await save.loadWorld(id);
       if (!data.meta) { $('msg').textContent = 'No se pudo leer este mundo'; return; }
-      startGame({ id, name: w.name, seed: data.meta.seed, mode: data.meta.mode, saved: data.chunks, meta: data.meta, created: w.created, played: w.played });
+      startGame({ id, name: w.name, seed: data.meta.seed, mode: data.meta.mode, saved: data.chunks, nether: data.nether, end: data.end, meta: data.meta, created: w.created, played: w.played });
     } else if (btn.dataset.act === 'del') {
       if (confirm(`¿Borrar "${w.name}" para siempre?`)) { await save.deleteWorld(id); list = await refresh(); }
     } else if (btn.dataset.act === 'rename') {

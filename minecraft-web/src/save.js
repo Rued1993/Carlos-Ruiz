@@ -46,10 +46,13 @@ export async function loadWorld(id) {
   const s = db.transaction(STORE).objectStore(STORE);
   const range = IDBKeyRange.bound(`w:${id}:`, `w:${id}:￿`);
   const keys = await wrap(s.getAllKeys(range)), vals = await wrap(s.getAll(range));
-  const out = { meta: null, chunks: new Map() };
+  const out = { meta: null, chunks: new Map(), nether: new Map(), end: new Map() };
   keys.forEach((k, i) => {
     const rest = k.slice(`w:${id}:`.length);
-    if (rest === 'meta') out.meta = vals[i]; else if (rest.startsWith('c:')) out.chunks.set(Number(rest.slice(2)), vals[i]);
+    if (rest === 'meta') out.meta = vals[i];
+    else if (rest.startsWith('c:')) out.chunks.set(Number(rest.slice(2)), vals[i]);
+    else if (rest.startsWith('n:')) out.nether.set(Number(rest.slice(2)), vals[i]);
+    else if (rest.startsWith('e:')) out.end.set(Number(rest.slice(2)), vals[i]);
   });
   return out;
 }
@@ -61,7 +64,7 @@ export async function saveWorld(id, meta, chunkEntries, summary) {
     const db = await open();
     const tx = db.transaction(STORE, 'readwrite'), s = tx.objectStore(STORE);
     s.put(meta, `w:${id}:meta`);
-    for (const [k, data] of chunkEntries) s.put(data, `w:${id}:c:${k}`);
+    for (const [k, data] of chunkEntries) s.put(data, `w:${id}:${typeof k === 'number' ? 'c:' + k : k}`); // k: número (Overworld) o 'n:123' / 'e:123'
     const index = await readIndex(s), i = index.findIndex((w) => w.id === id), row = { ...(i >= 0 ? index[i] : {}), ...summary, id, updated: Date.now() };
     if (i >= 0) index[i] = row; else index.push(row);
     s.put(index, 'index');
@@ -91,7 +94,8 @@ async function pipe(stream, Ctor, fmt) { return new Response(stream.pipeThrough(
 
 export async function exportWorld(id) {
   const worlds = await listWorlds(), summary = worlds.find((w) => w.id === id), data = await loadWorld(id);
-  const payload = JSON.stringify({ v: 2, summary, meta: data.meta, chunks: [...data.chunks].map(([k, u8]) => [k, b64(new Uint8Array(u8))]) });
+  const all = [...[...data.chunks].map(([k, u]) => ['c:' + k, u]), ...[...data.nether].map(([k, u]) => ['n:' + k, u]), ...[...data.end].map(([k, u]) => ['e:' + k, u])];
+  const payload = JSON.stringify({ v: 3, summary, meta: data.meta, chunks: all.map(([k, u8]) => [k, b64(new Uint8Array(u8))]) });
   const blob = new Blob([payload]);
   if (typeof CompressionStream === 'undefined') return blob;
   return (await pipe(blob.stream(), CompressionStream, 'gzip')).blob();

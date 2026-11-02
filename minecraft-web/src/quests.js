@@ -15,6 +15,12 @@ export const QUESTS = [
   { id: 'k_creeper', group: 'Cazador', title: 'Silencio…', desc: 'Derrota 2 creepers', ev: 'kill', target: 'creeper', n: 2, reward: [[I.GOLD, 4]], xp: 18 },
   { id: 'k_spider', group: 'Cazador', title: 'Aracnofobia', desc: 'Derrota 2 arañas', ev: 'kill', target: 'spider', n: 2, reward: [[I.GOLD, 4]], xp: 16 },
   { id: 'pearl', group: 'Cazador', title: 'Ojos que miran', desc: 'Consigue una perla de Ender', ev: 'collect', target: I.PEARL, n: 1, reward: [[I.DIAMOND, 3]], xp: 30 },
+  // Dimensiones
+  { id: 'obsidian', group: 'Dimensiones', title: 'Cristal volcánico', desc: 'Consigue obsidiana (8 adoquines + 1 diamante = 2)', ev: 'collect', target: B.OBSIDIAN, n: 1, reward: [[I.COAL, 12]], xp: 20 },
+  { id: 'd_nether', group: 'Dimensiones', title: 'Una puerta al infierno', desc: 'Entra al Nether (marco 4x5 de obsidiana + encendedor)', ev: 'dim', target: 'nether', n: 1, reward: [[I.GOLD, 8], [I.DIAMOND, 4]], xp: 80 },
+  { id: 'k_blaze', group: 'Dimensiones', title: 'Fuego cruzado', desc: 'Derrota a 2 blazes', ev: 'kill', target: 'blaze', n: 2, reward: [[I.DIAMOND, 4]], xp: 40 },
+  { id: 'k_piglin', group: 'Dimensiones', title: 'Oro maldito', desc: 'Derrota a 3 piglins zombificados', ev: 'kill', target: 'piglin', n: 3, reward: [[I.GOLD, 8]], xp: 35 },
+  { id: 'd_end', group: 'Dimensiones', title: 'El fin de todo', desc: 'Entra al End (12 marcos con ojo de Ender)', ev: 'dim', target: 'end', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   // Jefes
   { id: 'b_storm', group: 'Jefes', title: 'Domador de la tormenta', desc: 'Derrota a la Tormenta Wither', ev: 'boss', target: 'storm', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   { id: 'b_dragon', group: 'Jefes', title: '¿El final?', desc: 'Derrota al Ender Dragon', ev: 'boss', target: 'dragon', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },

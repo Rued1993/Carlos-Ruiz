@@ -111,6 +111,35 @@ export const MOB_TYPES = {
     },
     drops: () => [],
   },
+  piglin: {
+    hw: 0.3, h: 1.8, hp: 24, speed: 2.7, hostile: true, name: 'Piglin zombificado', damage: 5, xp: 6, piglin: true,
+    build(g, o) {
+      const skin = 0xc98a78, gold = 0xe8c040;
+      o.legs = [limb(g, 0.26, 0.75, 0.26, 0x5a4a38, -0.14, 0.75, 0), limb(g, 0.26, 0.75, 0.26, 0x5a4a38, 0.14, 0.75, 0)];
+      part(g, 0.56, 0.75, 0.3, 0x7a6a50, 0, 1.125, 0); part(g, 0.58, 0.14, 0.32, gold, 0, 1.45, 0);
+      o.arms = [limb(g, 0.22, 0.72, 0.22, skin, -0.38, 1.45, 0), limb(g, 0.22, 0.72, 0.22, skin, 0.38, 1.45, 0)];
+      o.arms.forEach((a) => (a.rotation.x = -Math.PI / 2.3));
+      part(g, 0.1, 0.55, 0.1, gold, 0.4, 1.0, 0.45); // espada
+      o.head = part(g, 0.6, 0.5, 0.5, skin, 0, 1.78, 0);
+      part(g, 0.34, 0.22, 0.12, 0xb0705f, 0, 1.72, 0.3); part(g, 0.06, 0.08, 0.04, 0x201010, -0.07, 1.72, 0.37); part(g, 0.06, 0.08, 0.04, 0x201010, 0.07, 1.72, 0.37);
+      part(g, 0.12, 0.28, 0.06, skin, -0.37, 1.8, 0).rotation.z = 0.5; part(g, 0.12, 0.28, 0.06, skin, 0.37, 1.8, 0).rotation.z = -0.5;
+      part(g, 0.08, 0.06, 0.03, 0xff3020, -0.14, 1.88, 0.26); part(g, 0.08, 0.06, 0.03, 0xff3020, 0.14, 1.88, 0.26);
+    },
+    drops: () => (Math.random() < 0.6 ? [[I.GOLD, 1]] : []),
+  },
+  blaze: {
+    hw: 0.35, h: 1.7, hp: 20, speed: 2.4, hostile: true, name: 'Blaze', fly: true, ranged: false, xp: 7,
+    build(g, o) {
+      const yel = new THREE.MeshLambertMaterial({ color: 0xf0b020, emissive: 0xa05000 }), org = new THREE.MeshLambertMaterial({ color: 0xff7a10, emissive: 0xc03000 });
+      o.head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), yel); o.head.position.y = 1.4; g.add(o.head);
+      for (const x of [-0.13, 0.13]) part(g, 0.12, 0.1, 0.03, 0x201000, x, 1.45, 0.29);
+      part(g, 0.22, 0.06, 0.03, 0x201000, 0, 1.28, 0.29);
+      o.rods = [];
+      for (let ring = 0; ring < 3; ring++) { const r = new THREE.Group(); r.position.y = 0.35 + ring * 0.38; g.add(r); for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; const rod = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), ring % 2 ? org : yel); rod.position.set(Math.cos(a) * 0.5, 0, Math.sin(a) * 0.5); r.add(rod); } o.rods.push(r); }
+      part(g, 0.2, 0.25, 0.2, 0xffa020, 0, 0.9, 0);
+    },
+    drops: () => (Math.random() < 0.8 ? [[I.COAL, 1 + Math.floor(Math.random() * 2)]] : []),
+  },
   zombie: {
     hw: 0.3, h: 1.8, hp: 20, speed: 2.5, hostile: true, name: 'Zombi', damage: 3,
     build(g, o) {
@@ -183,7 +212,7 @@ export function rayBox(o, d, min, max) {
 export class MobManager {
   constructor(scene, world, hooks) {
     this.scene = scene; this.world = world; this.hooks = hooks; // hooks: hurtPlayer, explode, drop, sound, puff, getDay
-    this.list = []; this.spawnT = 0; this.arrows = [];
+    this.list = []; this.spawnT = 0; this.arrows = []; this.dim = 'overworld';
   }
   add(type, x, y, z) { const m = new Mob(type, x, y, z, this.scene); this.list.push(m); return m; }
   clear() { for (const m of this.list) m.dispose(this.scene); this.list = []; for (const a of this.arrows) this.scene.remove(a.mesh); this.arrows = []; }
@@ -262,12 +291,15 @@ export class MobManager {
       m.moving = moving;
       if (inWater) { m.vel.y = Math.max(m.vel.y, 0) + 14 * dt; m.vel.y = Math.min(m.vel.y, 2.5); }
 
-      const r = moveBody(w, m, dt);
-      m.onGround = r.onGround;
-      if ((r.hitX || r.hitZ) && r.onGround && moving) m.vel.y = 7.4; // saltar obstáculos
+      if (m.def.fly) { this.flyMob(m, dt, player, hostile, dx, dz, dy, dist); m.onGround = false; }
+      else {
+        const r = moveBody(w, m, dt);
+        m.onGround = r.onGround;
+        if ((r.hitX || r.hitZ) && r.onGround && moving) m.vel.y = 7.4; // saltar obstáculos
+      }
 
-      // Ataque del zombi
-      if (m.type === 'zombie' && hostile && dist < 1.2 && Math.abs(dy) < 1.6 && m.cool <= 0) {
+      // Ataque del zombi y del piglin
+      if ((m.type === 'zombie' || m.type === 'piglin') && hostile && dist < 1.2 && Math.abs(dy) < 1.6 && m.cool <= 0) {
         m.cool = 1; this.hooks.hurtPlayer(m.def.damage, (dx / (dist || 1)) * 5, (dz / (dist || 1)) * 5);
       }
       // Araña y enderman: cuerpo a cuerpo
@@ -299,6 +331,7 @@ export class MobManager {
       if (m.sound <= 0) { m.sound = 6 + Math.random() * 12; if (dist < 16) this.hooks.sound(m.type === 'pig' ? 'oink' : m.type === 'cow' || m.type === 'sheep' ? 'moo' : m.type === 'chicken' ? 'pop' : m.type === 'zombie' || m.type === 'skeleton' || m.type === 'spider' ? 'groan' : ''); }
 
       // Animación
+      if (m.parts.rods) m.parts.rods.forEach((r, k) => (r.rotation.y += dt * (2 + k)));
       m.walkT += dt * (moving ? 9 : 0);
       const sw = moving ? Math.sin(m.walkT) * 0.7 : 0;
       if (m.parts.legs) m.parts.legs.forEach((l, k) => (l.rotation.x = (k % 2 ? -sw : sw)));
@@ -313,11 +346,11 @@ export class MobManager {
 
     // Flechas
     for (let i = this.arrows.length - 1; i >= 0; i--) {
-      const a = this.arrows[i]; a.life -= dt; a.vel.y -= 7 * dt;
+      const a = this.arrows[i]; a.life -= dt; a.vel.y -= (a.fire ? 0 : 7) * dt;
       a.mesh.position.addScaledVector(a.vel, dt);
       a.mesh.lookAt(a.mesh.position.clone().add(a.vel));
       const p = a.mesh.position, hit = Math.hypot(p.x - player.pos.x, p.y - (player.pos.y + 0.9), p.z - player.pos.z) < 0.75;
-      if (hit && !player.dead) { this.hooks.hurtPlayer(4, a.vel.x * 0.25, a.vel.z * 0.25); }
+      if (hit && !player.dead) { this.hooks.hurtPlayer(a.fire ? 3 : 4, a.vel.x * 0.25, a.vel.z * 0.25); if (a.fire) this.hooks.effect('burn', 4); }
       if (hit || a.life <= 0 || w.isSolid(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))) { this.scene.remove(a.mesh); this.arrows.splice(i, 1); }
     }
 
@@ -326,14 +359,48 @@ export class MobManager {
     if (this.spawnT <= 0) { this.spawnT = 1.5; this.trySpawn(player, mode, day); }
   }
 
-  shootArrow(o, dir) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.8), new THREE.MeshLambertMaterial({ color: 0x8a6a3a, emissive: 0x201408 }));
+  flyMob(m, dt, player, hostile, dx, dz, dy, dist) { // blaze: flota a distancia y dispara ráfagas de bolas de fuego
+    const w = this.world, want = hostile ? 9 : 0;
+    let tx = 0, tz = 0;
+    if (hostile && dist > 12) { tx = dx / (dist || 1); tz = dz / (dist || 1); } else if (hostile && dist < 6) { tx = -dx / (dist || 1); tz = -dz / (dist || 1); }
+    const ty = hostile ? player.pos.y + 3 + Math.sin(m.age * 1.4) * 0.8 : m.pos.y + Math.sin(m.age) * 0.4;
+    m.vel.x += (tx * m.def.speed - m.vel.x) * Math.min(1, dt * 3); m.vel.z += (tz * m.def.speed - m.vel.z) * Math.min(1, dt * 3);
+    m.vel.y += ((ty - m.pos.y) * 1.2 - m.vel.y) * Math.min(1, dt * 3);
+    const nx = m.pos.x + m.vel.x * dt, ny = m.pos.y + m.vel.y * dt, nz = m.pos.z + m.vel.z * dt;
+    if (!w.isSolid(Math.floor(nx), Math.floor(ny + 1), Math.floor(nz))) { m.pos.set(nx, ny, nz); }
+    if (hostile) {
+      m.yaw = Math.atan2(-dx, -dz);
+      m.burst = m.burst || 0;
+      if (m.burst > 0) { m.burstT -= dt; if (m.burstT <= 0) { m.burst--; m.burstT = 0.28; const o = new THREE.Vector3(m.pos.x, m.pos.y + 1.4, m.pos.z), t = new THREE.Vector3(player.pos.x, player.pos.y + 1, player.pos.z), dv = t.sub(o).normalize(); this.shootArrow(o, dv, true); } }
+      else if (m.cool <= 0 && dist < 26 && !w.raycast(new THREE.Vector3(m.pos.x, m.pos.y + 1.4, m.pos.z), new THREE.Vector3(dx, dy, dz).normalize(), dist)) { m.cool = 4; m.burst = 3; m.burstT = 0; this.hooks.sound('hiss'); }
+    }
+  }
+
+  shootArrow(o, dir, fire = false) {
+    const mesh = fire ? new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xff8a20 })) : new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.8), new THREE.MeshLambertMaterial({ color: 0x8a6a3a, emissive: 0x201408 }));
     mesh.position.copy(o); this.scene.add(mesh);
-    this.arrows.push({ mesh, vel: dir.normalize().multiplyScalar(22), life: 4 });
+    this.arrows.push({ mesh, vel: dir.normalize().multiplyScalar(fire ? 15 : 22), life: fire ? 6 : 4, fire });
     this.hooks.sound('shoot', 0.5);
   }
 
+  // Nether y End: busca suelo en una columna cercana y aparece algo hostil
+  trySpawnDim(player, mode) {
+    if (mode !== 'survival') return;
+    const w = this.world, hostile = this.list.length;
+    if (hostile >= (this.dim === 'nether' ? 12 : 7)) return;
+    const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 18;
+    const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);
+    for (let y = Math.min(CH - 6, Math.floor(player.pos.y) + 22); y > 4; y--) {
+      if (w.isSolid(x, y - 1, z) && !w.isLiquid(x, y - 1, z) && !w.isSolid(x, y, z) && !w.isSolid(x, y + 1, z) && !w.isLiquid(x, y, z)) {
+        if (this.dim === 'nether') { const r = Math.random(); this.add(r < 0.55 ? 'piglin' : 'blaze', x + 0.5, r < 0.55 ? y : y + 2, z + 0.5); }
+        else this.add('enderman', x + 0.5, y, z + 0.5);
+        return;
+      }
+    }
+  }
+
   trySpawn(player, mode, day) {
+    if (this.dim !== 'overworld') return this.trySpawnDim(player, mode);
     const w = this.world;
     const passive = this.list.filter((m) => !m.def.hostile).length, hostile = this.list.length - passive;
     const pickColumn = (min, max) => {

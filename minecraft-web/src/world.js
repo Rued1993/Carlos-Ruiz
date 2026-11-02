@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AIR, B, BLOCKS, OPAQUE, SOLID, LIQUID } from './blocks.js';
+import { AIR, B, BLOCKS, OPAQUE, SOLID, LIQUID, GHOST, EMIT } from './blocks.js';
 import { TILE_INDEX, TILE_COUNT } from './atlas.js';
 import { fbm, hash2, noise3 } from './noise.js';
 
@@ -55,8 +55,14 @@ export function terrainInfo(x, z, seed) {
 export const terrainHeight = (x, z, seed) => terrainInfo(x, z, seed).h;
 export function biomeAt(x, z, seed) { return terrainInfo(x, z, seed).biome; }
 
+// Pilares de obsidiana del End (10 en círculo; los 4 más altos sostienen los cristales del dragón)
+export function endPillars() {
+  return Array.from({ length: 10 }, (_, i) => { const a = (i / 10) * Math.PI * 2; return { x: Math.round(Math.cos(a) * 36), z: Math.round(Math.sin(a) * 36), top: 78 + (i % 5) * 7 }; });
+}
+
 export class World {
-  constructor(scene, materials, seed = 1337, saved = new Map()) {
+  constructor(scene, materials, seed = 1337, saved = new Map(), dim = 'overworld') {
+    this.dim = dim;
     this.scene = scene;
     this.materials = materials; // { opaque, trans }
     this.seed = seed;
@@ -87,6 +93,8 @@ export class World {
       this.scanTorches(k, data);
       return data;
     }
+    if (this.dim === 'nether') return this.genNether(cx, cz, k);
+    if (this.dim === 'end') return this.genEnd(cx, cz, k);
     const seed = this.seed;
     const data = new Uint8Array(CS * CS * CH);
     const x0 = cx * CS, z0 = cz * CS;
@@ -165,6 +173,7 @@ export class World {
     for (const v of villages) this.buildVillage(v, put);
     this.chunks.set(k, data);
     this.computeTops(k, data);
+    this.scanTorches(k, data);
     return data;
   }
 
@@ -243,10 +252,72 @@ export class World {
     });
   }
 
+  // Emisores de luz (antorchas, piedra luminosa y superficie de lava)
   scanTorches(k, data) {
-    let set = null;
-    for (let i = 0; i < data.length; i++) if (data[i] === B.TORCH) (set || (set = new Set())).add(i);
+    let set = null; const A = CS * CS;
+    for (let i = 0; i < data.length; i++) {
+      const id = data[i];
+      if (!id || !EMIT[id]) continue;
+      if (id === B.LAVA) { const lx = i % CS, lz = Math.floor(i / CS) % CS; if (((lx + lz) & 1) || data[i + A] !== 0) continue; }
+      (set || (set = new Set())).add(i);
+    }
     if (set) this.torches.set(k, set); else this.torches.delete(k);
+  }
+
+  // ---------- Nether: cavernas inmensas, mar de lava, glowstone y arena de almas ----------
+  genNether(cx, cz, k) {
+    const seed = this.seed + 7001, data = new Uint8Array(CS * CS * CH), x0 = cx * CS, z0 = cz * CS;
+    for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
+      const wx = x0 + lx, wz = z0 + lz;
+      for (let y = 0; y < CH; y++) {
+        let id = 0;
+        if (y === 0 || y === CH - 1 || (y === 1 && hash2(wx, wz, seed + 1) < 0.5) || (y === CH - 2 && hash2(wx, wz, seed + 2) < 0.5)) id = B.BEDROCK;
+        else {
+          const n = noise3(wx * 0.022, y * 0.04, wz * 0.022, seed + 301) * 0.65 + noise3(wx * 0.06, y * 0.09, wz * 0.06, seed + 302) * 0.35;
+          const t = Math.abs(y - 62) / 62;
+          if (n + 0.62 * t * t > 0.72 || y >= CH - 3) id = B.NETHERRACK; else id = y <= 31 ? B.LAVA : AIR;
+        }
+        data[this.idx(lx, y, lz)] = id;
+      }
+    }
+    // decoración de superficies
+    const A = CS * CS;
+    for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
+      const wx = x0 + lx, wz = z0 + lz, sand = noise3(wx * 0.05, 0, wz * 0.05, seed + 303) > 0.56;
+      for (let y = 2; y < CH - 3; y++) {
+        const i = this.idx(lx, y, lz);
+        if (data[i] !== B.NETHERRACK) continue;
+        const above = data[i + A], below = data[i - A];
+        if (above === AIR && y > 32 && sand) data[i] = B.SOUL_SAND;
+        else if (below === AIR && y > 84 && hash2(wx * 7 + y, wz * 3, seed + 310) < 0.02) data[i] = B.GLOWSTONE;
+        else if (hash2(wx * 13 + y, wz * 5 - y, seed + 311) < 0.006) data[i] = B.GOLD_ORE;
+      }
+    }
+    this.chunks.set(k, data); this.computeTops(k, data); this.scanTorches(k, data);
+    return data;
+  }
+
+  // ---------- End: isla principal, pilares de obsidiana e islas flotantes ----------
+  genEnd(cx, cz, k) {
+    const seed = this.seed + 9001, data = new Uint8Array(CS * CS * CH), x0 = cx * CS, z0 = cz * CS;
+    for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
+      const wx = x0 + lx, wz = z0 + lz, r = Math.hypot(wx, wz);
+      let top = -1, bottom = 0;
+      if (r < 54) { top = 64 + Math.floor(fbm(wx * 0.08, wz * 0.08, seed + 700, 2) * 3) - (r > 46 ? Math.floor(r - 46) : 0); bottom = top - ((54 - r) * 0.75 + 3 + fbm(wx * 0.05, wz * 0.05, seed + 703, 2) * 5); }
+      else if (r > 240) {
+        const n = fbm(wx * 0.011, wz * 0.011, seed + 701, 3);
+        if (n > 0.63) { top = 58 + Math.floor((n - 0.63) * 60) + Math.floor(fbm(wx * 0.06, wz * 0.06, seed + 702, 2) * 3); bottom = top - ((n - 0.63) * 230 + 2); }
+      }
+      if (top > 0) for (let y = Math.max(1, Math.floor(bottom)); y <= top && y < CH; y++) data[this.idx(lx, y, lz)] = B.END_STONE;
+    }
+    for (const pl of endPillars()) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      if (dx * dx + dz * dz > 5) continue;
+      const lx = pl.x + dx - x0, lz = pl.z + dz - z0; if (lx < 0 || lz < 0 || lx >= CS || lz >= CS) continue;
+      for (let y = 62; y <= pl.top; y++) data[this.idx(lx, y, lz)] = B.OBSIDIAN;
+      if (dx === 0 && dz === 0) data[this.idx(lx, pl.top + 1, lz)] = B.BEDROCK;
+    }
+    this.chunks.set(k, data); this.computeTops(k, data); this.scanTorches(k, data);
+    return data;
   }
 
   computeTops(k, data) {
@@ -279,6 +350,7 @@ export class World {
     return t ? t[(z - cz * CS) * CS + (x - cx * CS)] : -1;
   }
   skyLit(x, y, z) {
+    if (this.dim !== 'overworld') return 1;
     const cx = Math.floor(x / CS), cz = Math.floor(z / CS);
     const t = this.tops.get(ckey(cx, cz));
     if (!t) return 1;
@@ -305,10 +377,8 @@ export class World {
     c[ii] = id;
     if (id && y > this.hi.get(k)) this.hi.set(k, y);
     this.modified.add(k); this.unsaved.add(k);
-    if (old === B.TORCH || id === B.TORCH) {
-      let set = this.torches.get(k);
-      if (id === B.TORCH) { if (!set) this.torches.set(k, (set = new Set())); set.add(ii); }
-      else if (set) { set.delete(ii); if (!set.size) this.torches.delete(k); }
+    if (EMIT[old] || EMIT[id]) {
+      this.scanTorches(k, c);
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) this.dirty.add(ckey(cx + a, cz + b));
     }
     const tops = this.tops.get(k), ti = lz * CS + lx;
@@ -340,7 +410,7 @@ export class World {
     let normal = [0, 0, 0], t = 0;
     while (t <= maxDist) {
       const id = this.getBlock(x, y, z);
-      if (id !== AIR && (hitLiquid || !LIQUID[id])) return { x, y, z, id, normal, dist: t };
+      if (id !== AIR && (hitLiquid || (!LIQUID[id] && !GHOST[id]))) return { x, y, z, id, normal, dist: t };
       const a = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : (tMax[1] < tMax[2] ? 1 : 2);
       t = tMax[a];
       tMax[a] += tDelta[a];
@@ -482,7 +552,7 @@ export class World {
           for (const f of FACES) {
             const nx = wx + f.dir[0], ny = y + f.dir[1], nz = wz + f.dir[2];
             const nid = get(nx, ny, nz);
-            if (OPAQUE[nid] || (nid === id && def.transparent)) continue;
+            if (OPAQUE[nid] || (nid === id && (def.transparent || def.liquid))) continue;
             const tile = TILE_INDEX[f.top ? def.tiles[0] : f.bottom ? def.tiles[1] : def.tiles[2]];
             const [ta, tb] = f.tan;
             let cr = 1, cg = 1, cb = 1;
@@ -514,14 +584,14 @@ export class World {
             for (let ci = 0; ci < 4; ci++) {
               const c = f.corners[ci];
               let py = c.p[1];
-              if (id === B.WATER && py === 1 && get(wx, y + 1, wz) !== B.WATER) py = 0.88;
+              if ((id === B.WATER || id === B.LAVA) && py === 1 && get(wx, y + 1, wz) !== id) py = 0.88;
               L.pos.push(lx + c.p[0], y + py, lz + c.p[2]);
               L.nor.push(f.dir[0], f.dir[1], f.dir[2]);
               L.uv.push((tile + (c.uv[0] ? 1 - eps : eps)) / TILE_COUNT, c.uv[1] ? 1 - eps : eps);
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
               L.col.push(v * cr, v * cg, v * cb);
-              L.bl.push(f.shade * AO[ao[ci]] * bg[ci]);
-              L.sw.push(id === B.LEAVES ? 1 : id === B.WATER ? 2 : 0); L.sk.push(lg[ci]);
+              L.bl.push(def.glow ? 1 : f.shade * AO[ao[ci]] * bg[ci]);
+              L.sw.push(id === B.LEAVES ? 1 : id === B.WATER || id === B.LAVA ? 2 : 0); L.sk.push(lg[ci]);
             }
             if (ao[0] + ao[3] > ao[1] + ao[2]) L.ind.push(n, n + 1, n + 3, n, n + 3, n + 2);
             else L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);

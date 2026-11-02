@@ -122,9 +122,9 @@ class BossBase {
 
 // ===================================================================== ENDER DRAGON
 export class EnderDragon extends BossBase {
-  constructor(scene, hooks, pos) {
+  constructor(scene, hooks, pos, arena) {
     super(scene, hooks, pos, { name: 'ENDER DRAGON', type: 'dragon', maxHp: 300, hitbox: { hx: 4.5, hy: 2.4, hz: 5, oy: 0.5 }, scale: 1.4, burstColor: [0.7, 0.2, 0.9] });
-    this.center = pos.clone(); this.theta = Math.random() * 6; this.state = 'circle'; this.diveT = 12; this.fireT = 4; this.breath = 0; this.diveTime = 0; this.diveTarget = V();
+    this.arena = arena || null; this.center = arena ? V(arena.cx, arena.cy, arena.cz) : pos.clone(); this.theta = Math.random() * 6; this.state = 'circle'; this.diveT = 12; this.fireT = 4; this.breath = 0; this.diveTime = 0; this.diveTarget = V();
     const dk = this.mat(0x15101a), dk2 = this.mat(0x241a2e), glow = this.mat(0xe040ff, 0xe040ff, true);
     this.box(2.4, 2.0, 6, dk, 0, 0, 0);
     for (let i = 0; i < 6; i++) this.box(0.4, 0.8, 0.5, dk2, 0, 1.3, -2.4 + i * 0.95); // espinas dorsales
@@ -154,7 +154,9 @@ export class EnderDragon extends BossBase {
       const c1 = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), m), c2 = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), new THREE.MeshBasicMaterial({ color: 0xffd0f0 }));
       c2.rotation.set(0.7, 0.7, 0); c2.scale.setScalar(0.7); g.add(c1, c2);
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1, 5), new THREE.MeshBasicMaterial({ color: 0xff80e0, transparent: true, opacity: 0.6, fog: false }));
-      g.position.set(pos.x + Math.cos(a) * 14, pos.y - 6 + 3, pos.z + Math.sin(a) * 14); scene.add(g, beam); this.extra.push(g, beam);
+      if (this.arena && this.arena.pillars) { const pl = this.arena.pillars[(i * 2 + 1) % this.arena.pillars.length]; g.position.set(pl.x + 0.5, pl.top + 3.5, pl.z + 0.5); }
+      else g.position.set(pos.x + Math.cos(a) * 14, pos.y - 6 + 3, pos.z + Math.sin(a) * 14);
+      scene.add(g, beam); this.extra.push(g, beam);
       this.crystals.push({ g, beam, alive: true });
     }
     this.h.toast('¡Destruye los 4 cristales para poder dañar al Dragón!');
@@ -694,7 +696,7 @@ export class SlimeKing extends BossBase {
 
 export const BOSS_INFO = {
   storm: { name: 'Tormenta Wither', color: '#b060ff', hp: 360, desc: 'Colosal masa con tres cabezas. Rayo tractor, cráneos explosivos y un bloque de comandos como punto débil.', icon: '🌀' },
-  dragon: { name: 'Ender Dragon', color: '#e040ff', hp: 300, desc: 'Vuela en círculos, pica en picado y lanza aliento. Destruye sus 4 cristales para poder herirlo.', icon: '🐉', make: (s, h, p) => new EnderDragon(s, h, p), up: 16 },
+  dragon: { name: 'Ender Dragon', color: '#e040ff', hp: 300, desc: 'Vuela en círculos, pica en picado y lanza aliento. Destruye sus 4 cristales para poder herirlo.', icon: '🐉', make: (s, h, p, arena) => new EnderDragon(s, h, p, arena), up: 16 },
   wither: { name: 'Wither', color: '#9aa8c8', hp: 300, desc: 'Lanza cráneos negros que envenenan. Con poca vida se acoraza y te persigue de cerca.', icon: '💀', make: (s, h, p) => new WitherBoss(s, h, p), up: 8 },
   warden: { name: 'Warden', color: '#3be8c8', hp: 360, desc: 'Ciego pero letal. Golpes devastadores y explosión sónica a distancia. Oscurece la pantalla.', icon: '👁', make: (s, h, p) => new WardenBoss(s, h, p), up: 0, ground: true },
   guardian: { name: 'Guardián Ancestral', color: '#70fff0', hp: 240, desc: 'Su láser carga y causa fatiga de minería. Sus espinas devuelven daño al golpearlo.', icon: '🐟', make: (s, h, p) => new ElderGuardian(s, h, p), up: 6 },

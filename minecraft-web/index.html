@@ -57,6 +57,8 @@
     #effects { position: fixed; left: 10px; top: 60px; color: #fff; font-size: 12px; text-shadow: 1px 1px #000; pointer-events: none; display: flex; flex-direction: column; gap: 3px; }
     #effects span { background: rgba(0,0,0,.4); padding: 2px 8px; border-left: 3px solid #a0f; }
     #darkness { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 20%, rgba(0,0,0,.95) 95%); opacity: 0; transition: opacity .3s; }
+    #portalfx { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(150,60,255,.35), rgba(80,10,160,.85)); mix-blend-mode: screen; }
+    #travel { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #3a1060, #08020f); color: #fff; font-size: 26px; letter-spacing: 3px; text-shadow: 2px 2px 0 #000; }
     .panel.wide { width: min(860px, 94vw); }
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
     .card { background: #8b8b8b; border: 3px solid #1b1b1b; border-top-color: #eee; border-left-color: #eee; padding: 8px 10px; color: #222; display: flex; flex-direction: column; gap: 4px; }
@@ -131,6 +133,8 @@
 <body>
   <canvas id="game"></canvas>
   <div id="darkness"></div>
+  <div id="portalfx"></div>
+  <div id="travel" class="hidden"><b id="travelTxt">Viajando…</b></div>
   <div id="water" class="hidden"></div>
   <div id="vignette"></div>
   <div id="crosshair"></div>
@@ -170,6 +174,8 @@
       <div id="bossCards" class="cards"></div>
       <h3>Mobs</h3>
       <div id="mobBtns" class="mobs"></div>
+      <h3>Viajar entre dimensiones</h3>
+      <div id="dimBtns" class="mobs"><button class="btn" data-dim="overworld">🌍 Overworld</button><button class="btn" data-dim="nether">🔥 Nether</button><button class="btn" data-dim="end">🌌 El End</button></div>
       <div style="display:flex;gap:8px;justify-content:space-between;align-items:center"><button class="btn" id="bDespawn" style="width:auto">Descartar jefe actual</button><small>B o Esc para cerrar</small></div>
     </div>
   </div>
@@ -184,7 +190,7 @@
 
   <div id="overlay" class="screen">
     <div id="menu">
-      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡10 jefes y mundo enorme!</div></div>
+      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡Nether y End!</div></div>
       <p id="msg">Cargando…</p>
       <div id="menuBody" style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
         <div id="worldsBox" class="hidden"><h3>Tus mundos guardados</h3><div id="worldList"></div></div>
@@ -226,7 +232,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v0.6</div>
+    <div id="ver">Minecraft Web v0.7</div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
