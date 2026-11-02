@@ -22,7 +22,15 @@ npm run build    # versión de producción en dist/
 - **Cámaras:** primera persona, tercera persona por detrás y por delante (tecla **V**), con modelo de jugador animado.
 - **Interfaz:** menú rediseñado, HUD con corazones/comida/burbujas en pixel-art, ajustes de render, campo de visión, sensibilidad y volumen (se guardan).
 - **Clima:** lluvia y tormentas aleatorias (nieve en el bioma nevado) con rayos y trueno, viento que mece las hojas y empuja al jugador, cielo oscuro y sonido de lluvia/viento. Tecla **T** para cambiar el clima.
-- **Jefe: Tormenta Wither** (inspirado en el de *Minecraft: Story Mode*): fabrica un **bloque de comandos** (4 diamantes + 4 lingotes de oro + carbón en el centro, en anillo) y colócalo para invocarlo. Tiene 3 fases, rayo tractor que te arrastra, cráneos explosivos, devora bloques, esbirros y un bloque de comandos como punto débil (expuesto en la fase 3: ¡golpéalo para daño x3!). Sube una tormenta mientras vive y suelta una estrella, diamantes y oro.
+- **5 jefes** (panel **B** para invocarlos al instante, o el bloque de comandos para la Tormenta Wither):
+  - **Tormenta Wither**: rayo tractor, cráneos explosivos, devora bloques y su bloque de comandos es el punto débil.
+  - **Ender Dragon**: vuela en círculos, pica en picado y lanza aliento; sus 4 cristales lo curan y hay que destruirlos.
+  - **Wither**: cráneos que envenenan; con poca vida se acoraza y te persigue.
+  - **Warden**: golpes devastadores y explosión sónica; oscurece la pantalla.
+  - **Guardián Ancestral**: láser con carga que causa fatiga de minería; sus espinas devuelven daño.
+- **Misiones (M):** 17 misiones (aprendiz, caza y jefes), con recompensas y XP; derrota a los 5 jefes para el logro final.
+- **Más mobs:** oveja, gallina, esqueleto (con arco), araña y enderman (se enfada si lo miras y se teletransporta).
+- **HUD y gráficos:** minimapa circular con mobs y jefes, nivel y XP, efectos de estado, rastreador de misiones, corazones/comida pixel-art, cielo con degradado y brillo solar, agua con oleaje, grietas al picar, hojas mecidas por el viento y antialiasing.
 - **Creativo:** bloques infinitos, rotura instantánea, vuelo y paleta con todos los bloques e ítems.
 - **Guardado automático** en el navegador (IndexedDB) y sonido procedural.
 
@@ -36,6 +44,8 @@ npm run build    # versión de producción en dist/
 | Colocar / comer / abrir mesa | Clic derecho |
 | Elegir ranura | 1-9 o rueda |
 | Inventario | E |
+| Invocar jefes y mobs / Misiones | B / M |
+| Datos de depuración | F3 |
 | Cambiar clima (despejado/lluvia/tormenta) | T |
 | Cambiar cámara (1ª / 3ª detrás / 3ª delante) | V |
 | Tirar ítem | Q (supervivencia) |
@@ -51,11 +61,13 @@ npm run build    # versión de producción en dist/
 - `src/blocks.js` – bloques, ítems, herramientas y recetas
 - `src/ui.js` / `src/inventory.js` – HUD, inventario y crafteo
 - `src/playermodel.js` – modelo del jugador para tercera persona
+- `src/boss.js` / `src/bosses.js` – jefes
+- `src/quests.js` – misiones
 - `src/sky.js`, `src/atlas.js`, `src/icons.js`, `src/audio.js`, `src/save.js`, `src/entities.js`, `src/noise.js`
 
 ## Hoja de ruta
 
 - [ ] Agua que fluye, lava
-- [ ] Más mobs (esqueletos, arañas), cultivos, camas
+- [ ] Cultivos, camas, armaduras y arcos
 - [ ] Estructuras (aldeas, minas), más biomas
 - [ ] Multijugador

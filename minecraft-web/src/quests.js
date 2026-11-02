@@ -1,0 +1,51 @@
+// Misiones: aprendizaje, caza y derrotar a todos los jefes.
+import { B, I } from './blocks.js';
+
+export const QUESTS = [
+  // Aprendiz
+  { id: 'logs', group: 'Aprendiz', title: 'Primeros pasos', desc: 'Recoge 3 troncos', ev: 'collect', target: B.LOG, n: 3, reward: [[I.APPLE, 4]], xp: 8 },
+  { id: 'table', group: 'Aprendiz', title: 'Carpintero', desc: 'Fabrica una mesa de crafteo', ev: 'craft', target: B.TABLE, n: 1, reward: [[B.PLANKS, 16]], xp: 8 },
+  { id: 'pick', group: 'Aprendiz', title: 'Minero', desc: 'Fabrica un pico de piedra', ev: 'craft', target: 111, n: 1, reward: [[I.COAL, 8]], xp: 10 },
+  { id: 'torch', group: 'Aprendiz', title: 'Luz en la oscuridad', desc: 'Fabrica 4 antorchas', ev: 'craft', target: B.TORCH, n: 4, reward: [[I.COAL, 8]], xp: 10 },
+  { id: 'iron', group: 'Aprendiz', title: 'Fundidor', desc: 'Consigue un lingote de hierro', ev: 'collect', target: I.IRON, n: 1, reward: [[I.COAL, 16]], xp: 15 },
+  { id: 'diamond', group: 'Aprendiz', title: '¡Diamantes!', desc: 'Consigue un diamante', ev: 'collect', target: I.DIAMOND, n: 1, reward: [[I.GOLD, 6]], xp: 25 },
+  // Cazador
+  { id: 'k_zombie', group: 'Cazador', title: 'Cazador de zombis', desc: 'Derrota 3 zombis', ev: 'kill', target: 'zombie', n: 3, reward: [[I.STEAK, 4]], xp: 15 },
+  { id: 'k_skeleton', group: 'Cazador', title: 'Huesos rotos', desc: 'Derrota 3 esqueletos', ev: 'kill', target: 'skeleton', n: 3, reward: [[I.STEAK, 4]], xp: 18 },
+  { id: 'k_creeper', group: 'Cazador', title: 'Silencio…', desc: 'Derrota 2 creepers', ev: 'kill', target: 'creeper', n: 2, reward: [[I.GOLD, 4]], xp: 18 },
+  { id: 'k_spider', group: 'Cazador', title: 'Aracnofobia', desc: 'Derrota 2 arañas', ev: 'kill', target: 'spider', n: 2, reward: [[I.GOLD, 4]], xp: 16 },
+  { id: 'pearl', group: 'Cazador', title: 'Ojos que miran', desc: 'Consigue una perla de Ender', ev: 'collect', target: I.PEARL, n: 1, reward: [[I.DIAMOND, 3]], xp: 30 },
+  // Jefes
+  { id: 'b_storm', group: 'Jefes', title: 'Domador de la tormenta', desc: 'Derrota a la Tormenta Wither', ev: 'boss', target: 'storm', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_dragon', group: 'Jefes', title: '¿El final?', desc: 'Derrota al Ender Dragon', ev: 'boss', target: 'dragon', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_wither', group: 'Jefes', title: 'Más allá de los huesos', desc: 'Derrota al Wither', ev: 'boss', target: 'wither', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_warden', group: 'Jefes', title: 'Silencio absoluto', desc: 'Derrota al Warden', ev: 'boss', target: 'warden', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'b_guardian', group: 'Jefes', title: 'La mirada del océano', desc: 'Derrota al Guardián Ancestral', ev: 'boss', target: 'guardian', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
+  { id: 'master', group: 'Jefes', title: '★ LEYENDA DE LOS JEFES ★', desc: 'Derrota a los 5 jefes de Minecraft', ev: 'bossall', target: null, n: 5, reward: [[I.STAR, 5], [I.DIAMOND, 32], [I.GOLD, 32]], xp: 500 },
+];
+
+export class Quests {
+  constructor(hooks) { this.h = hooks; this.progress = {}; this.done = {}; this.bosses = new Set(); } // hooks: reward(items), toast, xp, sound
+  event(ev, target, n = 1) {
+    for (const q of QUESTS) {
+      if (this.done[q.id] || q.ev !== ev || (q.target !== null && q.target !== target)) continue;
+      this.progress[q.id] = Math.min(q.n, (this.progress[q.id] || 0) + n);
+      if (this.progress[q.id] >= q.n) this.complete(q);
+    }
+    if (ev === 'boss') {
+      this.bosses.add(target);
+      const m = QUESTS.find((q) => q.id === 'master');
+      if (!this.done.master) { this.progress.master = this.bosses.size; if (this.bosses.size >= m.n) this.complete(m); }
+    }
+  }
+  complete(q) {
+    this.done[q.id] = true; this.progress[q.id] = q.n;
+    this.h.reward(q.reward); this.h.xp(q.xp); this.h.sound('craft');
+    this.h.toast(q.id === 'master' ? '🏆 ¡ERES UNA LEYENDA! Has derrotado a todos los jefes' : `✔ Misión completada: ${q.title}`);
+  }
+  active(max = 3) { return QUESTS.filter((q) => !this.done[q.id]).slice(0, max); }
+  total() { return QUESTS.length; }
+  completed() { return QUESTS.filter((q) => this.done[q.id]).length; }
+  toJSON() { return { progress: this.progress, done: this.done, bosses: [...this.bosses] }; }
+  load(o) { if (o) { this.progress = o.progress || {}; this.done = o.done || {}; this.bosses = new Set(o.bosses || []); } }
+}

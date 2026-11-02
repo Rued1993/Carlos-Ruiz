@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export const DAY_LENGTH = 600; // segundos por día completo
-const GREY = new THREE.Color(0x70767f), FLASH = new THREE.Color(0xdde6ff);
+const WHITE = new THREE.Color(1, 1, 1), DEEP = new THREE.Color(0x2358c8), GREY = new THREE.Color(0x70767f), FLASH = new THREE.Color(0xdde6ff);
 const DAY = new THREE.Color(0x87ceeb), NIGHT = new THREE.Color(0x070b1c), DUSK = new THREE.Color(0xff8a50);
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -36,6 +36,19 @@ export class Sky {
     this.time = 0.08; // 0 = amanecer, 0.25 mediodía, 0.5 atardecer, 0.75 medianoche
     this.daylight = 1; this.wet = 0; this.flash = 0; this.cloudX = 0; this.cloudZ = 0;
     this.root = new THREE.Group(); scene.add(this.root);
+    // Cúpula del cielo con degradado horizonte -> cénit
+    this.domeMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
+      uniforms: { top: { value: new THREE.Color(0x4a88d8) }, hor: { value: new THREE.Color(0x9ad4f0) } },
+      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 hor; varying vec3 vP; void main(){ float h = normalize(vP).y; float t = smoothstep(-0.02, 0.6, h); gl_FragColor = vec4(mix(hor, top, t), 1.0); }',
+    });
+    this.dome = new THREE.Mesh(new THREE.SphereGeometry(420, 24, 14), this.domeMat); this.dome.renderOrder = -30; this.root.add(this.dome);
+    const gc = document.createElement('canvas'); gc.width = gc.height = 128; const gx = gc.getContext('2d');
+    const gr = gx.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,240,180,0.9)'); gr.addColorStop(0.25, 'rgba(255,200,110,0.35)'); gr.addColorStop(1, 'rgba(255,180,80,0)');
+    gx.fillStyle = gr; gx.fillRect(0, 0, 128, 128);
+    this.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, depthTest: false, fog: false }));
+    this.glow.scale.set(260, 260, 1); this.glow.renderOrder = -11; this.root.add(this.glow);
 
     const sunTex = squareTex((x) => { x.fillStyle = '#fff6b0'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#ffe14a'; x.fillRect(2, 2, 12, 12); x.fillStyle = '#fffbe0'; x.fillRect(5, 5, 6, 6); });
     const moonTex = squareTex((x) => { x.fillStyle = '#e8ecf2'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#b8bfcc'; x.fillRect(3, 4, 3, 3); x.fillRect(9, 8, 4, 3); x.fillRect(5, 11, 2, 2); });
@@ -84,6 +97,9 @@ export class Sky {
     if (flash > 0) this.sky.lerp(FLASH, flash * 0.7);
     if (underwater) this.sky.set(0x1a3a7a).multiplyScalar(0.4 + this.daylight * 0.6);
     this.scene.background = this.sky;
+    const clear = raw * (1 - wet);
+    this.domeMat.uniforms.hor.value.copy(this.sky).lerp(WHITE, 0.22 * clear);
+    this.domeMat.uniforms.top.value.copy(this.sky).multiplyScalar(0.7).lerp(DEEP, 0.3 * clear);
     this.scene.fog.color.copy(this.sky);
     this.scene.fog.near = underwater ? 0.5 : fogRadius * 0.6;
     this.scene.fog.far = underwater ? 18 : fogRadius * (1 - 0.3 * wet);
@@ -100,6 +116,7 @@ export class Sky {
     this.root.position.copy(this.camera.position);
     const R = 220;
     this.sun.position.set(cosA * R, sinA * R, 30);
+    this.glow.position.set(cosA * R * 0.98, sinA * R * 0.98, 30); this.glow.material.opacity = Math.max(0, Math.min(1, (sinA + 0.15) * 1.6)) * (1 - wet) * (underwater ? 0 : 1);
     this.moon.position.set(-cosA * R, -sinA * R, 30);
     this.sun.lookAt(this.camera.position); this.moon.lookAt(this.camera.position);
     this.stars.rotation.z = a;

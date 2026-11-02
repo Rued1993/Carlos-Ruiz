@@ -147,7 +147,7 @@ export class UI {
       if (this.cursor && !(this.cursor.id === out.id && this.cursor.n + out.n <= maxStack(out.id))) return;
       if (this.cursor) this.cursor.n += out.n; else this.cursor = { ...out };
       this.craft = this.craft.map((s) => (s && s.n > 1 ? { ...s, n: s.n - 1 } : null));
-      this.g.sound('craft'); this.render(); return;
+      this.g.sound('craft'); if (this.g.onCraft) this.g.onCraft(out.id, out.n); this.render(); return;
     }
     const arr = this.arr(group), slot = arr[i], cur = this.cursor;
     if (group === 'furnace' && i === 2) { // salida: solo se puede sacar

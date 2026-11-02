@@ -31,6 +31,7 @@ function cmdTexture() {
 export class WitherStorm {
   constructor(scene, hooks, pos) {
     this.scene = scene; this.h = hooks; this.pos = pos.clone();
+    this.name = 'TORMENTA WITHER'; this.type = 'storm';
     this.maxHp = 360; this.hp = 360; this.phase = 1; this.scale = 1; this.scaleT = 1;
     this.t = 0; this.yaw = 0; this.flash = 0; this.devourT = 1; this.atkT = 3; this.beamT = 3; this.beamOn = false;
     this.minionT = 10; this.meleeT = 0; this.beamHurtT = 0; this.shell = 1; this.dead = false; this.skulls = [];
@@ -117,7 +118,7 @@ export class WitherStorm {
     this.dead = true;
     this.h.explode(this.pos.x, this.pos.y, this.pos.z, 7, 0.25);
     this.h.sound('roar', 1);
-    this.h.loot(this.pos.x, this.pos.y, this.pos.z);
+    this.h.loot(this.pos.x, this.pos.y, this.pos.z, 'storm');
     this.h.toast('¡Has derrotado a la Tormenta Wither!');
     this.dispose(); this.h.done();
   }

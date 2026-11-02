@@ -4,12 +4,14 @@ import { initIcons, iconTexture, tileURL } from './icons.js';
 import { PlayerModel } from './playermodel.js';
 import { Weather, WEATHER_NAMES } from './weather.js';
 import { WitherStorm } from './boss.js';
+import { BOSS_INFO, BOSS_ORDER } from './bosses.js';
+import { Quests, QUESTS } from './quests.js';
 import { World, terrainHeight, biomeAt, SEA, CH } from './world.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
 import { Sky } from './sky.js';
 import { Drops, Particles } from './entities.js';
-import { MobManager } from './mobs.js';
+import { MobManager, MOB_TYPES } from './mobs.js';
 import { UI } from './ui.js';
 import * as audio from './audio.js';
 import * as save from './save.js';
@@ -17,7 +19,7 @@ import { B, I, AIR, BLOCKS, ITEMS, LIQUID, SOLID, SMELT, FUEL, SMELT_TIME, info,
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x87ceeb, 50, 90);
@@ -35,7 +37,7 @@ function patchChunkMaterial(m) {
     sh.uniforms.uTint = tint; sh.uniforms.uTime = gameU.uTime; sh.uniforms.uWind = gameU.uWind;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float blight;\nattribute float sway;\nuniform vec3 uTint;\nuniform float uTime;\nuniform float uWind;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvec4 wp = modelMatrix * vec4(position, 1.0);\nfloat sw = sway * uWind;\ntransformed.x += sin(uTime * 1.7 + wp.x * 0.9 + wp.z * 0.6 + wp.y * 0.5) * 0.075 * sw;\ntransformed.z += cos(uTime * 1.3 + wp.z * 0.8 + wp.x * 0.4) * 0.075 * sw;\ntransformed.y += sin(uTime * 2.1 + wp.x * 0.7 + wp.z * 0.7) * 0.03 * sw;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvec4 wp = modelMatrix * vec4(position, 1.0);\nfloat sw = (sway > 1.5 ? 0.0 : sway) * uWind;\ntransformed.x += sin(uTime * 1.7 + wp.x * 0.9 + wp.z * 0.6 + wp.y * 0.5) * 0.075 * sw;\ntransformed.z += cos(uTime * 1.3 + wp.z * 0.8 + wp.x * 0.4) * 0.075 * sw;\ntransformed.y += sin(uTime * 2.1 + wp.x * 0.7 + wp.z * 0.7) * 0.03 * sw;\ntransformed.y += (sway > 1.5 ? 1.0 : 0.0) * sin(uTime * 1.9 + wp.x * 1.2 + wp.z * 1.0) * 0.045;')
       .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_COLOR\nvColor = color * uTint + vec3(1.0, 0.8, 0.5) * blight;\n#endif');
   };
   m.customProgramCacheKey = () => 'chunk-light';
@@ -51,12 +53,29 @@ const materials = {
 const settings = { radius: 6, fov: 75, sens: 1, vol: 0.5, cam: 0 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
+const LOOT = {
+  storm: [[I.STAR, 1], [B.COMMAND, 1], [I.DIAMOND, 8], [I.GOLD, 12]],
+  dragon: [[I.STAR, 2], [I.PEARL, 4], [I.DIAMOND, 12], [I.GOLD, 10]],
+  wither: [[I.STAR, 1], [I.DIAMOND, 6], [I.GOLD, 10]],
+  warden: [[I.STAR, 1], [I.DIAMOND, 10], [I.GOLD, 16]],
+  guardian: [[I.STAR, 1], [I.PEARL, 1], [I.DIAMOND, 6], [I.GOLD, 8]],
+};
 const CAM_NAMES = ['Primera persona', 'Tercera persona (detrás)', 'Tercera persona (delante)'];
 
 // Resaltado y grietas del bloque apuntado
 const highlight = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.005, 1.005, 1.005)), new THREE.LineBasicMaterial({ color: 0x000000 }));
 highlight.visible = false; scene.add(highlight);
-const crack = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+const crackTex = (() => {
+  let sd = 12345; const rnd = () => (sd = (Math.imul(sd, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const pts = [];
+  for (let b = 0; b < 6; b++) { let px = 8, py = 8; const a = rnd() * 6.28; for (let i = 0; i < 12; i++) { px += Math.cos(a + (rnd() - 0.5) * 1.3); py += Math.sin(a + (rnd() - 0.5) * 1.3); pts.push([Math.round(px), Math.round(py), i]); } }
+  return Array.from({ length: 10 }, (_, s) => {
+    const c = document.createElement('canvas'); c.width = c.height = 16; const x = c.getContext('2d');
+    x.fillStyle = 'rgba(0,0,0,0.8)'; for (const [px, py, i] of pts) if (i <= (s + 1) * 1.25) x.fillRect(px, py, 1, 1);
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t;
+  });
+})();
+const crack = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), new THREE.MeshBasicMaterial({ map: crackTex[0], transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
 crack.visible = false; scene.add(crack);
 
 // Mano / ítem sostenido
@@ -70,7 +89,10 @@ handIcon.renderOrder = handArm.renderOrder = 999;
 let state = 'menu'; // menu | loading | play | inv | pause | dead
 let mode = 'survival', radius = settings.radius, camMode = settings.cam | 0;
 const furnaces = new Map(); // "x,y,z" -> {slots:[entrada,combustible,salida], burn, burnMax, cook}
-let model, furnRenderT = 0, weather, boss = null, ritual = null, bossHooks;
+let model, furnRenderT = 0, weather, boss = null, ritual = null, bossHooks, quests, panelId = null;
+let xpLevel = 0, xpPts = 0, darkTarget = 0, mmT = 0, trackT = 0;
+const xpNeed = (l) => 6 + l * 4;
+function addXp(n) { xpPts += n; while (xpPts >= xpNeed(xpLevel)) { xpPts -= xpNeed(xpLevel); xpLevel++; if (ui) ui.toast('¡Nivel ' + xpLevel + '!'); sound('pop'); } }
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1;
 const mouse = { left: false, right: false };
 const mining = { key: '', progress: 0 };
@@ -142,6 +164,7 @@ function breakBlock(hit) {
     const key = hit.x + ',' + hit.y + ',' + hit.z, f = furnaces.get(key);
     if (f) { for (const sl of f.slots) if (sl) drops.spawn(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, sl.id, sl.n); furnaces.delete(key); }
   }
+  if (id === B.COAL_ORE || id === B.IRON_ORE || id === B.GOLD_ORE || id === B.DIAMOND_ORE) addXp(id === B.DIAMOND_ORE ? 8 : 3);
   particles.blockBreak(hit.x, hit.y, hit.z, id);
   sound('break');
   if (mode === 'survival') {
@@ -188,6 +211,105 @@ function useItem() {
   if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
 }
 
+function setBossBar(type) {
+  const inf = BOSS_INFO[type];
+  $('bossFill').style.background = `linear-gradient(${inf.color}, #25103a)`;
+  $('bossbar').style.setProperty('--bc', inf.color);
+}
+function spawnBossOf(type, x, y, z) {
+  const inf = BOSS_INFO[type], pos = new THREE.Vector3(x, y, z);
+  boss = type === 'storm' ? new WitherStorm(scene, bossHooks, pos) : inf.make(scene, bossHooks, pos);
+  setBossBar(type);
+  if (type === 'storm' || type === 'dragon' || type === 'wither') { weather.set('storm'); weather.boss = true; weather.timer = 9999; }
+  sound('roar');
+}
+function summonBoss(type) {
+  if (boss || ritual) { ui.toast('Ya hay un jefe activo'); return false; }
+  const inf = BOSS_INFO[type], look = player.lookDir(), l = Math.hypot(look.x, look.z) || 1, fx = look.x / l, fz = look.z / l;
+  const dist = type === 'warden' ? 12 : type === 'guardian' ? 16 : type === 'wither' ? 20 : 26;
+  const x = player.pos.x + fx * dist, z = player.pos.z + fz * dist;
+  let y;
+  if (inf.ground) { const t = world.topY(Math.floor(x), Math.floor(z)); y = t > 0 ? t + 1 : player.pos.y; }
+  else y = player.pos.y + (inf.up === undefined ? 10 : inf.up) + (type === 'storm' ? 10 : 0);
+  spawnBossOf(type, x, y, z);
+  ui.toast('¡' + inf.name + ' ha sido invocado!');
+  return true;
+}
+function summonMob(type) {
+  const look = player.lookDir(), l = Math.hypot(look.x, look.z) || 1;
+  for (let d = 6; d <= 10; d += 2) {
+    const x = Math.floor(player.pos.x + (look.x / l) * d), z = Math.floor(player.pos.z + (look.z / l) * d), t = world.topY(x, z);
+    if (t > 0) { mobs.add(type, x + 0.5, t + 1, z + 0.5); return; }
+  }
+  mobs.add(type, player.pos.x + 3, player.pos.y + 1, player.pos.z);
+}
+function despawnBoss() {
+  if (boss) { boss.dispose(); boss = null; }
+  ritual = null; weather.boss = false; darkTarget = 0; $('bossbar').classList.add('hidden'); ui.toast('Jefe descartado');
+}
+
+// ---------- Paneles (invocación y misiones) ----------
+function openPanel(id) {
+  if (state !== 'play') return;
+  state = 'panel'; panelId = id; player.keys.clear(); mouse.left = mouse.right = false;
+  document.exitPointerLock(); $(id).classList.remove('hidden');
+  if (id === 'summon') renderSummon(); else renderQuests();
+}
+function closePanel(relock) {
+  if (!panelId) return;
+  $(panelId).classList.add('hidden'); panelId = null;
+  if (relock) { state = 'play'; canvas.requestPointerLock(); } else { state = 'pause'; showOverlay('pause'); }
+}
+function renderSummon() {
+  $('bossCards').innerHTML = BOSS_ORDER.map((t) => {
+    const i = BOSS_INFO[t], won = quests.bosses.has(t);
+    return `<div class="card" style="border-left:6px solid ${i.color}"><h4><span>${i.icon} ${i.name}</span><span class="tag">${i.hp} HP</span></h4><p>${i.desc}</p><button class="btn" data-boss="${t}">${won ? '✔ ' : ''}Invocar</button></div>`;
+  }).join('');
+  $('mobBtns').innerHTML = Object.keys(MOB_TYPES).map((t) => `<button class="btn" data-mob="${t}">${MOB_TYPES[t].name}</button>`).join('');
+}
+function renderQuests() {
+  $('questTitle').textContent = `Misiones — ${quests.completed()}/${quests.total()} completadas`;
+  let html = '', grp = '';
+  for (const q of QUESTS) {
+    if (q.group !== grp) { grp = q.group; html += `<div class="grp">${grp.toUpperCase()}</div>`; }
+    const done = quests.done[q.id], p = quests.progress[q.id] || 0;
+    const rw = q.reward.map(([id, n]) => `${n}× ${info(id).name}`).join(', ');
+    html += `<div class="q ${done ? 'done' : ''}"><span class="ck">${done ? '✔' : '○'}</span><div><b>${q.title}</b>${q.desc}<div class="bar"><i style="width:${(p / q.n) * 100}%"></i></div></div><div class="rw">${p}/${q.n}<br>${rw}<br>+${q.xp} XP</div></div>`;
+  }
+  $('questList').innerHTML = html;
+}
+$('bossCards').addEventListener('click', (e) => { const t = e.target.closest('[data-boss]'); if (t && state === 'panel') { closePanel(true); summonBoss(t.dataset.boss); } });
+$('mobBtns').addEventListener('click', (e) => { const t = e.target.closest('[data-mob]'); if (t && state === 'panel') { summonMob(t.dataset.mob); ui.toast(MOB_TYPES[t.dataset.mob].name + ' invocado'); } });
+$('bDespawn').onclick = () => { despawnBoss(); };
+
+// ---------- Minimapa ----------
+const mmCtx = $('minimap').getContext('2d'), mmImg = mmCtx.createImageData(64, 64), mmCol = {};
+for (const d of Object.values(BLOCKS)) { const c = tileColor(d.tiles[0]); mmCol[d.id] = [c[0] * 255, c[1] * 255, c[2] * 255]; }
+function drawMinimap() {
+  const px = Math.floor(player.pos.x), pz = Math.floor(player.pos.z), data = mmImg.data;
+  for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) {
+    const x = px + i - 32, z = pz + j - 32, top = world.topY(x, z), o = (j * 64 + i) * 4;
+    let c;
+    if (top < 0) c = [20, 20, 30];
+    else if (top < SEA && world.getBlock(x, SEA, z) === B.WATER) c = [38 + top, 84 + top, 190];
+    else {
+      const base = mmCol[world.getBlock(x, top, z)] || [90, 90, 90], f = Math.max(0.6, Math.min(1.25, 0.9 + (top - player.pos.y) * 0.012));
+      c = [base[0] * f, base[1] * f, base[2] * f];
+    }
+    data[o] = c[0]; data[o + 1] = c[1]; data[o + 2] = c[2]; data[o + 3] = 255;
+  }
+  mmCtx.putImageData(mmImg, 0, 0);
+  mmCtx.imageSmoothingEnabled = false; mmCtx.drawImage($('minimap'), 0, 0, 64, 64, 0, 0, 128, 128);
+  const dot = (wx, wz, col, r) => { const cx = (wx - px + 32) * 2, cy = (wz - pz + 32) * 2; if (cx < 2 || cy < 2 || cx > 126 || cy > 126) return; mmCtx.fillStyle = col; mmCtx.fillRect(cx - r, cy - r, r * 2, r * 2); };
+  for (const m of mobs.list) dot(m.pos.x, m.pos.z, m.def.hostile ? '#ff4040' : '#ffffff', 1.5);
+  if (boss) { const pulse = 3 + Math.sin(performance.now() / 150) * 1.2; const bx = boss.pos.x, bz = boss.pos.z, cx = Math.max(6, Math.min(122, (bx - px + 32) * 2)), cy = Math.max(6, Math.min(122, (bz - pz + 32) * 2)); mmCtx.fillStyle = '#d050ff'; mmCtx.fillRect(cx - pulse, cy - pulse, pulse * 2, pulse * 2); mmCtx.strokeStyle = '#fff'; mmCtx.strokeRect(cx - pulse, cy - pulse, pulse * 2, pulse * 2); }
+  mmCtx.save(); mmCtx.translate(64 + (player.pos.x - px) * 2, 64 + (player.pos.z - pz) * 2); mmCtx.rotate(-player.yaw + Math.PI);
+  mmCtx.fillStyle = '#fff'; mmCtx.strokeStyle = '#000'; mmCtx.beginPath(); mmCtx.moveTo(0, 6); mmCtx.lineTo(4.5, -4.5); mmCtx.lineTo(0, -2); mmCtx.lineTo(-4.5, -4.5); mmCtx.closePath(); mmCtx.fill(); mmCtx.stroke(); mmCtx.restore();
+}
+function updateTracker() {
+  $('tracker').innerHTML = quests.active(3).map((q) => `<div class="qt"><b>${q.title}</b>${q.desc} (${quests.progress[q.id] || 0}/${q.n})<div class="qb"><i style="width:${((quests.progress[q.id] || 0) / q.n) * 100}%"></i></div></div>`).join('');
+}
+
 function startRitual(x, y, z) {
   ritual = { x, y, z, t: 5, s: 0 };
   sound('roar'); weather.set('storm'); weather.boss = true;
@@ -199,7 +321,7 @@ function updateRitual(dt) {
   if (ritual.t <= 0) {
     const r = ritual; ritual = null;
     world.setBlock(r.x, r.y, r.z, AIR);
-    boss = new WitherStorm(scene, bossHooks, new THREE.Vector3(r.x + 0.5, r.y + 14, r.z + 0.5));
+    spawnBossOf('storm', r.x + 0.5, r.y + 14, r.z + 0.5);
     sound('roar'); ui.toast('¡LA TORMENTA WITHER HA DESPERTADO!');
   }
 }
@@ -210,7 +332,7 @@ function attack() {
   const blk = world.raycast(eye, dir, 7);
   if (bossHit && (!blk || bossHit.dist < blk.dist)) {
     const tb = toolOf(inv.held());
-    boss.hit(mode === 'creative' ? 12 : (tb ? tb.dmg : 1), bossHit.crit);
+    boss.hit(mode === 'creative' ? 12 : (tb ? tb.dmg : 1), bossHit.crit, bossHit);
     sound('hit'); if (bossHit.crit) ui.toast('¡Golpe crítico al bloque de comandos!');
     if (mode === 'survival' && tb) { inv.wearHeld(1); ui.renderHotbar(); }
     return true;
@@ -239,7 +361,7 @@ function updateInteraction(dt) {
     swing = swing > 0 ? swing : 0.001;
     if (mode === 'creative') { if (breakCool <= 0) { breakBlock(hit); breakCool = 0.2; } }
     else {
-      const bt = breakTime(hit.id, inv.held());
+      const bt = breakTime(hit.id, inv.held()) * (player.effects.fatigue > 0 ? 3 : 1);
       mining.progress += dt / bt;
       progress = Math.min(1, mining.progress);
       if (Math.floor(mining.progress * 6) !== Math.floor((mining.progress - dt / bt) * 6)) sound('hit');
@@ -247,7 +369,7 @@ function updateInteraction(dt) {
     }
     crack.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
   } else { mining.key = ''; mining.progress = 0; }
-  crack.visible = progress > 0; crack.material.opacity = progress * 0.6;
+  crack.visible = progress > 0; if (progress > 0) crack.material.map = crackTex[Math.min(9, Math.floor(progress * 10))];
   $('breakbar').classList.toggle('hidden', progress <= 0);
   $('breakbar').firstElementChild.style.width = progress * 100 + '%';
   if (mouse.right && placeCool <= 0) { placeCool = 0.22; useItem(); }
@@ -327,6 +449,7 @@ function syncSelect() {
 }
 
 function onDeath() {
+  darkTarget = 0;
   if (boss) { boss.dispose(); boss = null; weather.boss = false; weather.set('rain'); $('bossbar').classList.add('hidden'); ui.toast('La tormenta se retira…'); }
   ritual = null;
   state = 'dead'; sound('die'); player.keys.clear(); mouse.left = mouse.right = false;
@@ -340,7 +463,7 @@ function onDeath() {
 async function saveGame() {
   if (!world) return;
   const meta = { v: 1, seed, mode, time: sky.time, pos: player.pos.toArray(), yaw: player.yaw, pitch: player.pitch,
-    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON() };
+    hp: player.hp, food: player.food, spawn: player.spawn.toArray(), inv: inv.toJSON(), furnaces: [...furnaces.entries()], weather: weather.toJSON(), quests: quests.toJSON(), xp: { l: xpLevel, p: xpPts } };
   const entries = [...world.unsaved].filter((k) => world.chunks.has(k)).map((k) => [k, new Uint8Array(world.chunks.get(k))]);
   const ok = await save.saveAll(meta, entries);
   if (ok) world.unsaved.clear();
@@ -368,24 +491,37 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
     world: () => world, explode: (x, y, z, r, ds) => explode(x, y, z, r, ds), toast: (m) => ui.toast(m), sound: (n, v) => audio.play(n, v),
     burst: (x, y, z, c, n, s) => particles.burst(x, y, z, c, n, s), hurtPlayer: (n, kx, kz) => player.damage(n, kx, kz),
     strikeNear: (x, z) => weather.strike(player, false, { x, z }), minions: () => mobs.list.filter((m) => m.def.hostile).length,
-    spawnMinion: () => {
+    effect: (name, sec) => { if (mode === 'survival') player.effects[name] = Math.max(player.effects[name], sec); },
+    darkness: (l) => { darkTarget = l; },
+    player: () => player,
+    spawnMinion: (type) => {
       for (let i = 0; i < 6; i++) {
         const a = Math.random() * Math.PI * 2, d = 10 + Math.random() * 8, x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d), top = world.topY(x, z);
-        if (top > 0 && !world.isSolid(x, top + 1, z)) { mobs.add(Math.random() < 0.6 ? 'zombie' : 'creeper', x + 0.5, top + 1, z + 0.5); return; }
+        if (top > 0 && !world.isSolid(x, top + 1, z)) { mobs.add(type || (Math.random() < 0.6 ? 'zombie' : 'creeper'), x + 0.5, top + 1, z + 0.5); return; }
       }
     },
-    loot: (x, y, z) => { drops.spawn(x, y, z, I.STAR, 1); drops.spawn(x, y, z, B.COMMAND, 1); drops.spawn(x, y, z, I.DIAMOND, 8); drops.spawn(x, y, z, I.GOLD, 12); },
-    done: () => { boss = null; weather.boss = false; weather.set('rain'); $('bossbar').classList.add('hidden'); },
+    loot: (x, y, z, type = 'storm') => { for (const [id, n] of (LOOT[type] || LOOT.storm)) drops.spawn(x, y, z, id, n); },
+    done: () => {
+      const type = boss ? boss.type : 'storm';
+      quests.event('boss', type); addXp(100); sound('craft');
+      boss = null; weather.boss = false; darkTarget = 0;
+      if (weather.state === 'storm') weather.set('rain');
+      $('bossbar').classList.add('hidden');
+    },
   };
-  boss = null; ritual = null;
+  boss = null; ritual = null; panelId = null; darkTarget = 0;
+  quests = new Quests({ reward: (items) => { for (const [id, n] of items) { const left = inv.add(id, n); if (left) dropItem(id, left); } ui.renderHotbar(); }, toast: (m) => ui.toast(m), xp: addXp, sound });
   drops = new Drops(scene, world);
   particles = new Particles(scene, world);
   mobs = new MobManager(scene, world, {
+    killed: (type, xp) => { quests.event('kill', type); addXp(xp); },
+    tp: (x, y, z) => { particles.burst(x, y, z, [0.7, 0.2, 1], 14, 3); sound('pop'); },
     hurtPlayer: (d, kx, kz) => player.damage(d, kx, kz),
     explode, drop: (x, y, z, id, n) => drops.spawn(x, y, z, id, n), sound,
     puff: (x, y, z) => particles.burst(x, y, z, [0.9, 0.9, 0.9], 12, 3),
   });
-  ui = new UI({ inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect });
+  ui = new UI({ inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect, onCraft: (id, n) => quests.event('craft', id, n) });
+  xpLevel = 0; xpPts = 0;
 
   player.events.onHurt = () => { sound('hurt'); const v = $('vignette'); v.classList.add('hurt'); setTimeout(() => v.classList.remove('hurt'), 120); };
   player.events.onStep = () => sound('step');
@@ -395,7 +531,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
 
   let cx, cz;
   if (meta) {
-    weather.load(meta.weather); inv.load(meta.inv); (meta.furnaces || []).forEach(([k, f]) => furnaces.set(k, f)); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
+    weather.load(meta.weather); quests.load(meta.quests); if (meta.xp) { xpLevel = meta.xp.l; xpPts = meta.xp.p; } inv.load(meta.inv); (meta.furnaces || []).forEach(([k, f]) => furnaces.set(k, f)); sky.time = meta.time; player.hp = meta.hp; player.food = meta.food;
     player.yaw = meta.yaw; player.pitch = meta.pitch; player.spawn.fromArray(meta.spawn);
     player.pos.fromArray(meta.pos); cx = Math.floor(meta.pos[0]); cz = Math.floor(meta.pos[2]);
   } else { [cx, cz] = findSpawnColumn(seed); player.pos.set(cx + 0.5, 70, cz + 0.5); }
@@ -413,7 +549,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => { boss = new WitherStorm(scene, bossHooks, new THREE.Vector3(x, y, z)); } };
+  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, openPanel, closePanel, addXp, get xp() { return [xpLevel, xpPts]; } };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -432,6 +568,11 @@ document.addEventListener('mousemove', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   audio.unlock();
+  if (state === 'panel') {
+    if (e.code === 'Escape') closePanel(false);
+    else if ((e.code === 'KeyB' && panelId === 'summon') || (e.code === 'KeyM' && panelId === 'quests')) closePanel(true);
+    return;
+  }
   if (state === 'inv') {
     if (e.code === 'KeyE') { e.preventDefault(); closeInventory(true); }
     else if (e.code === 'Escape') closeInventory(false);
@@ -441,6 +582,9 @@ document.addEventListener('keydown', (e) => {
   if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 9) { inv.selected = n; syncSelect(); } return; }
   switch (e.code) {
     case 'KeyE': openInventory(2); return;
+    case 'KeyB': openPanel('summon'); return;
+    case 'KeyM': openPanel('quests'); return;
+    case 'F3': e.preventDefault(); $('info').classList.toggle('hidden'); return;
     case 'KeyT': if (!e.repeat) { const st = weather.cycle(); ui.toast('Clima: ' + WEATHER_NAMES[st]); } return;
     case 'KeyV': case 'F5': e.preventDefault(); if (!e.repeat) setCamMode((camMode + 1) % 3); return;
     case 'KeyF': if (mode === 'creative' && !e.repeat) { player.flying = !player.flying; player.vel.y = 0; ui.toast(player.flying ? 'Vuelo activado' : 'Vuelo desactivado'); } return;
@@ -471,6 +615,8 @@ $('bResume').onclick = () => { audio.unlock(); canvas.requestPointerLock(); };
 $('bSave').onclick = async () => { await saveGame(); location.reload(); };
 $('bRespawn').onclick = () => { audio.unlock(); player.respawn(); state = 'play'; showOverlay(null); ui.renderStats(); canvas.requestPointerLock(); };
 $('bCam').onclick = () => setCamMode((camMode + 1) % 3);
+$('bPSummon').onclick = () => { showOverlay(null); state = 'play'; openPanel('summon'); };
+$('bPQuests').onclick = () => { showOverlay(null); state = 'play'; openPanel('quests'); };
 const bind = (id, label, key, fmt, apply) => {
   const el = $(id), out = $(label);
   el.value = settings[key]; out.textContent = fmt(settings[key]); if (apply) apply(settings[key]);
@@ -507,16 +653,17 @@ function frame(now) {
     player.push.x = player.push.y = player.push.z = 0;
     if (ritual) updateRitual(dt);
     if (boss) {
-      weather.timer = 9999; weather.boss = true;
+      if (boss.type === 'storm' || boss.type === 'dragon' || boss.type === 'wither') { weather.timer = 9999; weather.boss = true; }
       boss.update(dt, player, world);
       if (boss) {
         $('bossbar').classList.remove('hidden');
         $('bossFill').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
         $('bossPhase').textContent = 'Fase ' + boss.phase;
+        if ($('bossName').firstChild.nodeValue !== boss.name + ' ') $('bossName').firstChild.nodeValue = boss.name + ' ';
       }
     }
     mobs.update(dt, player, mode, sky.daylight, radius);
-    drops.update(dt, player, inv, () => { sound('pop'); ui.renderHotbar(); });
+    drops.update(dt, player, inv, (d) => { sound('pop'); ui.renderHotbar(); quests.event('collect', d.id, d.n); });
     particles.update(dt);
     if (state === 'play') updateInteraction(dt);
     updateHand(dt);
@@ -531,7 +678,15 @@ function frame(now) {
       $('info').textContent = `${fps} FPS · ${mode === 'creative' ? 'Creativo' : 'Supervivencia'}\nXYZ ${player.pos.x.toFixed(1)} ${player.pos.y.toFixed(1)} ${player.pos.z.toFixed(1)}\n` +
         `Bioma: ${biomeAt(Math.floor(player.pos.x), Math.floor(player.pos.z), seed)} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}\nMobs: ${mobs.list.length} · Clima: ${WEATHER_NAMES[weather.state]}${snowing ? ' (nieve)' : ''} · Viento ${(weather.wind.s * 20).toFixed(0)} km/h${player.flying ? ' · [VUELO]' : ''}`;
       $('cam').textContent = '📷 ' + CAM_NAMES[camMode] + '  [V]';
+      $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${WEATHER_NAMES[weather.state]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
+      $('xpFill').style.width = (xpPts / xpNeed(xpLevel)) * 100 + '%'; $('xpLvl').textContent = xpLevel;
+      $('xp').style.visibility = mode === 'survival' ? 'visible' : 'hidden';
+      const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`);
+      $('effects').innerHTML = ef.join('');
+      $('darkness').style.opacity = darkTarget;
     }
+    mmT -= dt; if (mmT <= 0) { mmT = 0.4; drawMinimap(); }
+    trackT -= dt; if (trackT <= 0) { trackT = 0.5; updateTracker(); }
     saveT += dt; if (saveT > 20) { saveT = 0; saveGame(); }
   }
   renderer.render(scene, camera);

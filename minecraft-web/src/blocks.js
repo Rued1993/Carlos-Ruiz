@@ -6,7 +6,7 @@ export const B = {
   WATER: 9, GLASS: 10, COAL_ORE: 11, IRON_ORE: 12, GOLD_ORE: 13, DIAMOND_ORE: 14,
   BEDROCK: 15, SNOW: 16, CACTUS: 17, BRICKS: 18, TABLE: 19, TORCH: 20, FURNACE: 21, COMMAND: 22,
 };
-export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105 };
+export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, CHICKEN: 155, COOKED_CHICKEN: 156 };
 
 export const BLOCKS = {};
 function block(id, name, tiles, hardness, tool = null, lvl = 0, extra = {}) {
@@ -55,6 +55,9 @@ item(I.IRON, 'Lingote de hierro');
 item(I.GOLD, 'Lingote de oro');
 item(I.DIAMOND, 'Diamante');
 item(I.STAR, 'Estrella de la tormenta');
+item(I.PEARL, 'Perla de Ender');
+item(I.CHICKEN, 'Pollo crudo', { food: 4 });
+item(I.COOKED_CHICKEN, 'Pollo asado', { food: 12 });
 item(I.APPLE, 'Manzana', { food: 8 });
 item(I.PORK, 'Cerdo crudo', { food: 6 });
 item(I.BEEF, 'Ternera cruda', { food: 6 });
@@ -94,7 +97,7 @@ recipe(['DGD', 'GCG', 'DGD'], { D: I.DIAMOND, G: I.GOLD, C: I.COAL }, B.COMMAND)
 // Fundición: entrada -> [salida, cantidad]; combustible -> segundos de llama
 export const SMELT = {
   [B.IRON_ORE]: [I.IRON, 1], [B.GOLD_ORE]: [I.GOLD, 1], [B.COBBLE]: [B.STONE, 1], [B.SAND]: [B.GLASS, 1],
-  [B.LOG]: [I.COAL, 1], [I.PORK]: [I.COOKED_PORK, 1], [I.BEEF]: [I.STEAK, 1],
+  [B.LOG]: [I.COAL, 1], [I.PORK]: [I.COOKED_PORK, 1], [I.BEEF]: [I.STEAK, 1], [I.CHICKEN]: [I.COOKED_CHICKEN, 1],
 };
 export const FUEL = { [I.COAL]: 80, [B.LOG]: 15, [B.PLANKS]: 15, [B.TABLE]: 15, [I.STICK]: 5 };
 export const SMELT_TIME = 8;

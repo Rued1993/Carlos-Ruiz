@@ -22,6 +22,7 @@ export class Player {
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
     this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
+    this.effects = { poison: 0, fatigue: 0 }; this.poisonT = 0;
   }
 
   collides(px, py, pz) {
@@ -53,7 +54,7 @@ export class Player {
   heal(n) { this.hp = Math.min(20, this.hp + n); }
   eat(n) { this.food = Math.min(20, this.food + n); }
   respawn() {
-    this.hp = 20; this.food = 20; this.air = 10; this.dead = false; this.invuln = 2;
+    this.hp = 20; this.food = 20; this.air = 10; this.dead = false; this.invuln = 2; this.effects.poison = 0; this.effects.fatigue = 0;
     this.pos.copy(this.spawn); this.vel.set(0, 0, 0); this.fallStart = null;
   }
 
@@ -129,6 +130,12 @@ export class Player {
     }
     if (this.pos.y < -30) { this.pos.y = 70; this.vel.set(0, 0, 0); this.damage(4); }
 
+    // Efectos de estado
+    if (this.effects.fatigue > 0) this.effects.fatigue -= dt;
+    if (this.effects.poison > 0) {
+      this.effects.poison -= dt; this.poisonT += dt;
+      if (this.poisonT >= 1) { this.poisonT = 0; if (this.mode === 'survival' && this.hp > 1) { this.hp -= 1; if (this.events.onHurt) this.events.onHurt(1); } }
+    }
     // Supervivencia: aire, hambre, regeneración
     if (this.mode === 'survival') {
       if (this.headUnder) {

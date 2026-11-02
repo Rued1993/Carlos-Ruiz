@@ -402,7 +402,7 @@ export class World {
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
               L.col.push(v, v, v);
               L.bl.push(f.shade * AO[ao[ci]] * bg[ci]);
-              L.sw.push(id === B.LEAVES ? 1 : 0);
+              L.sw.push(id === B.LEAVES ? 1 : id === B.WATER ? 2 : 0);
             }
             if (ao[0] + ao[3] > ao[1] + ao[2]) L.ind.push(n, n + 1, n + 3, n, n + 3, n + 2);
             else L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
