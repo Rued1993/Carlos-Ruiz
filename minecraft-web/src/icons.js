@@ -1,6 +1,6 @@
 // Iconos de bloques (cubo isométrico) e ítems (pixel art) dibujados por código.
 import * as THREE from 'three';
-import { BLOCKS, ITEMS, I, B, TIERS, ARMOR_TIERS, TOOL_TYPES } from './blocks.js';
+import { SHAPE, BLOCKS, ITEMS, I, B, TIERS, ARMOR_TIERS, TOOL_TYPES } from './blocks.js';
 import { TILE_INDEX } from './atlas.js';
 
 let atlasCanvas = null;
@@ -17,6 +17,19 @@ function drawBlock(id) {
     if (shade) { x.fillStyle = `rgba(0,0,0,${shade})`; x.fillRect(0, 0, 16, 16); }
     x.restore();
   };
+  const sh = SHAPE[id];
+  if (sh && (sh.kind === 'slab' || sh.kind === 'stairs')) { // losa: medio cubo; escalera: losa + mitad trasera alta
+    face(def.tiles[0], [0.875, 0.4375, -0.875, 0.4375, 16, 11], 0);
+    face(def.tiles[2], [0.875, 0.4375, 0, 0.4375, 2, 18], 0.22);
+    face(def.tiles[2], [0.875, -0.4375, 0, 0.4375, 16, 25], 0.42);
+    if (sh.kind === 'stairs') {
+      const t = document.createElement('canvas'); t.width = t.height = 32; const tx = t.getContext('2d'); tx.imageSmoothingEnabled = false;
+      const f2 = (name, m, shade) => { tx.save(); tx.setTransform(...m); tx.drawImage(atlasCanvas, TILE_INDEX[name] * 16, 0, 16, 16, 0, 0, 16, 16); if (shade) { tx.fillStyle = `rgba(0,0,0,${shade})`; tx.fillRect(0, 0, 16, 16); } tx.restore(); };
+      f2(def.tiles[0], [0.875, 0.4375, -0.875, 0.4375, 16, 4], 0); f2(def.tiles[2], [0.875, 0.4375, 0, 0.875, 2, 11], 0.22); f2(def.tiles[2], [0.875, -0.4375, 0, 0.875, 16, 18], 0.42);
+      x.clearRect(16, 0, 16, 32); x.drawImage(t, 16, 0, 16, 32, 16, 0, 16, 32);
+    }
+    return c;
+  }
   face(def.tiles[0], [0.875, 0.4375, -0.875, 0.4375, 16, 4], 0);
   face(def.tiles[2], [0.875, 0.4375, 0, 0.875, 2, 11], 0.22);
   face(def.tiles[2], [0.875, -0.4375, 0, 0.875, 16, 18], 0.42);
@@ -34,7 +47,13 @@ function drawItem(id) {
   const stick = '#7a5a30';
   const handle = () => { for (let i = 2; i <= 11; i++) px(x, [[i, 15 - i]], stick); };
   const info = ITEMS[id] || {};
-  if (id === B.TORCH) {
+  if (SHAPE[id] && SHAPE[id].kind === 'fence') {
+    for (const xx of [3, 11]) for (let yy = 2; yy <= 14; yy++) px(x, [[xx, yy], [xx + 1, yy]], yy % 3 ? '#a8803f' : '#8a6a30');
+    for (const yy of [5, 6, 10, 11]) for (let xx = 3; xx <= 12; xx++) px(x, [[xx, yy]], '#b8904a');
+  } else if (SHAPE[id] && SHAPE[id].kind === 'door') {
+    for (let yy = 1; yy <= 14; yy++) for (let xx = 4; xx <= 11; xx++) px(x, [[xx, yy]], (yy === 1 || yy === 14 || xx === 4 || xx === 11) ? '#6a4a22' : (yy === 7 || xx === 7 || xx === 8) ? '#8a6a30' : '#b8904a');
+    px(x, [[10, 8], [10, 9]], '#e8e8e8');
+  } else if (id === B.TORCH) {
     for (let y = 6; y <= 14; y++) px(x, [[7, y], [8, y]], y % 2 ? '#7a5630' : '#6a4a28');
     px(x, [[7, 4], [8, 4], [7, 5], [8, 5]], '#ffc83c'); px(x, [[7, 3], [8, 3]], '#ff9a28'); px(x, [[7, 2]], '#ffeb78');
   } else if (info.armor) { // armaduras: silueta por pieza, teñida con el color del material

@@ -24,6 +24,7 @@ import { UI } from './ui.js';
 import * as audio from './audio.js';
 import * as save from './save.js';
 import { armorId, ARMOR_TIERS } from './blocks.js';
+import { SHAPE, SLAB_MATS, SLAB_BOTTOM, SLAB_TOP, STAIR_ID, FENCE, DOOR_LO, DOOR_LO_OPEN, DOOR_HI, DOOR_HI_OPEN } from './blocks.js';
 import { B, I, AIR, BLOCKS, ITEMS, LIQUID, SOLID, SMELT, FUEL, SMELT_TIME, info, isBlock, isFlat, maxStack, toolOf, breakTime, dropOf } from './blocks.js';
 
 const $ = (id) => document.getElementById(id);
@@ -310,11 +311,13 @@ function breakBlock(hit) {
     if (f) { for (const sl of f.slots) if (sl) drops.spawn(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, sl.id, sl.n); furnaces.delete(key); }
   }
   if (id === B.OBSIDIAN) removeAdjacentPortals(hit.x, hit.y, hit.z);
+  let skipDrop = false;
+  { const sh = SHAPE[id]; if (sh && sh.kind === 'door') { const y2 = sh.hi ? hit.y - 1 : hit.y + 1; if (SHAPE[world.getBlock(hit.x, y2, hit.z)] && SHAPE[world.getBlock(hit.x, y2, hit.z)].kind === 'door') world.setBlock(hit.x, y2, hit.z, AIR); if (sh.hi) skipDrop = true; } }
   if (id === B.COAL_ORE || id === B.IRON_ORE || id === B.GOLD_ORE || id === B.DIAMOND_ORE) addXp(id === B.DIAMOND_ORE ? 8 : 3);
   particles.blockBreak(hit.x, hit.y, hit.z, id);
   sound('break');
   if (mode === 'survival') {
-    const d = dropOf(id, held);
+    const d = skipDrop ? null : dropOf(id, held);
     if (d) {
       if (kind === 'oneblock' && hit.x === 0 && hit.y === 64 && hit.z === 0) { const left = inv.add(d[0], d[1]); if (left) drops.spawn(0.5, 65.6, 0.5, d[0], left); ui.renderHotbar(); sound('pop'); } // directo al inventario: nada se cae al vacío
       else drops.spawn(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, d[0], d[1]);
@@ -335,6 +338,7 @@ function useItem() {
     if (!furnaces.has(key)) furnaces.set(key, { slots: [null, null, null], burn: 0, burnMax: 1, cook: 0 });
     openInventory('furnace', furnaces.get(key)); return;
   }
+  if (hit && SHAPE[hit.id] && SHAPE[hit.id].kind === 'door' && !player.keys.has('ShiftLeft')) { toggleDoor(hit.x, hit.y, hit.z); return; }
   if (hit && hit.id === B.END_FRAME) { useEyeOnFrame(hit); return; }
   if (hit && hit.id === B.CHEST && !player.keys.has('ShiftLeft')) { openChest(hit); return; }
   if (!player.keys.has('ShiftLeft')) {
@@ -360,11 +364,27 @@ function useItem() {
     return;
   }
   if (!isBlock(held.id) || !hit) return;
-  const px = hit.x + hit.normal[0], py = hit.y + hit.normal[1], pz = hit.z + hit.normal[2];
+  let px = hit.x + hit.normal[0], py = hit.y + hit.normal[1], pz = hit.z + hit.normal[2], putId = held.id;
   if (py < 0 || py >= CH) return;
+  const shp = SHAPE[held.id];
+  if (shp) {
+    const pt = eye.clone().addScaledVector(dir, hit.dist), look = dir, o = Math.abs(look.x) > Math.abs(look.z) ? (look.x > 0 ? 1 : 3) : (look.z > 0 ? 2 : 0);
+    if (shp.kind === 'slab') {
+      const hs = SHAPE[hit.id];
+      if (hs && hs.kind === 'slab' && hs.m === shp.m && ((!hs.top && hit.normal[1] === 1) || (hs.top && hit.normal[1] === -1))) { // dos losas = bloque completo
+        world.setBlock(hit.x, hit.y, hit.z, SLAB_MATS[shp.m]); sound('place'); if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); } return;
+      }
+      const top = hit.normal[1] === -1 ? true : hit.normal[1] === 1 ? false : pt.y - Math.floor(pt.y) > 0.5;
+      putId = top ? SLAB_TOP(shp.m) : SLAB_BOTTOM(shp.m);
+    } else if (shp.kind === 'stairs') putId = STAIR_ID(shp.m, o);
+    else if (shp.kind === 'door') {
+      if (world.getBlock(px, py + 1, pz) !== AIR || py + 1 >= CH) return;
+      putId = DOOR_LO + o;
+    }
+  }
   const there = world.getBlock(px, py, pz);
   if (there !== AIR && !LIQUID[there]) return;
-  if (SOLID[held.id] && player.intersectsBlock(px, py, pz)) return;
+  if (SOLID[held.id] && !(shp && shp.kind === 'slab') && player.intersectsBlock(px, py, pz)) return;
   if (SOLID[held.id] && mobs.list.some((m) => Math.abs(m.pos.x - (px + 0.5)) < m.hw + 0.5 && Math.abs(m.pos.z - (pz + 0.5)) < m.hw + 0.5 && m.pos.y < py + 1 && m.pos.y + m.h > py)) return;
   if (held.id === B.COMMAND) {
     if (boss || ritual) { ui.toast('Ya hay una tormenta en curso'); return; }
@@ -372,9 +392,17 @@ function useItem() {
     if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
     startRitual(px, py, pz); return;
   }
-  world.setBlock(px, py, pz, held.id);
+  world.setBlock(px, py, pz, putId);
+  if (shp && shp.kind === 'door') world.setBlock(px, py + 1, pz, DOOR_HI + (putId - DOOR_LO));
   sound('place');
   if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
+}
+function toggleDoor(x, y, z) {
+  const id = world.getBlock(x, y, z), s = SHAPE[id], y2 = s.hi ? y - 1 : y + 1, id2 = world.getBlock(x, y2, z);
+  const flip = (i, sh) => (sh.open ? (sh.hi ? DOOR_HI : DOOR_LO) : (sh.hi ? DOOR_HI_OPEN : DOOR_LO_OPEN)) + sh.o;
+  world.setBlock(x, y, z, flip(id, s));
+  if (SHAPE[id2] && SHAPE[id2].kind === 'door') world.setBlock(x, y2, z, flip(id2, SHAPE[id2]));
+  sound(s.open ? 'place' : 'break');
 }
 
 function setBossBar(type) {

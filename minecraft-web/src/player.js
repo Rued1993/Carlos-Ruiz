@@ -27,12 +27,7 @@ export class Player {
   }
 
   collides(px, py, pz) {
-    const w = this.world;
-    for (let y = Math.floor(py); y <= Math.floor(py + HEIGHT - 0.001); y++)
-      for (let z = Math.floor(pz - HALF_W); z <= Math.floor(pz + HALF_W); z++)
-        for (let x = Math.floor(px - HALF_W); x <= Math.floor(px + HALF_W); x++)
-          if (w.isSolid(x, y, z)) return true;
-    return false;
+    return this.world.bodyHits(px, py, pz, HALF_W, HEIGHT);
   }
   intersectsBlock(bx, by, bz) {
     return this.pos.x + HALF_W > bx && this.pos.x - HALF_W < bx + 1 &&
@@ -123,6 +118,11 @@ export class Player {
         if (d === 0) continue;
         this.pos[axis] += d;
         if (this.collides(this.pos.x, this.pos.y, this.pos.z)) {
+          if (axis !== 'y' && (wasGround || this.onGround) && !this.flying && !this.inWater) { // subir losas y escalones de medio bloque
+            const y0 = this.pos.y; this.pos.y += 0.51;
+            if (!this.collides(this.pos.x, this.pos.y, this.pos.z)) continue;
+            this.pos.y = y0;
+          }
           this.pos[axis] -= d;
           if (axis === 'y' && this.vel.y < 0) this.onGround = true;
           this.vel[axis] = 0;

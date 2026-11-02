@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AIR, B, BLOCKS, OPAQUE, SOLID, LIQUID, GHOST, EMIT } from './blocks.js';
+import { AIR, B, BLOCKS, OPAQUE, SOLID, LIQUID, GHOST, EMIT, SHAPE, BLOCKLIGHT, shapeBoxes } from './blocks.js';
 import { TILE_INDEX, TILE_COUNT } from './atlas.js';
 import { fbm, hash2, noise3 } from './noise.js';
 
@@ -20,7 +20,14 @@ const FACES = [
   { dir: [0, 0, -1], shade: 0.82, ax: 2, corners: [{ p: [1, 0, 0], uv: [0, 0] }, { p: [0, 0, 0], uv: [1, 0] }, { p: [1, 1, 0], uv: [0, 1] }, { p: [0, 1, 0], uv: [1, 1] }] },
   { dir: [0, 0, 1], shade: 0.82, ax: 2, corners: [{ p: [0, 0, 1], uv: [0, 0] }, { p: [1, 0, 1], uv: [1, 0] }, { p: [0, 1, 1], uv: [0, 1] }, { p: [1, 1, 1], uv: [1, 1] }] },
 ];
-for (const f of FACES) f.tan = [0, 1, 2].filter((a) => a !== f.ax);
+for (const f of FACES) {
+  f.tan = [0, 1, 2].filter((a) => a !== f.ax);
+  // eje y sentido de u/v de la textura para recortar caras parciales
+  for (const [name, ci] of [['u', 0], ['v', 1]]) for (const a of f.tan) {
+    const same = f.corners.every((c) => c.uv[ci] === c.p[a]), inv = f.corners.every((c) => c.uv[ci] === 1 - c.p[a]);
+    if (same || inv) { f[name + 'A'] = a; f[name + 'I'] = inv; }
+  }
+}
 const AO = [0.5, 0.68, 0.84, 1];
 const smoothstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -567,7 +574,7 @@ export class World {
     for (let lz = 0; lz < CS; lz++)
       for (let lx = 0; lx < CS; lx++) {
         let y = CH - 1;
-        while (y >= 0 && !OPAQUE[data[this.idx(lx, y, lz)]]) y--;
+        while (y >= 0 && !BLOCKLIGHT[data[this.idx(lx, y, lz)]]) y--;
         tops[lz * CS + lx] = y;
       }
     this.tops.set(k, tops);
@@ -602,6 +609,38 @@ export class World {
     if (!c) return true;
     return SOLID[c[(y * CS + (z - cz * CS)) * CS + (x - cx * CS)]] === 1;
   }
+  // Colisión de una caja (pos en los pies, semiancho hw, alto h) con bloques sólidos y formas parciales
+  bodyHits(px, py, pz, hw, h) {
+    for (let y = Math.floor(py); y <= Math.floor(py + h - 0.001); y++)
+      for (let z = Math.floor(pz - hw); z <= Math.floor(pz + hw); z++)
+        for (let x = Math.floor(px - hw); x <= Math.floor(px + hw); x++) {
+          const id = this.getBlock(x, y, z), sh = SHAPE[id];
+          if (!sh) { if (this.isSolid(x, y, z)) return true; continue; }
+          const E = 1e-4;
+          for (const b of shapeBoxes(id, (dx, dz) => { const n = this.getBlock(x + dx, y, z + dz); return OPAQUE[n] || (SHAPE[n] && SHAPE[n].kind === 'fence'); }, true))
+            if (x + b[0] < px + hw - E && x + b[3] > px - hw + E && y + b[1] < py + h - E && y + b[4] > py + E && z + b[2] < pz + hw - E && z + b[5] > pz - hw + E) return true;
+        }
+    return false;
+  }
+  // Rayo contra las cajas de una forma: devuelve {t, normal} o null
+  _shapeRay(x, y, z, id, o, d, maxDist) {
+    let best = null;
+    for (const b of shapeBoxes(id, (dx, dz) => { const n = this.getBlock(x + dx, y, z + dz); return OPAQUE[n] || (SHAPE[n] && SHAPE[n].kind === 'fence'); }, false)) {
+      let t0 = 0, t1 = maxDist, ax = -1, sg = 0, inside = true;
+      for (let a = 0; a < 3; a++) {
+        const oo = [o.x - x, o.y - y, o.z - z][a], dd = [d.x, d.y, d.z][a];
+        if (Math.abs(dd) < 1e-9) { if (oo < b[a] || oo > b[a + 3]) { t1 = -1; break; } continue; }
+        let ta = (b[a] - oo) / dd, tb = (b[a + 3] - oo) / dd, s = -1;
+        if (ta > tb) { const q = ta; ta = tb; tb = q; s = 1; }
+        if (ta > t0) { t0 = ta; ax = a; sg = s; inside = false; }
+        if (tb < t1) t1 = tb;
+        if (t0 > t1) { t1 = -1; break; }
+      }
+      if (t1 < 0 || t0 > t1) continue;
+      if (!best || t0 < best.t) { const n = [0, 0, 0]; if (ax >= 0) n[ax] = sg; else n[1] = 1; best = { t: t0, normal: n }; }
+    }
+    return best;
+  }
   isLiquid(x, y, z) { return LIQUID[this.getBlock(x, y, z)] === 1; }
 
   setBlock(x, y, z, id) {
@@ -620,10 +659,10 @@ export class World {
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) this.dirty.add(ckey(cx + a, cz + b));
     }
     const tops = this.tops.get(k), ti = lz * CS + lx;
-    if (OPAQUE[id]) { if (y > tops[ti]) tops[ti] = y; }
+    if (BLOCKLIGHT[id]) { if (y > tops[ti]) tops[ti] = y; }
     else if (y === tops[ti]) {
       let yy = y - 1;
-      while (yy >= 0 && !OPAQUE[c[this.idx(lx, yy, lz)]]) yy--;
+      while (yy >= 0 && !BLOCKLIGHT[c[this.idx(lx, yy, lz)]]) yy--;
       tops[ti] = yy;
     }
     this.dirty.add(k);
@@ -648,7 +687,11 @@ export class World {
     let normal = [0, 0, 0], t = 0;
     while (t <= maxDist) {
       const id = this.getBlock(x, y, z);
-      if (id !== AIR && (hitLiquid || (!LIQUID[id] && !GHOST[id]))) return { x, y, z, id, normal, dist: t };
+      if (id !== AIR && (hitLiquid || (!LIQUID[id] && !GHOST[id]))) {
+        if (!SHAPE[id]) return { x, y, z, id, normal, dist: t };
+        const sr = this._shapeRay(x, y, z, id, origin, dir, maxDist);
+        if (sr && sr.t <= maxDist) return { x, y, z, id, normal: sr.normal, dist: sr.t };
+      }
       const a = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : (tMax[1] < tMax[2] ? 1 : 2);
       t = tMax[a];
       tMax[a] += tDelta[a];
@@ -812,6 +855,27 @@ export class World {
           const def = BLOCKS[id];
           const L = def.transparent ? lists[1] : lists[0];
           const wx = x0 + lx, wz = z0 + lz;
+          const shp = SHAPE[id];
+          if (shp) { // bloques con forma: cajas parciales
+            const fnb = (dx, dz) => { const n = get(wx + dx, y, wz + dz); return OPAQUE[n] || (SHAPE[n] && SHAPE[n].kind === 'fence'); };
+            const sky = Math.max(this.skyLit(wx, y, wz), y + 1 < CH ? this.skyLit(wx, y + 1, wz) : 1), bl = bAt(wx, y, wz);
+            for (const bx of shapeBoxes(id, fnb, false)) {
+              for (const f of FACES) {
+                const d = f.dir, edge = d[0] ? (d[0] < 0 ? bx[0] === 0 : bx[3] === 1) : d[1] ? (d[1] < 0 ? bx[1] === 0 : bx[4] === 1) : (d[2] < 0 ? bx[2] === 0 : bx[5] === 1);
+                if (edge && OPAQUE[get(wx + d[0], y + d[1], wz + d[2])]) continue;
+                const tile = TILE_INDEX[f.top ? def.tiles[0] : f.bottom ? def.tiles[1] : def.tiles[2]], n = L.pos.length / 3;
+                for (const c of f.corners) {
+                  const X = bx[0] + (bx[3] - bx[0]) * c.p[0], Y = bx[1] + (bx[4] - bx[1]) * c.p[1], Z = bx[2] + (bx[5] - bx[2]) * c.p[2], P = [X, Y, Z];
+                  L.pos.push(lx + X, y + Y, lz + Z); L.nor.push(d[0], d[1], d[2]);
+                  const uu = P[f.uA], vv = P[f.vA];
+                  L.uv.push((tile + Math.min(1 - eps, Math.max(eps, f.uI ? 1 - uu : uu))) / TILE_COUNT, Math.min(1 - eps, Math.max(eps, f.vI ? 1 - vv : vv)));
+                  const v = f.shade * (0.3 + 0.7 * sky); L.col.push(v, v, v); L.bl.push(f.shade * bl); L.sw.push(0); L.sk.push(sky);
+                }
+                L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
+              }
+            }
+            continue;
+          }
           if (def.torch) {
             const u0 = (TILE_INDEX.torch + 7 / 16) / TILE_COUNT, u1 = (TILE_INDEX.torch + 9 / 16) / TILE_COUNT;
             for (const f of FACES) {

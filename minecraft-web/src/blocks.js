@@ -60,14 +60,66 @@ block(B.ANCIENT_DEBRIS, 'Restos antiguos', ['ancient_debris_top', 'ancient_debri
 block(B.GOLD_BLOCK, 'Bloque de oro', ['gold_block', 'gold_block', 'gold_block'], 3, 'pick', 3);
 block(B.FURNACE, 'Horno', ['furnace_top', 'stone', 'furnace_front'], 3, 'pick', 1);
 
+// ---------- Bloques con forma: losas, escaleras, vallas y puertas ----------
+export const SHAPE = new Array(256).fill(null); // id -> { kind, ... }
+export const SLAB_MATS = [B.PLANKS, B.COBBLE, B.STONE, B.BRICKS, B.SANDSTONE];
+const SLAB_NAMES = ['madera', 'adoquín', 'piedra', 'ladrillo', 'arenisca'];
+export const SLAB_BOTTOM = (m) => 42 + m, SLAB_TOP = (m) => 47 + m;
+export const STAIR_MATS = [B.PLANKS, B.COBBLE, B.BRICKS, B.SANDSTONE];
+const STAIR_NAMES = ['madera', 'adoquín', 'ladrillo', 'arenisca'];
+export const STAIR_ID = (m, o) => 52 + m * 4 + o;
+export const FENCE = 68, DOOR_LO = 69, DOOR_LO_OPEN = 73, DOOR_HI = 77, DOOR_HI_OPEN = 81;
+SLAB_MATS.forEach((mat, m) => {
+  const base = BLOCKS[mat];
+  for (const top of [false, true]) {
+    const id = top ? SLAB_TOP(m) : SLAB_BOTTOM(m);
+    block(id, 'Losa de ' + SLAB_NAMES[m], base.tiles, base.hardness, base.tool, base.lvl, { opaque: false, hidden: top, dropAs: SLAB_BOTTOM(m) });
+    SHAPE[id] = { kind: 'slab', top, m };
+  }
+});
+STAIR_MATS.forEach((mat, m) => {
+  const base = BLOCKS[mat];
+  for (let o = 0; o < 4; o++) {
+    const id = STAIR_ID(m, o);
+    block(id, 'Escaleras de ' + STAIR_NAMES[m], base.tiles, base.hardness, base.tool, base.lvl, { opaque: false, hidden: o > 0, dropAs: STAIR_ID(m, 0) });
+    SHAPE[id] = { kind: 'stairs', o, m };
+  }
+});
+block(FENCE, 'Valla', BLOCKS[B.PLANKS].tiles, 2, 'axe', 0, { opaque: false, flat: true });
+SHAPE[FENCE] = { kind: 'fence' };
+for (let o = 0; o < 4; o++) for (const [base, open, hi] of [[DOOR_LO, false, false], [DOOR_LO_OPEN, true, false], [DOOR_HI, false, true], [DOOR_HI_OPEN, true, true]]) {
+  const id = base + o;
+  block(id, 'Puerta de madera', BLOCKS[B.PLANKS].tiles, 2, 'axe', 0, { opaque: false, flat: true, hidden: id !== DOOR_LO, dropAs: DOOR_LO });
+  SHAPE[id] = { kind: 'door', o, open, hi };
+}
+// Cajas (en coordenadas 0..1 de la celda) de cada forma. nb(dx, dz) indica si la valla conecta en esa dirección.
+export function shapeBoxes(id, nb, collide) {
+  const s = SHAPE[id];
+  if (s.kind === 'slab') return [s.top ? [0, 0.5, 0, 1, 1, 1] : [0, 0, 0, 1, 0.5, 1]];
+  if (s.kind === 'stairs') return [[0, 0, 0, 1, 0.5, 1], [[0, 0.5, 0, 1, 1, 0.5], [0.5, 0.5, 0, 1, 1, 1], [0, 0.5, 0.5, 1, 1, 1], [0, 0.5, 0, 0.5, 1, 1]][s.o]];
+  if (s.kind === 'fence') {
+    const hgt = collide ? 1.5 : 1, out = [[0.375, 0, 0.375, 0.625, hgt, 0.625]];
+    if (nb(0, -1)) out.push(collide ? [0.4375, 0, 0, 0.5625, 1.5, 0.375] : [0.4375, 0.375, 0, 0.5625, 0.5625, 0.375], ...(collide ? [] : [[0.4375, 0.6875, 0, 0.5625, 0.875, 0.375]]));
+    if (nb(0, 1)) out.push(collide ? [0.4375, 0, 0.625, 0.5625, 1.5, 1] : [0.4375, 0.375, 0.625, 0.5625, 0.5625, 1], ...(collide ? [] : [[0.4375, 0.6875, 0.625, 0.5625, 0.875, 1]]));
+    if (nb(-1, 0)) out.push(collide ? [0, 0, 0.4375, 0.375, 1.5, 0.5625] : [0, 0.375, 0.4375, 0.375, 0.5625, 0.5625], ...(collide ? [] : [[0, 0.6875, 0.4375, 0.375, 0.875, 0.5625]]));
+    if (nb(1, 0)) out.push(collide ? [0.625, 0, 0.4375, 1, 1.5, 0.5625] : [0.625, 0.375, 0.4375, 1, 0.5625, 0.5625], ...(collide ? [] : [[0.625, 0.6875, 0.4375, 1, 0.875, 0.5625]]));
+    return out;
+  }
+  // puerta: panel fino en un lateral de la celda; abierta, gira hacia el lateral contiguo
+  const side = s.open ? (s.o + 3) % 4 : s.o, T = 0.1875;
+  return [[[0, 0, 0, 1, 1, T], [1 - T, 0, 0, 1, 1, 1], [0, 0, 1 - T, 1, 1, 1], [0, 0, 0, T, 1, 1]][side]];
+}
+
 // Tablas rápidas por id
 export const OPAQUE = new Uint8Array(256);
 export const SOLID = new Uint8Array(256);
 export const LIQUID = new Uint8Array(256);
 export const GHOST = new Uint8Array(256);  // se atraviesan y no se pueden apuntar (portales)
 export const EMIT = new Uint8Array(256);   // emiten luz
+export const BLOCKLIGHT = new Uint8Array(256); // bloquean la luz del cielo (opacos, losas, escaleras y puertas)
 for (const b of Object.values(BLOCKS)) {
   OPAQUE[b.id] = b.opaque ? 1 : 0;
+  BLOCKLIGHT[b.id] = b.opaque || (SHAPE[b.id] && SHAPE[b.id].kind !== 'fence') ? 1 : 0;
   SOLID[b.id] = b.liquid || b.torch || b.portal ? 0 : 1;
   if (b.portal) GHOST[b.id] = 1;
   if (b.emit) EMIT[b.id] = b.emit;
@@ -148,6 +200,10 @@ ARMOR_TYPES.forEach((at, ai) => ARMOR_TIERS.forEach((tier, ti) => {
   else recipe(at.rows, { M: tier.mat }, id);
 }));
 recipe(['SG', 'GS'], { S: I.SCRAP, G: I.GOLD }, I.NETHERITE);
+SLAB_MATS.forEach((mat, m) => { recipe(['MMM'], { M: mat }, SLAB_BOTTOM(m), 6); recipe(['S', 'S'], { S: SLAB_BOTTOM(m) }, mat); });
+STAIR_MATS.forEach((mat, m) => recipe(['M  ', 'MM ', 'MMM'], { M: mat }, STAIR_ID(m, 0), 4));
+recipe(['PSP', 'PSP'], { P: B.PLANKS, S: I.STICK }, FENCE, 3);
+recipe(['PP', 'PP', 'PP'], { P: B.PLANKS }, DOOR_LO, 3);
 recipe(['L'], { L: B.LOG }, B.PLANKS, 4);
 recipe(['P', 'P'], { P: B.PLANKS }, I.STICK, 4);
 recipe(['PP', 'PP'], { P: B.PLANKS }, B.TABLE);
@@ -221,6 +277,7 @@ export function breakTime(blockId, slot) {
 // [id, cantidad] o null
 export function dropOf(blockId, slot) {
   if (!canHarvest(blockId, slot)) return null;
+  if (BLOCKS[blockId] && BLOCKS[blockId].dropAs) return [BLOCKS[blockId].dropAs, 1];
   switch (blockId) {
     case B.GRASS: return [B.DIRT, 1];
     case B.STONE: return [B.COBBLE, 1];

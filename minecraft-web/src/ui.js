@@ -115,7 +115,7 @@ export class UI {
       this.furnaceBars();
     } else if (g.getMode() === 'creative') {
       const pal = $('palette'); pal.innerHTML = '';
-      const ids = [...Object.keys(BLOCKS).map(Number), ...Object.keys(ITEMS).map(Number)];
+      const ids = [...Object.keys(BLOCKS).map(Number).filter((i) => !BLOCKS[i].hidden), ...Object.keys(ITEMS).map(Number)];
       ids.forEach((id) => pal.appendChild(slotEl({ id, n: 1, d: 0 }, { group: 'pal', index: id })));
     } else {
       const cg = $('craftGrid'); cg.innerHTML = '';

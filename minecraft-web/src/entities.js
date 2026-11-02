@@ -8,13 +8,7 @@ import { tileColor } from './atlas.js';
 export function moveBody(world, b, dt, gravity = 28) {
   const res = { onGround: false, hitX: false, hitZ: false };
   b.vel.y = Math.max(-50, b.vel.y - gravity * dt);
-  const collides = () => {
-    for (let y = Math.floor(b.pos.y); y <= Math.floor(b.pos.y + b.h - 0.001); y++)
-      for (let z = Math.floor(b.pos.z - b.hw); z <= Math.floor(b.pos.z + b.hw); z++)
-        for (let x = Math.floor(b.pos.x - b.hw); x <= Math.floor(b.pos.x + b.hw); x++)
-          if (world.isSolid(x, y, z)) return true;
-    return false;
-  };
+  const collides = () => world.bodyHits(b.pos.x, b.pos.y, b.pos.z, b.hw, b.h);
   for (const axis of ['x', 'z', 'y']) {
     const d = b.vel[axis] * dt;
     if (!d) continue;
