@@ -40,6 +40,10 @@
     #info { position: fixed; left: 8px; top: 8px; color: #fff; font: bold 12px var(--font); text-shadow: 1px 1px #000; white-space: pre; pointer-events: none; background: rgba(0,0,0,.25); padding: 4px 6px; }
     #cam { position: fixed; right: 10px; top: 8px; color: #fff; font-size: 12px; text-shadow: 1px 1px #000; pointer-events: none; background: rgba(0,0,0,.25); padding: 4px 6px; }
     #toast { position: fixed; left: 50%; bottom: 128px; transform: translateX(-50%); color: #fff; font-size: 18px; text-shadow: 2px 2px 0 #222; pointer-events: none; transition: opacity .6s; white-space: nowrap; }
+    #bossbar { position: fixed; left: 50%; top: 34px; transform: translateX(-50%); width: min(520px, 80vw); text-align: center; color: #fff; text-shadow: 2px 2px 0 #000; pointer-events: none; }
+    #bossName { font-size: 15px; letter-spacing: 3px; margin-bottom: 3px; } #bossName small { color: #c070ff; letter-spacing: 1px; margin-left: 8px; }
+    #bossbar .bb { height: 12px; background: #1a1020; border: 2px solid #000; box-shadow: 0 0 12px rgba(160,60,255,.7); }
+    #bossbar i { display: block; height: 100%; width: 100%; background: linear-gradient(#d06aff, #7a2ab0); transition: width .15s; }
     #breakbar { position: fixed; left: 50%; top: 56%; width: 64px; height: 5px; background: rgba(0,0,0,.55); border: 1px solid #000; transform: translateX(-50%); }
     #breakbar i { display: block; height: 100%; background: #fff; width: 0; }
 
@@ -84,7 +88,7 @@
     #keys kbd { background: #ddd; color: #222; padding: 0 5px; border-bottom: 2px solid #777; border-radius: 2px; font: bold 11px var(--font); }
     #ver { position: fixed; left: 8px; bottom: 6px; font-size: 11px; color: #aaa; text-shadow: 1px 1px #000; }
   </style>
-  <script type="module" crossorigin src="./assets/index-91KBK42l.js"></script>
+  <script type="module" crossorigin src="./assets/index-gfekXJI5.js"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -99,6 +103,7 @@
   </div>
   <div id="info"></div>
   <div id="cam"></div>
+  <div id="bossbar" class="hidden"><div id="bossName">TORMENTA WITHER <small id="bossPhase">Fase 1</small></div><div class="bb"><i id="bossFill"></i></div></div>
   <div id="toast"></div>
 
   <div id="inv" class="screen hidden">
@@ -119,7 +124,7 @@
 
   <div id="overlay" class="screen">
     <div id="menu">
-      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡Ahora con hornos!</div></div>
+      <div id="logo"><h1>MINECRAFT</h1><small>W E B</small><div id="splash">¡Nuevo jefe: Tormenta Wither!</div></div>
       <p id="msg">Cargando…</p>
       <button class="btn primary hidden" id="bContinue">Continuar mundo guardado</button>
       <button class="btn" id="bSurvival">Nuevo mundo · Supervivencia</button>
@@ -146,7 +151,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v0.3</div>
+    <div id="ver">Minecraft Web v0.4</div>
   </div>
 </body>
 </html>

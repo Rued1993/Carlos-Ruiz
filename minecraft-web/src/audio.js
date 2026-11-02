@@ -75,6 +75,8 @@ export function play(name, vol = 1) {
     case 'oink': tone('sawtooth', 220, 150, 0.15, 0.12); break;
     case 'moo': tone('sawtooth', 130, 100, 0.5, 0.12); break;
     case 'thunder': noise(3.2, 380, 0.7, 1.6 * vol, 0.12); setTimeout(() => noise(1.6, 220, 0.8, 0.9 * vol, 0.2), 450); tone('sine', 60, 25, 2, 0.5 * vol); break;
+    case 'roar': noise(1.5, 500, 0.8, 0.9 * vol, 0.15); tone('sawtooth', 95, 32, 1.5, 0.45 * vol); break;
+    case 'shoot': noise(0.3, 3200, 0.8, 0.45 * vol, 0.25); tone('sine', 700, 180, 0.25, 0.2 * vol); break;
     case 'groan': tone('sawtooth', 110, 70, 0.6, 0.14); break;
   }
 }

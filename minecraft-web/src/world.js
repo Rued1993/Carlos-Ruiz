@@ -264,7 +264,7 @@ export class World {
       let ready = true;
       for (let a = -1; a <= 1 && ready; a++) for (let b = -1; b <= 1; b++) if (!this.chunks.has(ckey(m.cx + a, m.cz + b))) { ready = false; break; }
       if (!ready) { pending++; continue; }
-      if (built < budget || m.d < -5000) { this.buildMesh(m.cx, m.cz); built++; } else pending++;
+      if (built < (m.d < -5000 ? 6 : budget)) { this.buildMesh(m.cx, m.cz); built++; } else pending++;
     }
     // Liberar lo lejano
     for (const [k, m] of this.meshes) {

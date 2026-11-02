@@ -22,6 +22,7 @@ npm run build    # versión de producción en dist/
 - **Cámaras:** primera persona, tercera persona por detrás y por delante (tecla **V**), con modelo de jugador animado.
 - **Interfaz:** menú rediseñado, HUD con corazones/comida/burbujas en pixel-art, ajustes de render, campo de visión, sensibilidad y volumen (se guardan).
 - **Clima:** lluvia y tormentas aleatorias (nieve en el bioma nevado) con rayos y trueno, viento que mece las hojas y empuja al jugador, cielo oscuro y sonido de lluvia/viento. Tecla **T** para cambiar el clima.
+- **Jefe: Tormenta Wither** (inspirado en el de *Minecraft: Story Mode*): fabrica un **bloque de comandos** (4 diamantes + 4 lingotes de oro + carbón en el centro, en anillo) y colócalo para invocarlo. Tiene 3 fases, rayo tractor que te arrastra, cráneos explosivos, devora bloques, esbirros y un bloque de comandos como punto débil (expuesto en la fase 3: ¡golpéalo para daño x3!). Sube una tormenta mientras vive y suelta una estrella, diamantes y oro.
 - **Creativo:** bloques infinitos, rotura instantánea, vuelo y paleta con todos los bloques e ítems.
 - **Guardado automático** en el navegador (IndexedDB) y sonido procedural.
 

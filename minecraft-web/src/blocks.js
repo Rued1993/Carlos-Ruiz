@@ -4,9 +4,9 @@ export const AIR = 0;
 export const B = {
   GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, LOG: 5, LEAVES: 6, PLANKS: 7, COBBLE: 8,
   WATER: 9, GLASS: 10, COAL_ORE: 11, IRON_ORE: 12, GOLD_ORE: 13, DIAMOND_ORE: 14,
-  BEDROCK: 15, SNOW: 16, CACTUS: 17, BRICKS: 18, TABLE: 19, TORCH: 20, FURNACE: 21,
+  BEDROCK: 15, SNOW: 16, CACTUS: 17, BRICKS: 18, TABLE: 19, TORCH: 20, FURNACE: 21, COMMAND: 22,
 };
-export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154 };
+export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105 };
 
 export const BLOCKS = {};
 function block(id, name, tiles, hardness, tool = null, lvl = 0, extra = {}) {
@@ -33,6 +33,7 @@ block(B.CACTUS, 'Cactus', ['cactus_top', 'cactus_top', 'cactus_side'], 0.4);
 block(B.BRICKS, 'Ladrillos', ['bricks', 'bricks', 'bricks'], 2, 'pick', 1);
 block(B.TABLE, 'Mesa de crafteo', ['table_top', 'planks', 'table_side'], 2.5, 'axe');
 block(B.TORCH, 'Antorcha', ['torch', 'torch', 'torch'], 0.05, null, 0, { opaque: false, torch: true, flat: true, emit: 10 });
+block(B.COMMAND, 'Bloque de comandos', ['command', 'command', 'command'], 5, 'pick', 3);
 block(B.FURNACE, 'Horno', ['furnace_top', 'stone', 'furnace_front'], 3, 'pick', 1);
 
 // Tablas rápidas por id
@@ -53,6 +54,7 @@ item(I.COAL, 'Carbón');
 item(I.IRON, 'Lingote de hierro');
 item(I.GOLD, 'Lingote de oro');
 item(I.DIAMOND, 'Diamante');
+item(I.STAR, 'Estrella de la tormenta');
 item(I.APPLE, 'Manzana', { food: 8 });
 item(I.PORK, 'Cerdo crudo', { food: 6 });
 item(I.BEEF, 'Ternera cruda', { food: 6 });
@@ -87,6 +89,7 @@ recipe(['SS', 'SS'], { S: B.SAND }, B.GLASS, 4);
 recipe(['CC', 'CC'], { C: B.COBBLE }, B.BRICKS, 4);
 recipe(['CCC', 'C C', 'CCC'], { C: B.COBBLE }, B.FURNACE);
 recipe(['C', 'S'], { C: I.COAL, S: I.STICK }, B.TORCH, 4);
+recipe(['DGD', 'GCG', 'DGD'], { D: I.DIAMOND, G: I.GOLD, C: I.COAL }, B.COMMAND);
 
 // Fundición: entrada -> [salida, cantidad]; combustible -> segundos de llama
 export const SMELT = {

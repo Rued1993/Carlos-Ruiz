@@ -3,6 +3,7 @@ import { createAtlas, tileColor } from './atlas.js';
 import { initIcons, iconTexture, tileURL } from './icons.js';
 import { PlayerModel } from './playermodel.js';
 import { Weather, WEATHER_NAMES } from './weather.js';
+import { WitherStorm } from './boss.js';
 import { World, terrainHeight, biomeAt, SEA, CH } from './world.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -69,7 +70,7 @@ handIcon.renderOrder = handArm.renderOrder = 999;
 let state = 'menu'; // menu | loading | play | inv | pause | dead
 let mode = 'survival', radius = settings.radius, camMode = settings.cam | 0;
 const furnaces = new Map(); // "x,y,z" -> {slots:[entrada,combustible,salida], burn, burnMax, cook}
-let model, furnRenderT = 0, weather;
+let model, furnRenderT = 0, weather, boss = null, ritual = null, bossHooks;
 let world, player, inv, sky, mobs, drops, particles, ui, seed = 1;
 const mouse = { left: false, right: false };
 const mining = { key: '', progress: 0 };
@@ -113,7 +114,7 @@ function dropItem(id, n, tossFrom = null) {
   last.vel.set(d.x * 5, 2.5, d.z * 5); last.age = -1.2; // retraso antes de poder recogerlo de nuevo
 }
 
-function explode(x, y, z, r) {
+function explode(x, y, z, r, ds = 1) {
   sound('explode');
   const R = Math.ceil(r) + 1;
   for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
@@ -127,7 +128,7 @@ function explode(x, y, z, r) {
   }
   particles.burst(x, y, z, [0.5, 0.5, 0.5], 40, 7); particles.burst(x, y, z, [0.9, 0.5, 0.1], 20, 6);
   const dx = player.pos.x - x, dz = player.pos.z - z, d = Math.hypot(dx, player.pos.y + 0.9 - y, dz);
-  if (d < r * 2) player.damage(Math.round((1 - d / (r * 2)) * 22), (dx / (Math.hypot(dx, dz) || 1)) * 9, (dz / (Math.hypot(dx, dz) || 1)) * 9);
+  if (d < r * 2) player.damage(Math.round((1 - d / (r * 2)) * 22 * ds), (dx / (Math.hypot(dx, dz) || 1)) * 9, (dz / (Math.hypot(dx, dz) || 1)) * 9);
   for (const m of [...mobs.list]) if (Math.hypot(m.pos.x - x, m.pos.y - y, m.pos.z - z) < r * 2) mobs.damage(m, 14, x, z);
 }
 
@@ -176,13 +177,44 @@ function useItem() {
   if (there !== AIR && !LIQUID[there]) return;
   if (SOLID[held.id] && player.intersectsBlock(px, py, pz)) return;
   if (SOLID[held.id] && mobs.list.some((m) => Math.abs(m.pos.x - (px + 0.5)) < m.hw + 0.5 && Math.abs(m.pos.z - (pz + 0.5)) < m.hw + 0.5 && m.pos.y < py + 1 && m.pos.y + m.h > py)) return;
+  if (held.id === B.COMMAND) {
+    if (boss || ritual) { ui.toast('Ya hay una tormenta en curso'); return; }
+    world.setBlock(px, py, pz, held.id); sound('place');
+    if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
+    startRitual(px, py, pz); return;
+  }
   world.setBlock(px, py, pz, held.id);
   sound('place');
   if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); }
 }
 
+function startRitual(x, y, z) {
+  ritual = { x, y, z, t: 5, s: 0 };
+  sound('roar'); weather.set('storm'); weather.boss = true;
+  ui.toast('El bloque de comandos late… ¡aléjate!');
+}
+function updateRitual(dt) {
+  ritual.t -= dt; ritual.s -= dt; weather.timer = 9999;
+  if (ritual.s <= 0) { ritual.s = 0.9; weather.strike(player, false, { x: ritual.x, z: ritual.z }); particles.burst(ritual.x + 0.5, ritual.y + 1, ritual.z + 0.5, [0.7, 0.3, 1], 20, 5); }
+  if (ritual.t <= 0) {
+    const r = ritual; ritual = null;
+    world.setBlock(r.x, r.y, r.z, AIR);
+    boss = new WitherStorm(scene, bossHooks, new THREE.Vector3(r.x + 0.5, r.y + 14, r.z + 0.5));
+    sound('roar'); ui.toast('¡LA TORMENTA WITHER HA DESPERTADO!');
+  }
+}
+
 function attack() {
   const eye = player.eye, dir = player.lookDir();
+  const bossHit = boss && boss.raycast(eye, dir, 7);
+  const blk = world.raycast(eye, dir, 7);
+  if (bossHit && (!blk || bossHit.dist < blk.dist)) {
+    const tb = toolOf(inv.held());
+    boss.hit(mode === 'creative' ? 12 : (tb ? tb.dmg : 1), bossHit.crit);
+    sound('hit'); if (bossHit.crit) ui.toast('¡Golpe crítico al bloque de comandos!');
+    if (mode === 'survival' && tb) { inv.wearHeld(1); ui.renderHotbar(); }
+    return true;
+  }
   const mh = mobs.raycast(eye, dir, 3.6);
   const bh = world.raycast(eye, dir, 3.6);
   if (!mh || (bh && bh.dist < mh.dist)) return false;
@@ -295,6 +327,8 @@ function syncSelect() {
 }
 
 function onDeath() {
+  if (boss) { boss.dispose(); boss = null; weather.boss = false; weather.set('rain'); $('bossbar').classList.add('hidden'); ui.toast('La tormenta se retira…'); }
+  ritual = null;
   state = 'dead'; sound('die'); player.keys.clear(); mouse.left = mouse.right = false;
   for (let i = 0; i < 36; i++) { const s = inv.slots[i]; if (s) { drops.spawn(player.pos.x, player.pos.y + 1, player.pos.z, s.id, s.n); inv.slots[i] = null; } }
   ui.renderHotbar();
@@ -330,6 +364,20 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
     burst: (x, y, z) => { particles.burst(x, y, z, [1, 1, 0.8], 24, 6); particles.burst(x, y, z, [0.3, 0.3, 0.35], 14, 4); },
     hurtPlayer: (n) => player.damage(n), strikeMobs: (x, z) => { for (const m of [...mobs.list]) if (Math.hypot(m.pos.x - x, m.pos.z - z) < 3.5) mobs.damage(m, 12, x, z); },
   });
+  bossHooks = {
+    world: () => world, explode: (x, y, z, r, ds) => explode(x, y, z, r, ds), toast: (m) => ui.toast(m), sound: (n, v) => audio.play(n, v),
+    burst: (x, y, z, c, n, s) => particles.burst(x, y, z, c, n, s), hurtPlayer: (n, kx, kz) => player.damage(n, kx, kz),
+    strikeNear: (x, z) => weather.strike(player, false, { x, z }), minions: () => mobs.list.filter((m) => m.def.hostile).length,
+    spawnMinion: () => {
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * Math.PI * 2, d = 10 + Math.random() * 8, x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d), top = world.topY(x, z);
+        if (top > 0 && !world.isSolid(x, top + 1, z)) { mobs.add(Math.random() < 0.6 ? 'zombie' : 'creeper', x + 0.5, top + 1, z + 0.5); return; }
+      }
+    },
+    loot: (x, y, z) => { drops.spawn(x, y, z, I.STAR, 1); drops.spawn(x, y, z, B.COMMAND, 1); drops.spawn(x, y, z, I.DIAMOND, 8); drops.spawn(x, y, z, I.GOLD, 12); },
+    done: () => { boss = null; weather.boss = false; weather.set('rain'); $('bossbar').classList.add('hidden'); },
+  };
+  boss = null; ritual = null;
   drops = new Drops(scene, world);
   particles = new Particles(scene, world);
   mobs = new MobManager(scene, world, {
@@ -365,7 +413,7 @@ async function startGame({ seed: sd, mode: md, saved, meta }) {
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; } };
+  window.__game = { world, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => { boss = new WitherStorm(scene, bossHooks, new THREE.Vector3(x, y, z)); } };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
@@ -456,6 +504,17 @@ function frame(now) {
     audio.setAmbient(weather.intensity * (0.25 + 0.75 * exposed) * (player.headUnder ? 0.2 : 1), weather.wind.s * (0.3 + 0.7 * exposed) * (weather.state === 'clear' ? 0.25 : 1), weather.t * 0.4);
     sky.update(dt, camera.position, radius * 16, player.headUnder, weather.wind);
     world.update(player.pos.x, player.pos.z, radius, 2);
+    player.push.x = player.push.y = player.push.z = 0;
+    if (ritual) updateRitual(dt);
+    if (boss) {
+      weather.timer = 9999; weather.boss = true;
+      boss.update(dt, player, world);
+      if (boss) {
+        $('bossbar').classList.remove('hidden');
+        $('bossFill').style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
+        $('bossPhase').textContent = 'Fase ' + boss.phase;
+      }
+    }
     mobs.update(dt, player, mode, sky.daylight, radius);
     drops.update(dt, player, inv, () => { sound('pop'); ui.renderHotbar(); });
     particles.update(dt);

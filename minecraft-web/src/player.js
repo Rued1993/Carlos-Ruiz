@@ -21,6 +21,7 @@ export class Player {
     this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null };
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
+    this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
   }
 
   collides(px, py, pz) {
@@ -92,6 +93,7 @@ export class Player {
       if (k.has('Space') && this.onGround) { this.vel.y = JUMP; this.onGround = false; }
     }
 
+    this.vel.x += this.push.x; this.vel.z += this.push.z; this.vel.y += this.push.y * dt;
     const wasGround = this.onGround;
     const steps = 2, sdt = dt / steps;
     this.onGround = false;

@@ -11,7 +11,7 @@ export class Weather {
     this.scene = scene; this.hooks = hooks; // hooks: world(), sky, sound(name), burst(x,y,z), hurtPlayer(n), strikeMobs(x,z)
     this.state = 'clear'; this.timer = rnd(90, 240); this.intensity = 0;
     this.t = Math.random() * 100; this.wind = { x: 0, z: 0, s: 0.12 };
-    this.lightningT = 6; this.bolts = []; this.thunder = [];
+    this.lightningT = 6; this.bolts = []; this.thunder = []; this.boss = false;
 
     // Gotas (segmentos) y copos (puntos) en una caja que sigue a la cámara
     this.pos = new Float32Array(N * 3);
@@ -87,7 +87,7 @@ export class Weather {
     // Rayos (solo en tormenta)
     if (this.state === 'storm' && w > 0.7) {
       this.lightningT -= dt;
-      if (this.lightningT <= 0) { this.lightningT = rnd(4, 14); this.strike(player); }
+      if (this.lightningT <= 0) { this.lightningT = this.boss ? rnd(2.5, 6) : rnd(4, 14); this.strike(player); }
     }
     const sky = this.hooks.sky();
     sky.wet = w;
@@ -103,10 +103,10 @@ export class Weather {
     }
   }
 
-  strike(player, forced) {
+  strike(player, forced, at) {
     const world = this.hooks.world();
     const a = Math.random() * Math.PI * 2, d = forced ? 6 : rnd(18, 110);
-    const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);
+    const x = at ? Math.floor(at.x + rnd(-2, 2)) : Math.floor(player.pos.x + Math.cos(a) * d), z = at ? Math.floor(at.z + rnd(-2, 2)) : Math.floor(player.pos.z + Math.sin(a) * d);
     const top = world.topY(x, z), loaded = top >= 0;
     const y = loaded ? top + 1 : 30;
     const dist = Math.hypot(x - player.pos.x, z - player.pos.z);

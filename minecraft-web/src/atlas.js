@@ -5,7 +5,7 @@ import { hash2 } from './noise.js';
 const T = 16;
 const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', 'log_top', 'leaves', 'planks', 'cobble',
   'water', 'glass', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'bedrock', 'snow', 'snow_side',
-  'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front'];
+  'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -77,6 +77,13 @@ const painters = {
     if (y < 2) return x === 7 ? [255, 235, 120, 255] : [255, 160, 40, 255];
     if (y < 4) return [255, 200, 60, 255];
     return jitter([122, 86, 44], 10, x, y, 70);
+  },
+  command: (x, y) => {
+    const edge = x === 0 || y === 0 || x === 15 || y === 15;
+    const chev = ((x === 4 + (y - 4) && y >= 4 && y <= 7) || (x === 4 + (11 - y) && y >= 8 && y <= 11)) || (y === 10 && x >= 9 && x <= 12);
+    if (edge) return [74, 34, 8, 255];
+    if (chev) return [42, 18, 4, 255];
+    return jitter([196, 114, 58], 18, x, y, 75);
   },
   furnace_top: (x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? jitter([70, 70, 70], 8, x, y, 71) : stone(x, y).map((c) => c - 20)),
   furnace_front: (x, y) => {
