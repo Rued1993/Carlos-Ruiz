@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AIR, B, BLOCKS, OPAQUE, SOLID, LIQUID, GHOST, EMIT, SHAPE, BLOCKLIGHT, shapeBoxes } from './blocks.js';
+import { AIR, B, BLOCKS, OPAQUE, SOLID, LIQUID, GHOST, EMIT, SHAPE, BLOCKLIGHT, shapeBoxes, STAIR_ID, FENCE, DOOR_LO, DOOR_HI } from './blocks.js';
 import { TILE_INDEX, TILE_COUNT } from './atlas.js';
 import { fbm, hash2, noise3 } from './noise.js';
 
@@ -328,6 +328,7 @@ export class World {
         if (Math.abs(dx) <= 3 && Math.abs(dz) <= 3) put(wx, H, wz, floor, false);
       }
       // paredes
+      const doorO = dirx ? (dirx > 0 ? 1 : 3) : (dirz > 0 ? 2 : 0);
       for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) {
         if (Math.abs(dx) !== 3 && Math.abs(dz) !== 3) continue;
         const corner = Math.abs(dx) === 3 && Math.abs(dz) === 3;
@@ -335,12 +336,23 @@ export class World {
           let id = corner ? B.LOG : wallA;
           const side = !corner && ((Math.abs(dx) === 3 && dz === 0) || (Math.abs(dz) === 3 && dx === 0));
           if (side && y === H + 2) id = B.GLASS;
-          if (dx === dirx * 3 && dz === dirz * 3 && y <= H + 2) id = 0; // puerta
+          if (dx === dirx * 3 && dz === dirz * 3 && y <= H + 2) id = y === H + 1 ? DOOR_LO + doorO : y === H + 2 ? DOOR_HI + doorO : 0; // puerta de madera
           put(cx + dx, y, cz + dz, id, false);
         }
       }
       // tejado en pirámide
-      for (let r = 4, y = H + 4; r >= 0; r--, y++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) put(cx + dx, y, cz + dz, r === 0 ? B.LOG : B.PLANKS, false);
+      for (let r = 4, y = H + 4; r >= 0; r--, y++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+        let id = r === 0 ? B.LOG : B.PLANKS;
+        if (r > 0 && (Math.abs(dx) === r || Math.abs(dz) === r)) id = STAIR_ID(0, Math.abs(dz) === r ? (dz < 0 ? 2 : 0) : (dx < 0 ? 1 : 3)); // escalón con el respaldo hacia el centro
+        put(cx + dx, y, cz + dz, id, false);
+      }
+      // valla del jardín (con hueco hacia el camino)
+      for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
+        if (Math.abs(dx) !== 4 && Math.abs(dz) !== 4) continue;
+        if ((dirx && dx === dirx * 4 && Math.abs(dz) <= 1) || (dirz && dz === dirz * 4 && Math.abs(dx) <= 1)) continue;
+        if (Math.abs(dx) === 4 && Math.abs(dz) === 4) { put(cx + dx, H, cz + dz, B.LOG, false); put(cx + dx, H + 1, cz + dz, B.TORCH, false); continue; }
+        put(cx + dx, H, cz + dz, FENCE, false);
+      }
       // interior: antorcha, mesa y horno
       put(cx - 2, H + 1, cz - 2, B.TORCH, false); put(cx + 2, H + 1, cz - 2, B.TABLE, false); put(cx + 2, H + 1, cz + 2, B.FURNACE, false); put(cx - 2, H + 1, cz + 2, B.TORCH, false);
       put(cx + dirx * 4 + dirz, H + 1, cz + dirz * 4 + dirx, B.TORCH, false);
@@ -361,7 +373,7 @@ export class World {
         for (let y = H + 1; y <= H + o.h; y++) {
           let id = corner ? B.LOG : o.wall;
           if (!corner && y === H + 2 && ((Math.abs(dx) === hw && dz % 3 === 0) || (Math.abs(dz) === hd && dx % 3 === 0))) id = B.GLASS;
-          if (dx === o.door[0] * hw && dz === o.door[1] * hd && y <= H + 2) id = 0;
+          if (dx === o.door[0] * hw && dz === o.door[1] * hd && y <= H + 2) { const dO = o.door[0] ? (o.door[0] > 0 ? 1 : 3) : (o.door[1] > 0 ? 2 : 0); id = y === H + 1 ? DOOR_LO + dO : y === H + 2 ? DOOR_HI + dO : 0; }
           put(cx + dx, y, cz + dz, id, false);
         }
       }
