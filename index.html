@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="es">
 <head>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2b2b2b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="MC Web" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Minecraft Web</title>
@@ -149,7 +156,7 @@
     #chatLog div { background: rgba(0,0,0,.45); color: #fff; font-size: 13px; padding: 2px 6px; text-shadow: 1px 1px #000; transition: opacity 1s; }
     #chatLog div b { color: #9fd6ff; } #chatLog div.sys { color: #ffe27a; }
   </style>
-  <script type="module" crossorigin src="./assets/index-DBnECnC5.js"></script>
+  <script type="module" crossorigin src="./assets/index-D-uwvJQW.js"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -259,6 +266,7 @@
           <input id="mpName" placeholder="Tu nombre" maxlength="16" />
           <button class="btn" id="bMulti" style="background:#3a6fb0;color:#fff">Conectar al servidor</button>
         </div>
+        <button class="btn hidden" id="bInstall" style="background:#7b4fc9;color:#fff">📲 Instalar como app</button>
         <button class="btn" id="bImport">⬆ Importar partida (.mcw)</button>
         <input type="file" id="fImport" accept=".mcw,application/octet-stream" class="hidden" />
       <div id="keys">
@@ -293,7 +301,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v1.3</div>
+    <div id="ver">Minecraft Web v1.4</div>
   </div>
 </body>
 </html>

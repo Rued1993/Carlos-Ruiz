@@ -540,6 +540,12 @@ function updateTracker() {
 
 // ===================================================================== DIMENSIONES Y PORTALES
 let kind = 'normal', ob = { count: 0 }, chunkPool = null;
+// ---------- PWA: instalación y modo sin conexión ----------
+let installEv = null;
+if ('serviceWorker' in navigator && import.meta.env.PROD) addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEv = e; const b = document.getElementById('bInstall'); if (b) b.classList.remove('hidden'); });
+addEventListener('appinstalled', () => { installEv = null; const b = document.getElementById('bInstall'); if (b) b.classList.add('hidden'); });
+document.getElementById('bInstall').onclick = async () => { if (!installEv) return; installEv.prompt(); try { await installEv.userChoice; } catch {} installEv = null; document.getElementById('bInstall').classList.add('hidden'); };
 // ---------- Multijugador ----------
 let mp = null; // { net, edits:{dim: Map}, remotes: Map, posT }
 const mpKey = (x, z) => (Math.floor(x / 16) + 32768) * 65536 + (Math.floor(z / 16) + 32768);
