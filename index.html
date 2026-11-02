@@ -38,6 +38,9 @@
     .slot { width: 46px; height: 46px; border: 3px solid #2d2d2d; border-right-color: #c9c9c9; border-bottom-color: #c9c9c9; background: #8b8b8b; position: relative; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
     #hotbar .slot { background: rgba(70,70,70,.7); border: 2px solid #1b1b1b; margin: 0 1px; }
     #hotbar .slot.active { border: 3px solid #fff; background: rgba(130,130,130,.75); transform: scale(1.12); z-index: 2; box-shadow: 0 0 8px rgba(255,255,255,.55); }
+    .slot.ench img { filter: drop-shadow(0 0 3px #c080ff); }
+    .slot.ench::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(190,120,255,.4) 50%, transparent 70%); background-size: 220% 100%; animation: glint 2.2s linear infinite; pointer-events: none; }
+    @keyframes glint { from { background-position: 160% 0; } to { background-position: -60% 0; } }
     .slot img { width: 32px; height: 32px; pointer-events: none; }
     .slot img.flat { width: 36px; height: 36px; }
     .slot .n { position: absolute; right: 2px; bottom: 0; font-size: 14px; color: #fff; text-shadow: 2px 2px 0 #3b3b3b; pointer-events: none; }
@@ -176,7 +179,7 @@
     @media (max-width: 900px), (max-height: 560px) { #splash { position: static; transform: none; animation: none; margin-top: 2px; font-size: 13px; } }
     body.touch #keys { display: none; }
   </style>
-  <script type="module" crossorigin src="./assets/index-DcfdMRQX.js"></script>
+  <script type="module" crossorigin src="./assets/index-BcK6qRyl.js"></script>
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -243,6 +246,21 @@
       <h3>🧑‍🌾 Aldeano — Comercio <span id="tradeInfo" style="font-weight:normal;font-size:11px"></span></h3>
       <div id="tradeList" class="cards"></div>
       <div style="font-size:11px">Pulsa Esc para cerrar. Necesitas los materiales en el inventario.</div>
+    </div>
+  </div>
+  <div id="brew" class="screen hidden">
+    <div class="panel wide">
+      <h3>⚗ Soporte de pociones <span style="font-weight:normal;font-size:11px">— 1 verruga del Nether + 1 ingrediente + hasta 3 botellas de cristal (3 cristales en V)</span></h3>
+      <div id="brewList" class="cards"></div>
+      <div style="font-size:11px">Esc o ✕ para cerrar. La verruga sale de la arena de almas y de las fortalezas; el polvo de blaze, de los blazes; la crema de magma, de los cubos de magma.</div>
+    </div>
+  </div>
+  <div id="ench" class="screen hidden">
+    <div class="panel wide">
+      <h3>✨ Mesa de encantamientos <span id="enchInfo" style="font-weight:normal;font-size:11px"></span></h3>
+      <div id="enchItem" style="font-size:13px"></div>
+      <div id="enchList" class="cards"></div>
+      <div style="font-size:11px">Sostén en la mano una herramienta, espada o armadura. Cuesta niveles de experiencia y lapislázuli (mena de lapislázuli bajo tierra).</div>
     </div>
   </div>
   <div id="padcfg" class="screen hidden">
@@ -323,7 +341,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v1.7</div>
+    <div id="ver">Minecraft Web v1.8</div>
   </div>
 </body>
 </html>

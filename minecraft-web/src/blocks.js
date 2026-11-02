@@ -9,9 +9,10 @@ export const B = {
   END_STONE: 30, END_FRAME: 31, END_FRAME_EYE: 32, END_PORTAL: 33,
   PURPUR: 34, END_BRICKS: 35, CHEST: 36, CHEST_OPEN: 37,
   SANDSTONE: 38, MOSSY_COBBLE: 39, ANCIENT_DEBRIS: 40, GOLD_BLOCK: 41,
+  BREWING: 85, ENCH_TABLE: 86, LAPIS_ORE: 87,
 };
 export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, ELYTRA: 109,
-  DONUT: 160, DUFF: 161, SENZU: 162, DBALL: 163, NETHERITE: 170, SCRAP: 171, LEATHER: 172, CHICKEN: 155, COOKED_CHICKEN: 156 };
+  DONUT: 160, DUFF: 161, SENZU: 162, DBALL: 163, NETHERITE: 170, SCRAP: 171, LEATHER: 172, BOTTLE: 173, WART: 174, BLAZE_POWDER: 175, MAGMA_CREAM: 176, LAPIS: 177, BOOK: 178, CHICKEN: 155, COOKED_CHICKEN: 156 };
 
 export const BLOCKS = {};
 function block(id, name, tiles, hardness, tool = null, lvl = 0, extra = {}) {
@@ -58,6 +59,9 @@ block(B.SANDSTONE, 'Arenisca', ['sandstone', 'sandstone', 'sandstone'], 0.8, 'pi
 block(B.MOSSY_COBBLE, 'Adoquín musgoso', ['mossy_cobble', 'mossy_cobble', 'mossy_cobble'], 2, 'pick', 1);
 block(B.ANCIENT_DEBRIS, 'Restos antiguos', ['ancient_debris_top', 'ancient_debris_top', 'ancient_debris_side'], 30, 'pick', 4);
 block(B.GOLD_BLOCK, 'Bloque de oro', ['gold_block', 'gold_block', 'gold_block'], 3, 'pick', 3);
+block(B.BREWING, 'Soporte de pociones', ['brew_top', 'brew_top', 'brew_side'], 1.5, 'pick', 1);
+block(B.ENCH_TABLE, 'Mesa de encantamientos', ['ench_top', 'obsidian', 'ench_side'], 5, 'pick', 3);
+block(B.LAPIS_ORE, 'Mena de lapislázuli', ['lapis_ore', 'lapis_ore', 'lapis_ore'], 3, 'pick', 2);
 block(B.FURNACE, 'Horno', ['furnace_top', 'stone', 'furnace_front'], 3, 'pick', 1);
 
 // ---------- Bloques con forma: losas, escaleras, vallas y puertas ----------
@@ -146,6 +150,45 @@ item(I.DBALL, 'Esfera del dragón', { stack: 7 });
 item(I.NETHERITE, 'Lingote de netherita');
 item(I.SCRAP, 'Fragmento de netherita');
 item(I.LEATHER, 'Cuero');
+item(I.BOTTLE, 'Botella de cristal'); item(I.WART, 'Verruga del Nether'); item(I.BLAZE_POWDER, 'Polvo de blaze'); item(I.MAGMA_CREAM, 'Crema de magma'); item(I.LAPIS, 'Lapislázuli'); item(I.BOOK, 'Libro');
+// ---------- Pociones: botella + verruga del Nether + ingrediente (en el soporte de pociones) ----------
+export const POTIONS = [
+  { k: 'heal', id: 180, name: 'Poción de curación', color: [232, 60, 80], ing: I.APPLE, dur: 0, desc: 'Cura 5 corazones al instante' },
+  { k: 'regen', id: 181, name: 'Poción de regeneración', color: [240, 120, 200], ing: I.GOLD, dur: 45, desc: 'Regenera vida durante 45 s' },
+  { k: 'speed', id: 182, name: 'Poción de rapidez', color: [90, 200, 240], ing: I.IRON, dur: 180, desc: 'Velocidad +30 % durante 3 min' },
+  { k: 'strength', id: 183, name: 'Poción de fuerza', color: [200, 60, 40], ing: I.BLAZE_POWDER, dur: 180, desc: 'Más daño durante 3 min' },
+  { k: 'fire', id: 184, name: 'Poción de resistencia al fuego', color: [255, 150, 40], ing: I.MAGMA_CREAM, dur: 180, desc: 'Inmune a fuego y lava 3 min' },
+  { k: 'jump', id: 185, name: 'Poción de salto', color: [90, 230, 90], ing: I.LEATHER, dur: 180, desc: 'Saltas mucho más alto 3 min' },
+  { k: 'night', id: 186, name: 'Poción de visión nocturna', color: [90, 90, 220], ing: B.GLOWSTONE, dur: 240, desc: 'Ves en la oscuridad 4 min' },
+];
+for (const p of POTIONS) item(p.id, p.name, { stack: 4, potion: p.k, color: p.color });
+// ---------- Encantamientos ----------
+export const ENCHANTS = {
+  eficiencia: { name: 'Eficiencia', max: 3, desc: 'Rompe bloques más rápido' },
+  fortuna: { name: 'Fortuna', max: 3, desc: 'Más recursos de las menas' },
+  afilado: { name: 'Filo', max: 3, desc: '+1,5 de daño por nivel' },
+  fuego: { name: 'Aspecto ígneo', max: 2, desc: 'Prende fuego a los enemigos' },
+  irrompibilidad: { name: 'Irrompibilidad', max: 3, desc: 'Se desgasta menos' },
+  proteccion: { name: 'Protección', max: 3, desc: 'Más defensa' },
+  caida: { name: 'Caída de pluma', max: 3, desc: 'Menos daño al caer' },
+};
+const ROMAN = ['', 'I', 'II', 'III', 'IV'];
+export const enchText = (it) => (it && it.ench ? Object.entries(it.ench).map(([k, v]) => ENCHANTS[k].name + ' ' + ROMAN[v]).join(', ') : '');
+export function enchantsFor(id) {
+  const it = ITEMS[id]; if (!it) return [];
+  if (it.tool) return it.tool.type === 'sword' ? ['afilado', 'fuego', 'irrompibilidad'] : ['eficiencia', 'fortuna', 'irrompibilidad'];
+  if (it.armor) return it.armor.slot === 3 ? ['proteccion', 'caida', 'irrompibilidad'] : ['proteccion', 'irrompibilidad'];
+  return [];
+}
+// Opción de encantamiento (tier 1-3) determinista a partir de una semilla
+export function rollEnchant(id, tier, seed) {
+  const list = enchantsFor(id); if (!list.length) return null;
+  let s = (seed * 2654435761 + tier * 40503 + id * 9973) >>> 0; const rnd = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const out = {}, k = list[Math.floor(rnd() * list.length)];
+  out[k] = Math.max(1, Math.min(ENCHANTS[k].max, Math.round(tier - 1 + rnd() * 1.2) || 1));
+  if (tier === 3 && list.length > 1 && rnd() < 0.6) { const k2 = list.filter((x) => x !== k)[Math.floor(rnd() * (list.length - 1))]; out[k2] = Math.max(1, Math.min(ENCHANTS[k2].max, 1 + Math.floor(rnd() * 2))); }
+  return out;
+}
 item(I.CHICKEN, 'Pollo crudo', { food: 4 });
 item(I.COOKED_CHICKEN, 'Pollo asado', { food: 12 });
 item(I.APPLE, 'Manzana', { food: 8 });
@@ -200,6 +243,10 @@ ARMOR_TYPES.forEach((at, ai) => ARMOR_TIERS.forEach((tier, ti) => {
   else recipe(at.rows, { M: tier.mat }, id);
 }));
 recipe(['SG', 'GS'], { S: I.SCRAP, G: I.GOLD }, I.NETHERITE);
+recipe(['G G', ' G '], { G: B.GLASS }, I.BOTTLE, 3);
+recipe(['L', 'L', 'L'], { L: I.LEATHER }, I.BOOK);
+recipe([' P ', 'CCC'], { P: I.BLAZE_POWDER, C: B.COBBLE }, B.BREWING);
+recipe([' B ', 'DOD', 'OOO'], { B: I.BOOK, D: I.DIAMOND, O: B.OBSIDIAN }, B.ENCH_TABLE);
 SLAB_MATS.forEach((mat, m) => { recipe(['MMM'], { M: mat }, SLAB_BOTTOM(m), 6); recipe(['S', 'S'], { S: SLAB_BOTTOM(m) }, mat); });
 STAIR_MATS.forEach((mat, m) => recipe(['M  ', 'MM ', 'MMM'], { M: mat }, STAIR_ID(m, 0), 4));
 recipe(['PSP', 'PSP'], { P: B.PLANKS, S: I.STICK }, FENCE, 3);
@@ -270,7 +317,7 @@ export function breakTime(blockId, slot) {
   const t = toolOf(slot);
   const match = t && b.tool && t.type === b.tool;
   const ok = canHarvest(blockId, slot);
-  const speed = match ? t.speed : 1;
+  const speed = (match ? t.speed : 1) * (1 + 0.4 * ((slot && slot.ench && slot.ench.eficiencia) || 0));
   return (b.hardness * (ok ? 1.5 : 5)) / speed;
 }
 
@@ -286,6 +333,8 @@ export function dropOf(blockId, slot) {
     case B.LEAVES: return Math.random() < 0.1 ? [I.APPLE, 1] : null;
     case B.CHEST_OPEN: return [B.CHEST, 1];
     case B.GOLD_BLOCK: return [I.GOLD, 9];
+    case B.LAPIS_ORE: return [I.LAPIS, 4 + Math.floor(Math.random() * 5)];
+    case B.SOUL_SAND: return Math.random() < 0.2 ? [I.WART, 1] : [B.SOUL_SAND, 1];
     case B.GLASS: case B.WATER: case B.LAVA: case B.NETHER_PORTAL: case B.END_PORTAL: case B.END_FRAME: case B.END_FRAME_EYE: return null;
     default: return [blockId, 1];
   }

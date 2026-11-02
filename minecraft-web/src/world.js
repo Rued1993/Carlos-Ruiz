@@ -131,6 +131,7 @@ export class World {
           else {
             const r = hash2(wx * 31 + y, wz * 17 - y, seed + 77 + y);
             if (y < 64 && r < 0.025) b = B.COAL_ORE;
+            else if (y < 32 && r > 0.95 && r < 0.958) b = B.LAPIS_ORE;
             else if (y < 48 && r > 0.975 && r < 0.99) b = B.IRON_ORE;
             else if (y < 28 && r > 0.99 && r < 0.996) b = B.GOLD_ORE;
             else if (y < 16 && r > 0.996) b = B.DIAMOND_ORE;

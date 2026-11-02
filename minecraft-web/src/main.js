@@ -25,7 +25,7 @@ import { MobManager, MOB_TYPES } from './mobs.js';
 import { UI } from './ui.js';
 import * as audio from './audio.js';
 import * as save from './save.js';
-import { armorId, ARMOR_TIERS } from './blocks.js';
+import { armorId, ARMOR_TIERS, POTIONS, ENCHANTS, enchText, enchantsFor, rollEnchant } from './blocks.js';
 import { SHAPE, SLAB_MATS, SLAB_BOTTOM, SLAB_TOP, STAIR_ID, FENCE, DOOR_LO, DOOR_LO_OPEN, DOOR_HI, DOOR_HI_OPEN } from './blocks.js';
 import { B, I, AIR, BLOCKS, ITEMS, LIQUID, SOLID, SMELT, FUEL, SMELT_TIME, info, isBlock, isFlat, maxStack, toolOf, breakTime, dropOf } from './blocks.js';
 
@@ -323,6 +323,7 @@ function breakBlock(hit) {
   sound('break');
   if (mode === 'survival') {
     const d = skipDrop ? null : dropOf(id, held);
+    if (d && held && held.ench && held.ench.fortuna && (id === B.COAL_ORE || id === B.DIAMOND_ORE || id === B.LAPIS_ORE)) d[1] += Math.floor(Math.random() * (held.ench.fortuna + 1)); // Fortuna
     if (d) {
       if (kind === 'oneblock' && hit.x === 0 && hit.y === 64 && hit.z === 0) { const left = inv.add(d[0], d[1]); if (left) drops.spawn(0.5, 65.6, 0.5, d[0], left); ui.renderHotbar(); sound('pop'); } // directo al inventario: nada se cae al vacío
       else drops.spawn(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, d[0], d[1]);
@@ -344,6 +345,8 @@ function useItem() {
     openInventory('furnace', furnaces.get(key)); return;
   }
   if (hit && SHAPE[hit.id] && SHAPE[hit.id].kind === 'door' && !player.keys.has('ShiftLeft')) { toggleDoor(hit.x, hit.y, hit.z); return; }
+  if (hit && hit.id === B.BREWING && !player.keys.has('ShiftLeft')) { openPanel('brew'); return; }
+  if (hit && hit.id === B.ENCH_TABLE && !player.keys.has('ShiftLeft')) { openPanel('ench'); return; }
   if (hit && hit.id === B.END_FRAME) { useEyeOnFrame(hit); return; }
   if (hit && hit.id === B.CHEST && !player.keys.has('ShiftLeft')) { openChest(hit); return; }
   if (!player.keys.has('ShiftLeft')) {
@@ -362,6 +365,7 @@ function useItem() {
     inv.armor[a.slot] = { ...held }; inv.slots[inv.selected] = cur ? { ...cur } : null; sound('craft'); ui.renderHotbar(); model.setArmor(inv.armor); ui.toast('Equipado: ' + ITEMS[held.id].name); return;
   }
   if (held.id === I.DBALL) { dragonWish(); return; }
+  if (ITEMS[held.id] && ITEMS[held.id].potion) { drinkPotion(held); return; }
   const food = ITEMS[held.id] && ITEMS[held.id].food;
   if (food) {
     const heal = ITEMS[held.id].heal;
@@ -458,7 +462,7 @@ function openPanel(id) {
   if (state !== 'play') return;
   state = 'panel'; panelId = id; player.keys.clear(); mouse.left = mouse.right = false;
   document.exitPointerLock(); $(id).classList.remove('hidden');
-  if (id === 'chatp') { $('chatIn').value = ''; setTimeout(() => $('chatIn').focus(), 30); } else if (id === 'summon') renderSummon(); else if (id === 'trade') renderTrade(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
+  if (id === 'brew') renderBrew(); else if (id === 'ench') renderEnch(); else if (id === 'chatp') { $('chatIn').value = ''; setTimeout(() => $('chatIn').focus(), 30); } else if (id === 'summon') renderSummon(); else if (id === 'trade') renderTrade(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
 }
 function closePanel(relock) {
   if (!panelId) return;
@@ -638,9 +642,9 @@ function rollLoot(hit) {
   const out = [], r = Math.random, add = (id, a, b, p = 1) => { if (r() < p) out.push([id, a + Math.floor(r() * (b - a + 1))]); };
   const gear = (tiers, p) => { if (r() < p) out.push([armorId(Math.floor(r() * 4), tiers[Math.floor(r() * tiers.length)]), 1]); };
   if (r() < 0.07) out.push([I.DBALL, 1]);
-  if (dim === 'nether') { add(I.GOLD, 2, 8); add(I.IRON, 1, 5, 0.7); add(I.DIAMOND, 1, 2, 0.3); add(B.OBSIDIAN, 2, 4, 0.4); add(I.COAL, 3, 8, 0.6); add(I.EYE, 1, 1, 0.15); add(I.COOKED_PORK, 2, 4, 0.4); gear([1, 2], 0.5); if (r() < 0.12) out.push([I.SCRAP, 1]); }
-  else if (dim === 'end') { gear([2, 3], 0.55); add(I.DIAMOND, 2, 6, 0.7); add(I.GOLD, 3, 9); add(I.IRON, 2, 6, 0.8); add(I.PEARL, 1, 3, 0.5); add(I.EYE, 1, 2, 0.3); add(B.PURPUR, 6, 16, 0.7); if (world.getBlock(hit.x, hit.y - 1, hit.z) === B.END_BRICKS) out.push([I.ELYTRA, 1]); else add(I.ELYTRA, 1, 1, 0.06); }
-  else { add(I.GOLD, 1, 4); add(I.IRON, 1, 4); add(I.COAL, 2, 6); gear([0, 1, 2], 0.4); add(I.DONUT, 1, 3, 0.3); add(B.GOLD_BLOCK, 1, 1, 0.1); }
+  if (dim === 'nether') { add(I.WART, 1, 4, 0.65); add(I.BLAZE_POWDER, 1, 2, 0.35); add(I.GOLD, 2, 8); add(I.IRON, 1, 5, 0.7); add(I.DIAMOND, 1, 2, 0.3); add(B.OBSIDIAN, 2, 4, 0.4); add(I.COAL, 3, 8, 0.6); add(I.EYE, 1, 1, 0.15); add(I.COOKED_PORK, 2, 4, 0.4); gear([1, 2], 0.5); if (r() < 0.12) out.push([I.SCRAP, 1]); }
+  else if (dim === 'end') { add(I.LAPIS, 3, 8, 0.6); gear([2, 3], 0.55); add(I.DIAMOND, 2, 6, 0.7); add(I.GOLD, 3, 9); add(I.IRON, 2, 6, 0.8); add(I.PEARL, 1, 3, 0.5); add(I.EYE, 1, 2, 0.3); add(B.PURPUR, 6, 16, 0.7); if (world.getBlock(hit.x, hit.y - 1, hit.z) === B.END_BRICKS) out.push([I.ELYTRA, 1]); else add(I.ELYTRA, 1, 1, 0.06); }
+  else { add(I.LAPIS, 2, 6, 0.45); add(I.BOTTLE, 1, 3, 0.3); add(I.GOLD, 1, 4); add(I.IRON, 1, 4); add(I.COAL, 2, 6); gear([0, 1, 2], 0.4); add(I.DONUT, 1, 3, 0.3); add(B.GOLD_BLOCK, 1, 1, 0.1); }
   return out;
 }
 // Las 7 esferas del dragón invocan a Shenlong y conceden un deseo
@@ -661,6 +665,55 @@ function dragonWish() {
     player.hp = 20; player.food = 20; addXp(250); ui.renderHotbar(); ui.toast('¡Deseo concedido! Vida completa, 32 diamantes, 4 netherita, élitros y 5 semillas');
   }, 3500);
 }
+// ---------- Pociones y encantamientos ----------
+const dmgBonus = () => { const h = inv.held(); return (player.effects.strength > 0 ? 3 : 0) + (h && h.ench && h.ench.afilado ? 1.5 * h.ench.afilado : 0); };
+function drinkPotion(held) {
+  const p = POTIONS.find((q) => q.id === held.id); if (!p) return;
+  if (p.k === 'heal') { player.heal(10); particles.burst(player.pos.x, player.pos.y + 1, player.pos.z, [1, 0.3, 0.4], 18, 4); }
+  else { player.effects[p.k] = Math.max(player.effects[p.k], p.dur); particles.burst(player.pos.x, player.pos.y + 1, player.pos.z, p.color.map((v) => v / 255), 14, 3); }
+  sound('eat'); ui.toast(p.name + (p.dur ? ' (' + (p.dur >= 60 ? Math.round(p.dur / 60) + ' min' : p.dur + ' s') + ')' : ''));
+  if (mode === 'survival') { inv.consumeHeld(1); const left = inv.add(I.BOTTLE, 1); if (left) dropItem(I.BOTTLE, left); ui.renderHotbar(); }
+  ui.renderStats();
+}
+function renderBrew() {
+  const bottles = inv.count(I.BOTTLE), wart = inv.count(I.WART), cr = mode === 'creative';
+  $('brewList').innerHTML = POTIONS.map((p) => {
+    const ok = cr || (bottles >= 1 && wart >= 1 && inv.count(p.ing) >= 1), col = `rgb(${p.color.join(',')})`;
+    return `<div class="card" style="border-left:6px solid ${col}"><h4><span>${p.name}</span></h4><p>${p.desc}<br>1× Verruga + 1× ${info(p.ing).name} + botellas (tienes ${bottles})</p><button class="btn" data-brew="${p.k}" ${ok ? '' : 'disabled style="opacity:.5"'}>Preparar</button></div>`;
+  }).join('') + `<div style="grid-column:1/-1;font-size:12px">Inventario: ${bottles} botella(s) · ${wart} verruga(s)</div>`;
+}
+$('brewList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-brew]'); if (!b || state !== 'panel') return;
+  const p = POTIONS.find((q) => q.k === b.dataset.brew), cr = mode === 'creative';
+  const n = cr ? 3 : Math.min(3, inv.count(I.BOTTLE));
+  if (!cr && (n < 1 || inv.count(I.WART) < 1 || inv.count(p.ing) < 1)) return;
+  if (!cr) { inv.take(I.BOTTLE, n); inv.take(I.WART, 1); inv.take(p.ing, 1); }
+  const left = inv.add(p.id, n); if (left) dropItem(p.id, left);
+  quests.event('craft', p.id, n); sound('craft'); particles.burst(player.pos.x, player.pos.y + 1, player.pos.z, p.color.map((v) => v / 255), 16, 3);
+  ui.toast('Preparado: ' + n + '× ' + p.name); ui.renderHotbar(); renderBrew();
+});
+let enchSeed = 1, enchOpts = [];
+function renderEnch() {
+  const h = inv.held(), cr = mode === 'creative', lapis = inv.count(I.LAPIS);
+  $('enchInfo').textContent = `— nivel ${xpLevel} · ${lapis} lapislázuli`;
+  const ok = h && enchantsFor(h.id).length;
+  $('enchItem').innerHTML = ok ? `En la mano: <b>${info(h.id).name}</b>${h.ench ? ' · ' + enchText(h) : ''}` : '⚠ Sostén en la mano una herramienta, espada o armadura (selecciónala en la barra).';
+  if (!ok) { $('enchList').innerHTML = ''; return; }
+  enchOpts = [1, 2, 3].map((t) => rollEnchant(h.id, t, enchSeed));
+  $('enchList').innerHTML = enchOpts.map((o, i) => {
+    const t = i + 1, can = cr || (xpLevel >= t && lapis >= t), lines = Object.entries(o).map(([k, v]) => `${ENCHANTS[k].name} ${['', 'I', 'II', 'III'][v]}`).join(' + ');
+    return `<div class="card" style="border-left:6px solid #b070ff"><h4><span>✨ ${lines}</span><span class="tag">${t} niv · ${t} lapis</span></h4><p>${Object.keys(o).map((k) => ENCHANTS[k].desc).join(' · ')}</p><button class="btn" data-ench="${i}" ${can ? '' : 'disabled style="opacity:.5"'}>Encantar</button></div>`;
+  }).join('');
+}
+$('enchList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ench]'); if (!b || state !== 'panel') return;
+  const i = +b.dataset.ench, t = i + 1, h = inv.held(), cr = mode === 'creative'; if (!h || !enchOpts[i]) return;
+  if (!cr) { if (xpLevel < t || inv.count(I.LAPIS) < t) return; inv.take(I.LAPIS, t); xpLevel -= t; }
+  h.ench = { ...(h.ench || {}) }; for (const [k, v] of Object.entries(enchOpts[i])) h.ench[k] = Math.max(h.ench[k] || 0, v);
+  enchSeed++; quests.event('enchant', 'x', 1); sound('levelup'); sound('craft');
+  particles.burst(player.pos.x, player.pos.y + 1.5, player.pos.z, [0.7, 0.4, 1], 30, 5);
+  ui.toast('¡Encantado! ' + enchText(h)); ui.renderHotbar(); model && model.setArmor(inv.armor); renderEnch();
+});
 function updateFx(dt) {
   for (let i = fxList.length - 1; i >= 0; i--) {
     const f = fxList[i]; f.t += dt;
@@ -826,7 +879,7 @@ function attack() {
   const blk = world.raycast(eye, dir, 7);
   if (bossHit && (!blk || bossHit.dist < blk.dist)) {
     const tb = toolOf(inv.held());
-    boss.hit(mode === 'creative' ? 12 : (tb ? tb.dmg : 1), bossHit.crit, bossHit);
+    boss.hit(mode === 'creative' ? 12 : (tb ? tb.dmg : 1) + dmgBonus(), bossHit.crit, bossHit);
     sound('hit'); if (bossHit.crit) ui.toast('¡Golpe crítico al bloque de comandos!');
     if (mode === 'survival' && tb) { inv.wearHeld(1); ui.renderHotbar(); }
     return true;
@@ -835,8 +888,9 @@ function attack() {
   const bh = world.raycast(eye, dir, 3.6);
   if (!mh || (bh && bh.dist < mh.dist)) return false;
   const t = toolOf(inv.held());
-  const dmg = mode === 'creative' ? 20 : (t ? t.dmg : 1);
+  const he = (inv.held() && inv.held().ench) || {}, dmg = mode === 'creative' ? 20 : (t ? t.dmg : 1) + dmgBonus();
   mobs.damage(mh.mob, dmg, player.pos.x, player.pos.z);
+  if (he.fuego) { const mm = mh.mob; for (let i = 1; i <= 2 * he.fuego; i++) setTimeout(() => { if (mobs.list.includes(mm)) { mobs.damage(mm, 2, player.pos.x, player.pos.z); particles.burst(mm.pos.x, mm.pos.y + mm.h * 0.6, mm.pos.z, [1, 0.5, 0.1], 5, 2); } }, i * 700); }
   particles.burst(mh.mob.pos.x, mh.mob.pos.y + mh.mob.h * 0.6, mh.mob.pos.z, [0.8, 0.1, 0.1], 6, 2.5);
   if (mode === 'survival' && t) { inv.wearHeld(1); ui.renderHotbar(); }
   return true;
@@ -1380,7 +1434,7 @@ function frame(now) {
   fpsAcc += dt; fpsN++; if (fpsAcc >= 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
 
   if (state !== 'pause') {
-    { const hd = inv.held(); player.canGlide = !!(hd && hd.id === I.ELYTRA); player.armorPts = inv.armorPoints(); model.setArmor(inv.armor); updateFx(dt); }
+    { const hd = inv.held(); player.canGlide = !!(hd && hd.id === I.ELYTRA); player.armorPts = inv.armorPoints(); player.fallReduce = inv.fallReduce(); sky.nv = player.effects.night > 0; model.setArmor(inv.armor); updateFx(dt); }
     player.update(dt);
     model.update(dt, player, swing);
     mpUpdate(dt);
@@ -1429,7 +1483,7 @@ function frame(now) {
       $('mmInfo').textContent = `${Math.floor(player.pos.x)}, ${Math.floor(player.pos.y)}, ${Math.floor(player.pos.z)}\n${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${dim === 'overworld' ? WEATHER_NAMES[weather.state] : DIM_NAMES[dim]}\n📷 ${['1ª persona', '3ª detrás', '3ª delante'][camMode]} · ${fps} FPS`;
       $('xpFill').style.width = (xpPts / xpNeed(xpLevel)) * 100 + '%'; $('xpLvl').textContent = xpLevel;
       $('xp').style.visibility = mode === 'survival' ? 'visible' : 'hidden';
-      const ef = []; if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`); if (player.effects.levitate > 0) ef.push(`<span style="border-color:#fff">☁ Levitación ${Math.ceil(player.effects.levitate)}s</span>`);
+      const ef = []; for (const [k, lab, col] of [['speed', '⚡ Rapidez', '#6cf'], ['strength', '💪 Fuerza', '#f66'], ['regen', '❤ Regeneración', '#f8c'], ['fire', '🛡 Res. fuego', '#fa4'], ['jump', '⇧ Salto', '#7e7'], ['night', '👁 Visión nocturna', '#99f']]) if (player.effects[k] > 0) ef.push(`<span style="border-color:${col}">${lab} ${Math.ceil(player.effects[k])}s</span>`); if (player.effects.poison > 0) ef.push(`<span style="border-color:#7a2">☠ Veneno ${Math.ceil(player.effects.poison)}s</span>`); if (player.effects.fatigue > 0) ef.push(`<span style="border-color:#6cf">⛏ Fatiga ${Math.ceil(player.effects.fatigue)}s</span>`); if (player.effects.burn > 0) ef.push(`<span style="border-color:#f80">🔥 Fuego ${Math.ceil(player.effects.burn)}s</span>`); if (player.effects.levitate > 0) ef.push(`<span style="border-color:#fff">☁ Levitación ${Math.ceil(player.effects.levitate)}s</span>`);
       $('effects').innerHTML = ef.join('');
       $('darkness').style.opacity = darkTarget;
     }

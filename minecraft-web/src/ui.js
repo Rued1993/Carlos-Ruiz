@@ -1,6 +1,6 @@
 // Interfaz: barra rápida, estadísticas, inventario, crafteo y paleta creativa.
 import { iconURL, hudSprites } from './icons.js';
-import { info, BLOCKS, ITEMS, toolOf, maxStack, matchRecipe, isFlat, SMELT_TIME } from './blocks.js';
+import { info, BLOCKS, ITEMS, toolOf, maxStack, matchRecipe, isFlat, SMELT_TIME, enchText } from './blocks.js';
 const durOf = (item) => toolOf(item) || (ITEMS[item.id] && ITEMS[item.id].armor ? { dur: ITEMS[item.id].armor.dur } : null);
 
 const $ = (id) => document.getElementById(id);
@@ -13,7 +13,8 @@ function slotEl(item, opts = {}) {
     const img = document.createElement('img');
     img.src = iconURL(item.id); if (isFlat(item.id)) img.className = 'flat';
     d.appendChild(img);
-    d.title = info(item.id).name;
+    d.title = info(item.id).name + (item.ench ? '\n✨ ' + enchText(item) : '');
+    if (item.ench) d.classList.add('ench');
     if (item.n > 1) { const n = document.createElement('span'); n.className = 'n'; n.textContent = item.n; d.appendChild(n); }
     const t = durOf(item);
     if (t && item.d > 0) {

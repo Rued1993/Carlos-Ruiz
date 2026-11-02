@@ -25,15 +25,17 @@ export class Inventory {
   wearHeld(amount = 1) {
     const s = this.slots[this.selected], t = toolOf(s);
     if (!t) return false;
+    const ir = (s.ench && s.ench.irrompibilidad) || 0; if (ir && Math.random() < ir / (ir + 1)) return false; // Irrompibilidad
     s.d = (s.d || 0) + amount;
     if (s.d >= t.dur) { this.slots[this.selected] = null; return true; }
     return false;
   }
   count(id) { let n = 0; for (const s of this.slots) if (s && s.id === id) n += s.n; return n; }
   take(id, n) { for (let i = 0; i < 36 && n > 0; i++) { const s = this.slots[i]; if (s && s.id === id) { const t = Math.min(n, s.n); s.n -= t; n -= t; if (s.n <= 0) this.slots[i] = null; } } return n === 0; }
-  armorPoints() { let p = 0; for (const a of this.armor) if (a && ITEMS[a.id] && ITEMS[a.id].armor) p += ITEMS[a.id].armor.pts; return p; }
+  armorPoints() { let p = 0; for (const a of this.armor) if (a && ITEMS[a.id] && ITEMS[a.id].armor) p += ITEMS[a.id].armor.pts + ((a.ench && a.ench.proteccion) || 0); return p; }
+  fallReduce() { const b = this.armor[3]; return b && b.ench && b.ench.caida ? b.ench.caida * 2 : 0; }
   // Cada golpe recibido desgasta cada pieza; devuelve las ranuras que se han roto
-  wearArmor(n = 1) { const broken = []; this.armor.forEach((a, i) => { if (!a) return; a.d = (a.d || 0) + n; if (a.d >= ITEMS[a.id].armor.dur) { this.armor[i] = null; broken.push(i); } }); return broken; }
+  wearArmor(n = 1) { const broken = []; this.armor.forEach((a, i) => { if (!a) return; const ir = (a.ench && a.ench.irrompibilidad) || 0; if (ir && Math.random() < ir / (ir + 1)) return; a.d = (a.d || 0) + n; if (a.d >= ITEMS[a.id].armor.dur) { this.armor[i] = null; broken.push(i); } }); return broken; }
   toJSON() { return { slots: this.slots, selected: this.selected, armor: this.armor }; }
   load(o) { if (o) { this.slots = o.slots; this.selected = o.selected || 0; this.armor = o.armor || [null, null, null, null]; } }
 }

@@ -138,7 +138,7 @@ export const MOB_TYPES = {
       for (let ring = 0; ring < 3; ring++) { const r = new THREE.Group(); r.position.y = 0.35 + ring * 0.38; g.add(r); for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2; const rod = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), ring % 2 ? org : yel); rod.position.set(Math.cos(a) * 0.5, 0, Math.sin(a) * 0.5); r.add(rod); } o.rods.push(r); }
       part(g, 0.2, 0.25, 0.2, 0xffa020, 0, 0.9, 0);
     },
-    drops: () => (Math.random() < 0.8 ? [[I.COAL, 1 + Math.floor(Math.random() * 2)]] : []),
+    drops: () => [...(Math.random() < 0.8 ? [[I.COAL, 1 + Math.floor(Math.random() * 2)]] : []), ...(Math.random() < 0.55 ? [[I.BLAZE_POWDER, 1]] : [])],
   },
   magmacube: {
     hw: 0.5, h: 1.0, hp: 18, speed: 0, hostile: true, name: 'Cubo de magma', hopper: true, xp: 5,
@@ -148,7 +148,7 @@ export const MOB_TYPES = {
       for (const [x, y, z] of [[0, 0.7, 0.51], [0.3, 0.3, 0.51], [-0.3, 0.45, 0.51], [0.51, 0.5, 0.2], [-0.51, 0.5, -0.1]]) part(g, 0.3, 0.12, 0.05, 0xffa020, x, y, z);
       part(g, 0.15, 0.12, 0.04, 0x201000, -0.22, 0.65, 0.52); part(g, 0.15, 0.12, 0.04, 0x201000, 0.22, 0.65, 0.52); part(g, 0.4, 0.1, 0.04, core, 0, 0.35, 0.52);
     },
-    drops: () => (Math.random() < 0.6 ? [[I.COAL, 1]] : []),
+    drops: () => [...(Math.random() < 0.6 ? [[I.COAL, 1]] : []), ...(Math.random() < 0.4 ? [[I.MAGMA_CREAM, 1]] : [])],
   },
   witherskeleton: {
     hw: 0.35, h: 2.4, hp: 30, speed: 2.9, hostile: true, name: 'Esqueleto Wither', damage: 6, reach: 1.7, effect: ['poison', 5], xp: 9,

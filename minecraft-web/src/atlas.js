@@ -8,7 +8,7 @@ const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', '
   'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command',
   'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal',
   'purpur', 'end_bricks', 'chest_top', 'chest_side', 'chest_open',
-  'sandstone', 'mossy_cobble', 'ancient_debris_top', 'ancient_debris_side', 'gold_block'];
+  'sandstone', 'mossy_cobble', 'ancient_debris_top', 'ancient_debris_side', 'gold_block', 'brew_top', 'brew_side', 'ench_top', 'ench_side', 'lapis_ore'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -110,6 +110,11 @@ const painters = {
   ancient_debris_top: (x, y) => { const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)); return d > 5.5 ? jitter([92, 66, 58], 8, x, y, 124) : d > 3 ? jitter([126, 92, 80], 8, x, y, 125) : jitter([70, 48, 44], 8, x, y, 126); },
   ancient_debris_side: (x, y) => { const band = y % 5 === 2; return jitter(band ? [70, 48, 44] : [112, 80, 70], 9, x, y, 127); },
   gold_block: (x, y) => { const edge = x < 1 || y < 1 || x > 14 || y > 14, hl = (x === 2 && y < 6) || (y === 2 && x < 6); return hl ? [255, 252, 200] : edge ? jitter([200, 150, 20], 6, x, y, 128) : jitter([250, 214, 60], 10, x, y, 129); },
+  lapis_ore: ore([38, 76, 190], 140),
+  brew_top: (x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 2.2) return [250, 190, 40]; if (d < 4.6) return jitter([70, 70, 74], 6, x, y, 141); return x < 1 || y < 1 || x > 14 || y > 14 ? jitter([40, 40, 44], 6, x, y, 142) : stone(x, y).map((c) => c - 30); },
+  brew_side: (x, y) => { if (y > 11) return stone(x, y).map((c) => c - 25); const rod = x >= 7 && x <= 8; if (rod) return jitter([250, 180, 40], 12, x, y, 143); const bottle = (x >= 2 && x <= 4 && y >= 5) || (x >= 11 && x <= 13 && y >= 5); if (bottle) return [215, 235, 245, 255]; return [0, 0, 0, 0]; },
+  ench_top: (x, y) => { const edge = x < 1 || y < 1 || x > 14 || y > 14; if (edge) return jitter([26, 14, 36], 4, x, y, 144); const gem = Math.hypot(x - 7.5, y - 7.5) < 2.4; return gem ? [80, 230, 220] : jitter([150 + (hash2(x >> 1, y >> 1, 145) > 0.8 ? 25 : 0), 24, 36], 10, x, y, 146); },
+  ench_side: (x, y) => { if (y < 4) return jitter([150, 24, 36], 10, x, y, 147); const gem = (x === 3 || x === 12) && y > 6 && y < 10; return gem ? [90, 235, 225] : jitter([22, 12, 34], 8, x, y, 148); },
   furnace_top: (x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? jitter([70, 70, 70], 8, x, y, 71) : stone(x, y).map((c) => c - 20)),
   furnace_front: (x, y) => {
     const edge = x === 0 || y === 0 || x === 15;

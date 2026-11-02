@@ -23,7 +23,7 @@ export class Player {
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
     this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
-    this.effects = { poison: 0, fatigue: 0, burn: 0, levitate: 0 }; this.poisonT = 0; this.burnT = 0;
+    this.effects = { poison: 0, fatigue: 0, burn: 0, levitate: 0, speed: 0, strength: 0, regen: 0, fire: 0, jump: 0, night: 0 }; this.fallReduce = 0; this.regenFx = 0; this.poisonT = 0; this.burnT = 0;
   }
 
   collides(px, py, pz) {
@@ -51,7 +51,7 @@ export class Player {
   heal(n) { this.hp = Math.min(20, this.hp + n); }
   eat(n) { this.food = Math.min(20, this.food + n); }
   respawn() {
-    this.hp = 20; this.food = 20; this.air = 10; this.dead = false; this.invuln = 2; this.effects.poison = 0; this.effects.fatigue = 0; this.effects.burn = 0; this.effects.levitate = 0;
+    this.hp = 20; this.food = 20; this.air = 10; this.dead = false; this.invuln = 2; this.effects.poison = 0; this.effects.fatigue = 0; this.effects.burn = 0; this.effects.levitate = 0; for (const k of ['speed', 'strength', 'regen', 'fire', 'jump', 'night']) this.effects[k] = 0;
     this.pos.copy(this.spawn); this.vel.set(0, 0, 0); this.fallStart = null;
   }
 
@@ -64,7 +64,7 @@ export class Player {
     const wasWater = this.inWater;
     this.inWater = w.isLiquid(fx, Math.floor(this.pos.y + 0.3), fz);
     this.inLava = w.getBlock(fx, Math.floor(this.pos.y + 0.3), fz) === B.LAVA || w.getBlock(fx, Math.floor(this.pos.y + 1.2), fz) === B.LAVA;
-    if (this.inLava && this.mode === 'survival') { this.effects.burn = Math.max(this.effects.burn, 6); this.damage(4); }
+    if (this.inLava && this.mode === 'survival' && this.effects.fire <= 0) { this.effects.burn = Math.max(this.effects.burn, 6); this.damage(4); }
     const onSoul = w.getBlock(fx, Math.floor(this.pos.y - 0.15), fz) === B.SOUL_SAND;
     this.headUnder = w.isLiquid(fx, Math.floor(this.pos.y + EYE), fz);
     if (this.inWater && !wasWater && this.vel.y < -4 && this.events.onSplash) this.events.onSplash();
@@ -74,6 +74,7 @@ export class Player {
     const strafe = an ? an.x : (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     const sprinting = k.has('ShiftLeft') && fwd > 0 && !(this.mode === 'survival' && this.food <= 6);
     let speed = this.flying ? FLY : (sprinting ? SPRINT : WALK);
+    if (this.effects.speed > 0) speed *= 1.3;
     if (this.inWater && !this.flying) speed *= 0.6;
     if (onSoul && !this.flying) speed *= 0.55;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
@@ -103,7 +104,7 @@ export class Player {
     } else {
       this.vel.y -= GRAVITY * dt;
       if (this.vel.y < -50) this.vel.y = -50;
-      if (k.has('Space') && this.onGround) { this.vel.y = JUMP; this.onGround = false; }
+      if (k.has('Space') && this.onGround) { this.vel.y = JUMP * (this.effects.jump > 0 ? 1.4 : 1); this.onGround = false; }
     }
 
     this.vel.x += this.push.x; this.vel.z += this.push.z; this.vel.y += this.push.y * dt;
@@ -136,7 +137,7 @@ export class Player {
     }
     if (this.onGround && !wasGround && this.fallStart !== null) {
       const dist = this.fallStart - this.pos.y;
-      if (dist > 3 && this.mode === 'survival') this.damage(Math.floor(dist - 3));
+      const fd = Math.floor(dist - 3 - this.fallReduce); if (fd > 0 && this.mode === 'survival') this.damage(fd);
       if (dist > 1.2 && this.events.onLand) this.events.onLand(dist);
       this.fallStart = null;
     }
@@ -150,6 +151,9 @@ export class Player {
 
     // Efectos de estado
     if (this.effects.fatigue > 0) this.effects.fatigue -= dt;
+    for (const k of ['speed', 'strength', 'regen', 'fire', 'jump', 'night']) if (this.effects[k] > 0) this.effects[k] = Math.max(0, this.effects[k] - dt);
+    if (this.effects.regen > 0 && this.mode === 'survival') { this.regenFx += dt; if (this.regenFx >= 1.2) { this.regenFx = 0; this.heal(1); } }
+    if (this.effects.fire > 0) this.effects.burn = 0;
     if (this.effects.burn > 0) {
       if (this.inWater && !this.inLava) this.effects.burn = 0;
       else { this.effects.burn -= dt; this.burnT += dt; if (this.burnT >= 0.8) { this.burnT = 0; if (this.mode === 'survival') this.damage(1); } }

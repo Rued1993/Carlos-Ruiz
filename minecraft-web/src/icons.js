@@ -1,6 +1,6 @@
 // Iconos de bloques (cubo isométrico) e ítems (pixel art) dibujados por código.
 import * as THREE from 'three';
-import { SHAPE, BLOCKS, ITEMS, I, B, TIERS, ARMOR_TIERS, TOOL_TYPES } from './blocks.js';
+import { POTIONS, SHAPE, BLOCKS, ITEMS, I, B, TIERS, ARMOR_TIERS, TOOL_TYPES } from './blocks.js';
 import { TILE_INDEX } from './atlas.js';
 
 let atlasCanvas = null;
@@ -37,6 +37,7 @@ function drawBlock(id) {
 }
 
 const P = (x, id) => x;
+const hash = (x, y) => (((Math.imul(x, 374761393) ^ Math.imul(y, 668265263)) >>> 0) % 1000) / 1000;
 function px(ctx, list, color) { ctx.fillStyle = color; for (const [a, b] of list) ctx.fillRect(a, b, 1, 1); }
 const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const shade = (c, f) => rgb(c.map((v) => Math.max(0, Math.min(255, v * f))));
@@ -47,7 +48,26 @@ function drawItem(id) {
   const stick = '#7a5a30';
   const handle = () => { for (let i = 2; i <= 11; i++) px(x, [[i, 15 - i]], stick); };
   const info = ITEMS[id] || {};
-  if (SHAPE[id] && SHAPE[id].kind === 'fence') {
+  const pot = POTIONS.find((p) => p.id === id);
+  if (pot || id === I.BOTTLE) { // botella: cuello, cuerpo redondo y líquido de color
+    const col = pot ? pot.color : null, glass = '#cfe6f0', rim = '#8aa4b0';
+    px(x, [[6, 1], [7, 1], [8, 1], [9, 1]], '#9a7040'); for (let yy = 2; yy <= 4; yy++) px(x, [[7, yy], [8, yy]], glass); px(x, [[6, 4], [9, 4]], rim);
+    for (let yy = 5; yy <= 13; yy++) for (let xx = 3; xx <= 12; xx++) { const d = Math.hypot(xx - 7.5, yy - 9.2); if (d < 4.6) { const liquid = col && yy >= 7; px(x, [[xx, yy]], liquid ? rgb(col.map((v) => v * (d > 3.6 ? 0.7 : 1))) : (d > 3.8 ? rim : 'rgba(207,230,240,.55)')); } }
+    px(x, [[5, 8], [5, 9], [6, 7]], 'rgba(255,255,255,.8)');
+  } else if (id === I.WART) {
+    for (const [a, b] of [[4, 8], [8, 5], [10, 9], [6, 11], [11, 12], [3, 12]]) { px(x, [[a, b], [a + 1, b], [a, b + 1], [a + 1, b + 1]], '#a8222c'); px(x, [[a, b]], '#d84a50'); }
+  } else if (id === I.BLAZE_POWDER) {
+    for (let yy = 8; yy <= 13; yy++) for (let xx = 3; xx <= 12; xx++) { const d = Math.hypot((xx - 7.5) * 0.8, yy - 11.5); if (d < 3.6 + hash(xx, yy) * 1.2) px(x, [[xx, yy]], (xx + yy) % 3 ? '#ffb020' : '#ff7a10'); }
+    px(x, [[7, 7], [8, 6], [6, 8]], '#ffe070');
+  } else if (id === I.MAGMA_CREAM) {
+    for (let yy = 4; yy <= 13; yy++) for (let xx = 3; xx <= 12; xx++) { const d = Math.hypot(xx - 7.5, (yy - 8.5) * 1.1); if (d < 4.6) px(x, [[xx, yy]], d < 3 ? '#ff8a20' : '#c84a10'); }
+    px(x, [[6, 7], [9, 9], [7, 10]], '#401000'); px(x, [[5, 6], [6, 6]], '#ffd070');
+  } else if (id === I.LAPIS) {
+    for (const [a, b] of [[4, 5], [8, 4], [6, 9], [10, 8], [5, 12], [9, 12]]) { px(x, [[a, b], [a + 1, b], [a, b + 1], [a + 1, b + 1], [a + 2, b + 1]], '#2a4fb8'); px(x, [[a, b]], '#6a90f0'); }
+  } else if (id === I.BOOK) {
+    for (let yy = 2; yy <= 13; yy++) for (let xx = 3; xx <= 12; xx++) px(x, [[xx, yy]], xx === 3 || yy === 2 || yy === 13 ? '#4a2a10' : xx === 4 ? '#7a4a20' : '#e8dcc0');
+    px(x, [[6, 5], [7, 5], [8, 5], [9, 5], [6, 7], [7, 7], [8, 7]], '#6a5a40');
+  } else if (SHAPE[id] && SHAPE[id].kind === 'fence') {
     for (const xx of [3, 11]) for (let yy = 2; yy <= 14; yy++) px(x, [[xx, yy], [xx + 1, yy]], yy % 3 ? '#a8803f' : '#8a6a30');
     for (const yy of [5, 6, 10, 11]) for (let xx = 3; xx <= 12; xx++) px(x, [[xx, yy]], '#b8904a');
   } else if (SHAPE[id] && SHAPE[id].kind === 'door') {

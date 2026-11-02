@@ -157,7 +157,7 @@ export class Sky {
     this.sunLight.color.setRGB(1, 0.95 - 0.38 * low, 0.88 - 0.62 * low); if (!useSun) this.sunLight.color.setRGB(0.55, 0.66, 1);
     this.sunLight.intensity = (useSun ? 3.4 * sunLevel : 0.6 * moonLevel) + flash * 2.5;
     this.hemi.color.copy(this.sky).lerp(WHITE, 0.6); this.hemi.groundColor.setRGB(0.42, 0.36, 0.28).multiplyScalar(0.4 + 0.6 * this.daylight);
-    this.hemi.intensity = 0.3 + 2.5 * this.daylight + 0.3 * moonLevel + flash * 3;
+    this.hemi.intensity = 0.3 + 2.5 * this.daylight + 0.3 * moonLevel + flash * 3 + (this.nv ? 1.7 : 0);
     // la luz sigue al jugador (cuadriculada para evitar parpadeos de sombra)
     const grid = this.shadowOn ? (2 * this.shadowExt) / Math.max(256, this.sunLight.shadow.mapSize.x) : 1;
     const tx = Math.round(playerPos.x / grid) * grid, ty = Math.round(playerPos.y / grid) * grid, tz = Math.round(playerPos.z / grid) * grid;
@@ -166,7 +166,7 @@ export class Sky {
     this.sunLight.castShadow = this.shadowOn && this.sunLight.intensity > 0.05;
     if (this.classic) { // modo clásico: iluminación plana (solo la luz baked por vértice)
       this.sunLight.intensity = 0; this.sunLight.castShadow = false; this.hemi.color.set(0xffffff); this.hemi.groundColor.set(0xffffff);
-      this.hemi.intensity = (0.2 + 0.8 * this.daylight) * 3.1 + flash * 3;
+      this.hemi.intensity = (0.2 + 0.8 * this.daylight) * 3.1 + flash * 3 + (this.nv ? 1.2 : 0);
     }
 
     this.root.position.copy(this.camera.position);
