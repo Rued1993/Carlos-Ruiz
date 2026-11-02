@@ -15,6 +15,7 @@ import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from 
 import { Ambient } from './ambient.js';
 import { ChunkPool } from './chunkpool.js';
 import { Net } from './net.js';
+import { TouchControls } from './touch.js';
 import { Gamepads, PAD_ACTIONS, BTN_NAMES, defaultPadConfig } from './gamepad.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -125,8 +126,11 @@ function applyQuality() {
 }
 
 // ---------- Ajustes (persistentes) ----------
-const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0, quality: 2 };
-try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
+const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0, quality: 2, touch: 'auto' };
+const COARSE = (typeof matchMedia !== 'undefined' && (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window)) || /[?&]touch/.test(location.search);
+let firstRun = true;
+try { const sv = localStorage.getItem('mcweb-settings'); if (sv) { firstRun = false; Object.assign(settings, JSON.parse(sv)); } } catch {}
+if (firstRun && COARSE) { settings.quality = 1; settings.radius = 5; settings.sens = 1.2; } // móvil: ajustes ligeros por defecto
 { const d = defaultPadConfig(); settings.pad = Object.assign(d, settings.pad || {}); settings.pad.map = Object.assign(defaultPadConfig().map, (settings.pad && settings.pad.map) || {}); }
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
 const STORMY = new Set(['storm', 'dragon', 'wither', 'herobrine']);
@@ -315,7 +319,7 @@ function breakBlock(hit) {
   let skipDrop = false;
   { const sh = SHAPE[id]; if (sh && sh.kind === 'door') { const y2 = sh.hi ? hit.y - 1 : hit.y + 1; if (SHAPE[world.getBlock(hit.x, y2, hit.z)] && SHAPE[world.getBlock(hit.x, y2, hit.z)].kind === 'door') world.setBlock(hit.x, y2, hit.z, AIR); if (sh.hi) skipDrop = true; } }
   if (id === B.COAL_ORE || id === B.IRON_ORE || id === B.GOLD_ORE || id === B.DIAMOND_ORE) addXp(id === B.DIAMOND_ORE ? 8 : 3);
-  particles.blockBreak(hit.x, hit.y, hit.z, id);
+  particles.blockBreak(hit.x, hit.y, hit.z, id); buzz(10);
   sound('break');
   if (mode === 'survival') {
     const d = skipDrop ? null : dropOf(id, held);
@@ -1041,7 +1045,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   ui = new UI({ inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect, onCraft: (id, n) => quests.event('craft', id, n), onArmorChange: () => model && model.setArmor(inv.armor) });
   xpLevel = 0; xpPts = 0;
 
-  player.events.onHurt = () => { sound('hurt'); const v = $('vignette'); v.classList.add('hurt'); setTimeout(() => v.classList.remove('hurt'), 120); };
+  player.events.onHurt = () => { buzz(45); sound('hurt'); const v = $('vignette'); v.classList.add('hurt'); setTimeout(() => v.classList.remove('hurt'), 120); };
   player.events.onStep = () => sound('step');
   player.events.onLand = (d) => sound(d > 3 ? 'hurt' : 'place');
   player.events.onSplash = () => sound('splash');
@@ -1075,15 +1079,15 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   window.__game = { get mp() { return mp; }, get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, openChest, rollLoot, get xp() { return [xpLevel, xpPts]; } };
   if (mp) { mpSetup(); for (const p of welcome.players) mpAddRemote(p.id, p.name, p.color); sky.time = welcome.time; chatLine('Conectado · ' + (welcome.players.length + 1) + ' jugador(es). Enter = chat', 'sys'); }
   state = 'play'; showOverlay(null);
-  safeLock();
-  setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play' && !padActive) { state = 'pause'; showOverlay('pause'); } }, 1500);
+  safeLock(); keepAwake();
+  setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play' && !padActive && !touchMode) { state = 'pause'; showOverlay('pause'); } }, 1500);
 }
 
 // ---------- Eventos ----------
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (locked) { if (state === 'pause' || state === 'play') { state = 'play'; showOverlay(null); } }
-  else { player && player.keys.clear(); mouse.left = mouse.right = false; if (state === 'play' && !padActive) { state = 'pause'; showOverlay('pause'); } }
+  else { player && player.keys.clear(); mouse.left = mouse.right = false; if (state === 'play' && !padActive && !touchMode) { state = 'pause'; showOverlay('pause'); } }
 });
 document.addEventListener('mousemove', (e) => {
   if (state !== 'play' || document.pointerLockElement !== canvas) return;
@@ -1126,6 +1130,65 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => player && player.keys.delete(e.code));
 document.addEventListener('wheel', (e) => { if (state === 'play') { inv.selected = (inv.selected + Math.sign(e.deltaY) + 9) % 9; syncSelect(); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+// ---------- Controles táctiles y mejoras para móvil ----------
+let touchMode = settings.touch === 'on' || (settings.touch !== 'off' && COARSE), touchMove = null, touchSprint = false, touchAuto = false, touchUI = null, wakeLock = null, fsTries = 0, lowFpsT = 0;
+const buzz = (ms) => { if (touchMode && navigator.vibrate) try { navigator.vibrate(ms); } catch {} };
+function applyTouchMode() {
+  document.body.classList.toggle('touch', touchMode);
+  document.documentElement.style.setProperty('--hs', Math.max(0.62, Math.min(1, (innerWidth - 330) / 480)));
+  const b = $('bTouch'); if (b) b.textContent = '🖐 Controles táctiles: ' + ({ auto: 'Auto', on: 'Sí', off: 'No' })[settings.touch];
+}
+async function keepAwake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !wakeLock && state !== 'menu') { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch {} }
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches) return;
+  try { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (r && r.then) r.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch {} }).catch(() => {}); } catch {}
+}
+addEventListener('pointerup', (e) => { if (touchMode && e.pointerType === 'touch' && fsTries < 2 && !document.fullscreenElement) { fsTries++; enterFullscreen(); } });
+addEventListener('touchstart', () => { if (!touchMode && settings.touch === 'auto') { touchMode = true; applyTouchMode(); } }, { passive: true, once: true });
+document.addEventListener('contextmenu', (e) => { if (touchMode) e.preventDefault(); });
+addEventListener('resize', applyTouchMode);
+function initTouch() {
+  touchUI = new TouchControls({
+    move: (x, y, m) => { touchMove = m > 0 ? { x, y } : null; touchAuto = m > 0.97 && y > 0.6; },
+    sprint: (on) => { touchSprint = on; },
+    key: (code, on) => { if (!player || state !== 'play') return; if (on) player.keys.add(code); else player.keys.delete(code); },
+    look: (dx, dy) => { if (state !== 'play' || !player) return; player.yaw -= dx * 0.0046 * settings.sens; player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch - dy * 0.0046 * settings.sens)); },
+    attack: (on) => { if (state !== 'play') { mouse.left = false; return; } if (on) pressLeft(); else mouse.left = false; },
+    use: (on) => { if (state !== 'play') { mouse.right = false; return; } if (on) pressRight(); else mouse.right = false; },
+    vibrate: buzz,
+    btn: (n) => {
+      if (n === 'pause') { if (state === 'play') { state = 'pause'; showOverlay('pause'); } }
+      else if (n === 'inv') { if (state === 'play') openInventory(2); }
+      else if (n === 'quests') { if (state === 'play') openPanel('quests'); }
+      else if (n === 'chat') { if (state === 'play' && mp) openPanel('chatp'); }
+      else if (n === 'cam') setCamMode((camMode + 1) % 3);
+      else if (n === 'fly') tap('KeyF');
+      else if (n === 'close') { if (state === 'inv') closeInventory(true); else if (state === 'panel') closePanel(true); }
+    },
+  });
+  applyTouchMode();
+}
+function touchFrame(dt) {
+  if (!touchUI) return;
+  const play = state === 'play' && !!world && !!player;
+  touchUI.update({ visible: touchMode && play, close: touchMode && (state === 'inv' || state === 'panel'), flying: !!(player && player.flying), creative: mode === 'creative', mp: !!mp });
+  if (!touchMode || !play) return;
+  if (touchMove) player.analog = touchMove;
+  setPadKey('ShiftLeft', (touchSprint || touchAuto) && !!touchMove && touchMove.y > 0.3);
+  // si el rendimiento es bajo de forma sostenida, baja el alcance y luego la calidad gráfica
+  lowFpsT = Math.max(0, lowFpsT + (fps > 0 && fps < 22 ? dt : -dt * 0.5));
+  if (lowFpsT > 12 && settings.autoQ !== false) {
+    lowFpsT = 0;
+    if (radius > 5) { radius--; settings.radius = radius; saveSettings(); ui.toast('Rendimiento: distancia de visión ' + radius); const r = $('rRadius'); if (r) { r.value = radius; $('vRadius').textContent = radius; } }
+    else if (settings.quality > 0 && settings.quality < 4) { settings.quality--; saveSettings(); applyQuality(); ui.toast('Rendimiento: gráficos ' + QUALITY[settings.quality].name); }
+  }
+}
+$('bTouch').onclick = () => { settings.touch = settings.touch === 'auto' ? 'on' : settings.touch === 'on' ? 'off' : 'auto'; touchMode = settings.touch === 'on' || (settings.touch !== 'off' && COARSE); saveSettings(); applyTouchMode(); };
+$('bFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else enterFullscreen(); };
+$('chatSend').onclick = () => { sendChat($('chatIn').value); closePanel(true); };
+initTouch();
+
 function pressLeft() { mouse.left = true; swing = swing || 0.001; if (attackCool <= 0) { if (attack()) { attackCool = 0.4; mouse.left = false; } } }
 function pressRight() { mouse.right = true; placeCool = 0.22; useItem(); }
 document.addEventListener('mousedown', (e) => {
@@ -1135,7 +1198,10 @@ document.addEventListener('mousedown', (e) => {
   if (e.button === 0) pressLeft(); else if (e.button === 2) pressRight();
 });
 document.addEventListener('mouseup', (e) => { if (e.button === 0) mouse.left = false; if (e.button === 2) mouse.right = false; });
-document.addEventListener('visibilitychange', () => { if (document.hidden && state !== 'menu') saveGame(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state !== 'menu') { saveGame(); if (state === 'play') { state = 'pause'; showOverlay('pause'); } } // al cambiar de app, el juego se pausa
+  else if (!document.hidden) keepAwake();
+});
 addEventListener('beforeunload', () => { if (world && state !== 'menu') saveGame(); });
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
@@ -1298,7 +1364,7 @@ let last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  padFrame(dt);
+  padFrame(dt); touchFrame(dt);
   if (!world || state === 'menu' || state === 'loading') return;
   fpsAcc += dt; fpsN++; if (fpsAcc >= 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
 

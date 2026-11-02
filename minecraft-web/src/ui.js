@@ -35,6 +35,7 @@ export class UI {
     const inv = $('inv');
     inv.addEventListener('mousedown', (e) => this.onDown(e));
     inv.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.touchRight = false; const tr = $('touchRight'); if (tr) tr.onclick = () => { this.touchRight = !this.touchRight; tr.textContent = this.touchRight ? '☝ Tocar: 1 unidad' : '☝ Tocar: todo'; };
     document.addEventListener('mousemove', (e) => { const c = $('cursorItem'); c.style.left = e.clientX + 'px'; c.style.top = e.clientY + 'px'; });
   }
 
@@ -138,7 +139,7 @@ export class UI {
 
   onDown(e) {
     const el = e.target.closest('.slot');
-    const right = e.button === 2;
+    const right = e.button === 2 || !!this.touchRight; // en táctil, el botón «Tocar» alterna entre coger todo / una unidad
     if (!el || !el.dataset.g) {
       if (this.g.getMode() === 'creative' && e.target.closest('#paletteWrap')) { this.cursor = null; this.render(); }
       else if (!e.target.closest('.panel') && this.cursor) { this.g.dropItem(this.cursor.id, right ? 1 : this.cursor.n); if (right && this.cursor.n > 1) this.cursor.n--; else this.cursor = null; this.render(); }

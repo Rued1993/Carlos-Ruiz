@@ -9,11 +9,11 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="icons/icon-192.png" />
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Minecraft Web</title>
   <style>
     :root { --font: "Courier New", ui-monospace, Menlo, Consolas, monospace; --stone: #7d7d7d; --stone-d: #4a4a4a; --stone-l: #b4b4b4; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: var(--font); font-weight: bold; user-select: none; -webkit-user-select: none; }
+    html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; touch-action: manipulation; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; background: #000; font-family: var(--font); font-weight: bold; user-select: none; -webkit-user-select: none; }
     canvas#game { display: block; width: 100%; height: 100%; }
     .hidden { display: none !important; }
     img { image-rendering: pixelated; }
@@ -169,7 +169,7 @@
   <div id="air"></div>
   <div id="ob" class="hidden"><b id="obPhase"></b> <span id="obCount"></span><div class="obbar"><i id="obFill"></i></div></div>
   <div id="chatLog"></div>
-  <div id="chatp" class="screen hidden"><div class="panel" style="width:min(560px,94vw)"><h3>💬 Chat</h3><input id="chatIn" maxlength="200" placeholder="Escribe y pulsa Enter (Esc para cancelar)" style="font-size:16px;padding:6px" /></div></div>
+  <div id="chatp" class="screen hidden"><div class="panel" style="width:min(560px,94vw)"><h3>💬 Chat</h3><div style="display:flex;gap:6px"><input id="chatIn" maxlength="200" placeholder="Escribe y pulsa Enviar" style="font-size:16px;padding:6px;flex:1" /><button class="btn" id="chatSend" style="width:auto;padding:6px 14px">Enviar</button></div></div></div>
   <div id="hud">
     <div id="bars"><div id="hearts"></div><div id="food"></div></div>
     <div id="xp"><div id="xpFill"></div><span id="xpLvl">0</span></div>
@@ -186,7 +186,7 @@
 
   <div id="inv" class="screen hidden">
     <div class="panel">
-      <h3 id="invTitle">Inventario</h3>
+      <h3 id="invTitle">Inventario <button class="btn" id="touchRight" style="width:auto;padding:4px 10px;font-size:12px;margin-left:8px">☝ Tocar: todo</button></h3>
       <div id="craftArea"><div id="craftGrid" class="grid"></div><span class="arrow">➜</span><div id="craftOut"></div></div>
       <div id="furnaceArea" class="hidden">
         <div class="col"><div id="fIn"></div><div id="fFlameBox"><div id="fFlame"></div></div><div id="fFuel"></div></div>
@@ -285,6 +285,8 @@
       <button class="btn primary" id="bResume">Reanudar</button>
       <button class="btn" id="bCam">Cámara: Primera persona</button>
       <button class="btn" id="bQuality">Gráficos: Alto</button>
+      <button class="btn" id="bTouch">🖐 Controles táctiles: Auto</button>
+      <button class="btn" id="bFull">⛶ Pantalla completa</button>
       <button class="btn" id="bPPad">🎮 Mando (PS4)</button>
       <button class="btn" id="bPSummon">⚔ Invocar jefes (B)</button>
       <button class="btn" id="bPQuests">📜 Misiones (M)</button>
@@ -300,7 +302,7 @@
       <div id="logo"><h1 style="color:#e03030;font-size:56px">HAS MUERTO</h1></div>
       <button class="btn primary" id="bRespawn">Reaparecer</button>
     </div>
-    <div id="ver">Minecraft Web v1.5</div>
+    <div id="ver">Minecraft Web v1.6</div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
