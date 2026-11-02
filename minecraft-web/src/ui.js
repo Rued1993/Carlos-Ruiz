@@ -1,6 +1,7 @@
 // Interfaz: barra rápida, estadísticas, inventario, crafteo y paleta creativa.
 import { iconURL, hudSprites } from './icons.js';
 import { info, BLOCKS, ITEMS, toolOf, maxStack, matchRecipe, isFlat, SMELT_TIME } from './blocks.js';
+const durOf = (item) => toolOf(item) || (ITEMS[item.id] && ITEMS[item.id].armor ? { dur: ITEMS[item.id].armor.dur } : null);
 
 const $ = (id) => document.getElementById(id);
 
@@ -14,7 +15,7 @@ function slotEl(item, opts = {}) {
     d.appendChild(img);
     d.title = info(item.id).name;
     if (item.n > 1) { const n = document.createElement('span'); n.className = 'n'; n.textContent = item.n; d.appendChild(n); }
-    const t = toolOf(item);
+    const t = durOf(item);
     if (t && item.d > 0) {
       const bar = document.createElement('div'); bar.className = 'dur';
       const f = Math.max(0, 1 - item.d / t.dur);
@@ -99,6 +100,9 @@ export class UI {
   }
   render() {
     const g = this.g;
+    const as = $('armorSlots'); as.innerHTML = ''; for (let i = 0; i < 4; i++) as.appendChild(slotEl(g.inv.armor[i], { group: 'armor', index: i }));
+    { const pts = g.inv.armorPoints(); $('armorPts').textContent = 'Defensa ' + pts + ' · ' + Math.round((1 - Math.pow(0.96, pts)) * 100) + '% menos daño'; }
+    $('armorRow').classList.toggle('hidden', !!this.furnace);
     const main = $('invMain'); main.innerHTML = '';
     for (let i = 9; i < 36; i++) main.appendChild(slotEl(g.inv.slots[i], { group: 'inv', index: i }));
     const hot = $('invHot'); hot.innerHTML = '';
@@ -130,7 +134,7 @@ export class UI {
     $('fFlame').style.height = (f.burn > 0 ? Math.min(100, (f.burn / f.burnMax) * 100) : 0) + '%';
     $('fArrow').style.width = Math.min(100, (f.cook / SMELT_TIME) * 100) + '%';
   }
-  arr(group) { return group === 'inv' ? this.g.inv.slots : group === 'furnace' ? this.furnace.slots : this.craft; }
+  arr(group) { return group === 'inv' ? this.g.inv.slots : group === 'armor' ? this.g.inv.armor : group === 'furnace' ? this.furnace.slots : this.craft; }
 
   onDown(e) {
     const el = e.target.closest('.slot');
@@ -150,6 +154,8 @@ export class UI {
       this.g.sound('craft'); if (this.g.onCraft) this.g.onCraft(out.id, out.n); this.render(); return;
     }
     const arr = this.arr(group), slot = arr[i], cur = this.cursor;
+    if (group === 'armor' && cur && !(ITEMS[cur.id] && ITEMS[cur.id].armor && ITEMS[cur.id].armor.slot === i)) return; // cada ranura solo admite su pieza
+    if (group === 'armor' && this.g.onArmorChange) setTimeout(() => this.g.onArmorChange(), 0);
     if (group === 'furnace' && i === 2) { // salida: solo se puede sacar
       if (!slot) return;
       if (!cur) { this.cursor = slot; arr[2] = null; }

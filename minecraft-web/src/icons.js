@@ -1,6 +1,6 @@
 // Iconos de bloques (cubo isométrico) e ítems (pixel art) dibujados por código.
 import * as THREE from 'three';
-import { BLOCKS, ITEMS, I, B, TIERS, TOOL_TYPES } from './blocks.js';
+import { BLOCKS, ITEMS, I, B, TIERS, ARMOR_TIERS, TOOL_TYPES } from './blocks.js';
 import { TILE_INDEX } from './atlas.js';
 
 let atlasCanvas = null;
@@ -37,6 +37,34 @@ function drawItem(id) {
   if (id === B.TORCH) {
     for (let y = 6; y <= 14; y++) px(x, [[7, y], [8, y]], y % 2 ? '#7a5630' : '#6a4a28');
     px(x, [[7, 4], [8, 4], [7, 5], [8, 5]], '#ffc83c'); px(x, [[7, 3], [8, 3]], '#ff9a28'); px(x, [[7, 2]], '#ffeb78');
+  } else if (info.armor) { // armaduras: silueta por pieza, teñida con el color del material
+    const col = ARMOR_TIERS[info.armor.tier].color, base = rgb(col), dk = shade(col, 0.68), lt = shade(col, 1.2);
+    const row = (y, a, b) => { for (let xx = a; xx <= b; xx++) px(x, [[xx, y]], y > 9 ? dk : (xx + y) % 5 === 0 ? lt : base); };
+    if (info.armor.slot === 0) { row(3, 5, 10); row(4, 4, 11); for (const y of [5, 6, 7]) row(y, 3, 12); row(8, 3, 4); row(8, 11, 12); row(9, 3, 4); row(9, 11, 12); }
+    else if (info.armor.slot === 1) { row(3, 2, 5); row(3, 10, 13); row(4, 2, 13); row(5, 2, 4); row(5, 11, 13); row(5, 6, 9); for (let y = 6; y <= 13; y++) { row(y, 4, 11); if (y < 10) { row(y, 2, 3); row(y, 12, 13); } } }
+    else if (info.armor.slot === 2) { for (let y = 3; y <= 6; y++) row(y, 4, 11); for (let y = 7; y <= 13; y++) { row(y, 4, 7); row(y, 8, 11); } }
+    else { for (let y = 8; y <= 12; y++) { row(y, 3, 7); row(y, 9, 13); } row(13, 2, 7); row(13, 9, 14); }
+    if (info.armor.tier === 4) px(x, [[7, 5], [8, 5]], '#8a5ac8');
+  } else if (id === I.DONUT) {
+    for (let yy = 3; yy <= 12; yy++) for (let xx = 3; xx <= 12; xx++) { const d = Math.hypot(xx - 7.5, yy - 7.5); if (d < 5 && d > 1.8) px(x, [[xx, yy]], d > 3.6 ? '#d89a50' : '#ff7ab0'); }
+    px(x, [[5, 5], [9, 4], [10, 8], [6, 10], [4, 8], [8, 11]], '#fff'); px(x, [[7, 4], [11, 7], [5, 7]], '#4ac0ff');
+  } else if (id === I.DUFF) {
+    for (let yy = 3; yy <= 13; yy++) for (let xx = 5; xx <= 10; xx++) px(x, [[xx, yy]], yy < 4 || yy > 12 ? '#b8b8b8' : yy >= 7 && yy <= 9 ? '#f4f4f4' : '#1a5fc0');
+    px(x, [[6, 8], [7, 8], [9, 8]], '#d02020');
+  } else if (id === I.SENZU) {
+    for (let yy = 3; yy <= 12; yy++) for (let xx = 4; xx <= 11; xx++) { const d = Math.hypot((xx - 7.5) * 1.25 + (yy - 7.5) * 0.4, (yy - 7.5) * 0.9); if (d < 4.2) px(x, [[xx, yy]], d < 2 ? '#8ae860' : '#4fb830'); }
+    px(x, [[6, 5], [7, 5]], '#d8ffb0');
+  } else if (id === I.DBALL) {
+    for (let yy = 2; yy <= 13; yy++) for (let xx = 2; xx <= 13; xx++) { const d = Math.hypot(xx - 7.5, yy - 7.5); if (d < 5.6) px(x, [[xx, yy]], d < 3.2 ? '#ffb020' : '#e07808'); }
+    px(x, [[7, 6], [8, 6], [6, 7], [9, 7], [7, 9], [8, 9]], '#d02010'); px(x, [[7, 7], [8, 7], [7, 8], [8, 8]], '#fff0a0'); px(x, [[5, 4], [6, 4]], '#fff0c0');
+  } else if (id === I.NETHERITE) {
+    for (let yy = 5; yy <= 10; yy++) for (let xx = 3; xx <= 12; xx++) px(x, [[xx, yy]], yy >= 9 ? '#2a2228' : (xx + yy) % 4 === 0 ? '#6a5a66' : '#4e444c');
+    px(x, [[5, 6], [6, 6], [10, 8]], '#c8a850');
+  } else if (id === I.SCRAP) {
+    px(x, [[6, 5], [7, 5], [8, 5], [5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [5, 7], [6, 7], [7, 7], [8, 7], [9, 7], [10, 7], [6, 8], [7, 8], [8, 8], [9, 8], [7, 9], [8, 9]], '#4a3a40'); px(x, [[6, 6], [7, 6]], '#8a7480');
+  } else if (id === I.LEATHER) {
+    for (let yy = 4; yy <= 11; yy++) for (let xx = 3; xx <= 12; xx++) px(x, [[xx, yy]], (xx + yy) % 3 === 0 ? '#a8683a' : '#8a5230');
+    px(x, [[3, 4], [12, 4], [3, 11], [12, 11]], 'rgba(0,0,0,0)'); px(x, [[5, 7], [7, 7], [9, 7]], '#d8b080');
   } else if (info.tool) {
     const col = TIERS[info.tool.tier].color, dark = shade(col, 0.7), light = rgb(col);
     handle();

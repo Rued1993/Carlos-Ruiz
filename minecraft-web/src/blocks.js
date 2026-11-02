@@ -8,8 +8,10 @@ export const B = {
   OBSIDIAN: 23, NETHER_PORTAL: 24, NETHERRACK: 25, SOUL_SAND: 26, GLOWSTONE: 27, LAVA: 28, NETHER_BRICKS: 29,
   END_STONE: 30, END_FRAME: 31, END_FRAME_EYE: 32, END_PORTAL: 33,
   PURPUR: 34, END_BRICKS: 35, CHEST: 36, CHEST_OPEN: 37,
+  SANDSTONE: 38, MOSSY_COBBLE: 39, ANCIENT_DEBRIS: 40, GOLD_BLOCK: 41,
 };
-export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, ELYTRA: 109, CHICKEN: 155, COOKED_CHICKEN: 156 };
+export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, ELYTRA: 109,
+  DONUT: 160, DUFF: 161, SENZU: 162, DBALL: 163, NETHERITE: 170, SCRAP: 171, LEATHER: 172, CHICKEN: 155, COOKED_CHICKEN: 156 };
 
 export const BLOCKS = {};
 function block(id, name, tiles, hardness, tool = null, lvl = 0, extra = {}) {
@@ -52,6 +54,10 @@ block(B.PURPUR, 'Purpur', ['purpur', 'purpur', 'purpur'], 1.5, 'pick', 1);
 block(B.END_BRICKS, 'Ladrillos del End', ['end_bricks', 'end_bricks', 'end_bricks'], 2, 'pick', 1);
 block(B.CHEST, 'Cofre', ['chest_top', 'chest_top', 'chest_side'], 2.5, 'axe');
 block(B.CHEST_OPEN, 'Cofre abierto', ['chest_open', 'chest_top', 'chest_side'], 2.5, 'axe');
+block(B.SANDSTONE, 'Arenisca', ['sandstone', 'sandstone', 'sandstone'], 0.8, 'pick', 1);
+block(B.MOSSY_COBBLE, 'Adoquín musgoso', ['mossy_cobble', 'mossy_cobble', 'mossy_cobble'], 2, 'pick', 1);
+block(B.ANCIENT_DEBRIS, 'Restos antiguos', ['ancient_debris_top', 'ancient_debris_top', 'ancient_debris_side'], 30, 'pick', 4);
+block(B.GOLD_BLOCK, 'Bloque de oro', ['gold_block', 'gold_block', 'gold_block'], 3, 'pick', 3);
 block(B.FURNACE, 'Horno', ['furnace_top', 'stone', 'furnace_front'], 3, 'pick', 1);
 
 // Tablas rápidas por id
@@ -81,6 +87,13 @@ item(I.PEARL, 'Perla de Ender');
 item(I.LIGHTER, 'Encendedor', { stack: 1, uses: 64 });
 item(I.EYE, 'Ojo de Ender');
 item(I.ELYTRA, 'Élitros', { stack: 1 });
+item(I.DONUT, 'Dona rosquilla', { food: 12 });
+item(I.DUFF, 'Cerveza Duff', { food: 5 });
+item(I.SENZU, 'Semilla del ermitaño', { food: 20, heal: true });
+item(I.DBALL, 'Esfera del dragón', { stack: 7 });
+item(I.NETHERITE, 'Lingote de netherita');
+item(I.SCRAP, 'Fragmento de netherita');
+item(I.LEATHER, 'Cuero');
 item(I.CHICKEN, 'Pollo crudo', { food: 4 });
 item(I.COOKED_CHICKEN, 'Pollo asado', { food: 12 });
 item(I.APPLE, 'Manzana', { food: 8 });
@@ -90,11 +103,28 @@ item(I.COOKED_PORK, 'Cerdo asado', { food: 14 });
 item(I.STEAK, 'Filete', { food: 16 });
 
 export const TIERS = [
-  { n: 'de madera', color: [176, 140, 84], speed: 2, dur: 59, lvl: 1, mat: B.PLANKS },
-  { n: 'de piedra', color: [140, 140, 140], speed: 4, dur: 131, lvl: 2, mat: B.COBBLE },
-  { n: 'de hierro', color: [225, 225, 225], speed: 6, dur: 250, lvl: 3, mat: I.IRON },
-  { n: 'de diamante', color: [90, 235, 225], speed: 8, dur: 1561, lvl: 4, mat: I.DIAMOND },
+  { n: 'de madera', color: [176, 140, 84], speed: 2, dur: 59, lvl: 1, mat: B.PLANKS, dmgB: 0 },
+  { n: 'de piedra', color: [140, 140, 140], speed: 4, dur: 131, lvl: 2, mat: B.COBBLE, dmgB: 1 },
+  { n: 'de hierro', color: [225, 225, 225], speed: 6, dur: 250, lvl: 3, mat: I.IRON, dmgB: 2 },
+  { n: 'de diamante', color: [90, 235, 225], speed: 8, dur: 1561, lvl: 4, mat: I.DIAMOND, dmgB: 3 },
+  { n: 'de oro', color: [250, 215, 60], speed: 12, dur: 32, lvl: 1, mat: I.GOLD, dmgB: 0 },          // rápido pero frágil, como en Minecraft
+  { n: 'de netherita', color: [78, 68, 76], speed: 9, dur: 2031, lvl: 5, mat: I.NETHERITE, dmgB: 4 }, // la mejor: se mejora desde diamante
 ];
+// Armaduras: puntos por pieza [casco, peto, grebas, botas], durabilidad base y material
+export const ARMOR_TIERS = [
+  { n: 'de cuero', color: [160, 100, 60], pts: [1, 3, 2, 1], dur: 80, mat: I.LEATHER },
+  { n: 'de oro', color: [250, 215, 60], pts: [2, 5, 3, 1], dur: 90, mat: I.GOLD },
+  { n: 'de hierro', color: [225, 225, 225], pts: [2, 6, 5, 2], dur: 240, mat: I.IRON },
+  { n: 'de diamante', color: [90, 235, 225], pts: [3, 8, 6, 3], dur: 528, mat: I.DIAMOND },
+  { n: 'de netherita', color: [78, 68, 76], pts: [4, 9, 7, 4], dur: 592, mat: I.NETHERITE },
+];
+export const ARMOR_TYPES = [
+  { t: 'head', name: 'Casco', rows: ['MMM', 'M M'], dm: 1 },
+  { t: 'chest', name: 'Peto', rows: ['M M', 'MMM', 'MMM'], dm: 1.45 },
+  { t: 'legs', name: 'Grebas', rows: ['MMM', 'M M', 'M M'], dm: 1.35 },
+  { t: 'feet', name: 'Botas', rows: ['M M', 'M M'], dm: 1.15 },
+];
+export const armorId = (type, tier) => 200 + type * 10 + tier;
 export const TOOL_TYPES = [
   { t: 'pick', name: 'Pico', base: 110, dmg: 2, rows: ['MMM', ' S ', ' S '] },
   { t: 'axe', name: 'Hacha', base: 120, dmg: 3, rows: ['MM', 'MS', ' S'] },
@@ -107,9 +137,17 @@ function recipe(rows, key, out, n = 1) { RECIPES.push({ pattern: rows, key, out,
 
 TOOL_TYPES.forEach((tt) => TIERS.forEach((tier, ti) => {
   const id = tt.base + ti;
-  item(id, `${tt.name} ${tier.n}`, { stack: 1, tool: { type: tt.t, tier: ti, speed: tier.speed, dur: tier.dur, lvl: tier.lvl, dmg: tt.dmg + ti }, color: tier.color });
-  recipe(tt.rows, { M: tier.mat, S: I.STICK }, id);
+  item(id, `${tt.name} ${tier.n}`, { stack: 1, tool: { type: tt.t, tier: ti, speed: tier.speed, dur: tier.dur, lvl: tier.lvl, dmg: tt.dmg + tier.dmgB }, color: tier.color });
+  if (ti === 5) recipe(['T', 'N'], { T: tt.base + 3, N: I.NETHERITE }, id); // netherita = herramienta de diamante + lingote
+  else recipe(tt.rows, { M: tier.mat, S: I.STICK }, id);
 }));
+ARMOR_TYPES.forEach((at, ai) => ARMOR_TIERS.forEach((tier, ti) => {
+  const id = armorId(ai, ti);
+  item(id, `${at.name} ${tier.n}`, { stack: 1, armor: { slot: ai, pts: tier.pts[ai], tier: ti, dur: Math.round(tier.dur * at.dm) }, color: tier.color });
+  if (ti === 4) recipe(['A', 'N'], { A: armorId(ai, 3), N: I.NETHERITE }, id);
+  else recipe(at.rows, { M: tier.mat }, id);
+}));
+recipe(['SG', 'GS'], { S: I.SCRAP, G: I.GOLD }, I.NETHERITE);
 recipe(['L'], { L: B.LOG }, B.PLANKS, 4);
 recipe(['P', 'P'], { P: B.PLANKS }, I.STICK, 4);
 recipe(['PP', 'PP'], { P: B.PLANKS }, B.TABLE);
@@ -126,7 +164,7 @@ recipe(['DGD', 'GCG', 'DGD'], { D: I.DIAMOND, G: I.GOLD, C: I.COAL }, B.COMMAND)
 // Fundición: entrada -> [salida, cantidad]; combustible -> segundos de llama
 export const SMELT = {
   [B.IRON_ORE]: [I.IRON, 1], [B.GOLD_ORE]: [I.GOLD, 1], [B.COBBLE]: [B.STONE, 1], [B.SAND]: [B.GLASS, 1],
-  [B.LOG]: [I.COAL, 1], [I.PORK]: [I.COOKED_PORK, 1], [I.BEEF]: [I.STEAK, 1], [I.CHICKEN]: [I.COOKED_CHICKEN, 1],
+  [B.LOG]: [I.COAL, 1], [I.PORK]: [I.COOKED_PORK, 1], [I.BEEF]: [I.STEAK, 1], [I.CHICKEN]: [I.COOKED_CHICKEN, 1], [B.ANCIENT_DEBRIS]: [I.SCRAP, 1],
 };
 export const FUEL = { [I.COAL]: 80, [B.LOG]: 15, [B.PLANKS]: 15, [B.TABLE]: 15, [I.STICK]: 5 };
 export const SMELT_TIME = 8;
@@ -190,6 +228,7 @@ export function dropOf(blockId, slot) {
     case B.DIAMOND_ORE: return [I.DIAMOND, 1];
     case B.LEAVES: return Math.random() < 0.1 ? [I.APPLE, 1] : null;
     case B.CHEST_OPEN: return [B.CHEST, 1];
+    case B.GOLD_BLOCK: return [I.GOLD, 9];
     case B.GLASS: case B.WATER: case B.LAVA: case B.NETHER_PORTAL: case B.END_PORTAL: case B.END_FRAME: case B.END_FRAME_EYE: return null;
     default: return [blockId, 1];
   }

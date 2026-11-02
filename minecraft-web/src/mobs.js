@@ -38,7 +38,7 @@ export const MOB_TYPES = {
       part(g, 0.08, 0.15, 0.08, 0xdddddd, -0.22, 1.45, 0.75); part(g, 0.08, 0.15, 0.08, 0xdddddd, 0.22, 1.45, 0.75);
       o.legs = [[-0.22, 0.45], [0.22, 0.45], [-0.22, -0.45], [0.22, -0.45]].map(([x, z]) => limb(g, 0.24, 0.6, 0.24, 0x3d2c1e, x, 0.6, z));
     },
-    drops: () => [[I.BEEF, 1 + Math.floor(Math.random() * 3)]],
+    drops: () => [[I.BEEF, 1 + Math.floor(Math.random() * 3)], ...(Math.random() < 0.7 ? [[I.LEATHER, 1 + Math.floor(Math.random() * 2)]] : [])],
   },
   sheep: {
     hw: 0.42, h: 1.2, hp: 8, speed: 1.2, hostile: false, name: 'Oveja', xp: 1,

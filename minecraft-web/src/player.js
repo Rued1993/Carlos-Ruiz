@@ -18,8 +18,8 @@ export class Player {
     this.fallStart = null; this.foodTimer = 0; this.regenTimer = 0; this.airTimer = 0; this.starveTimer = 0;
     this.invuln = 0; this.dead = false;
     this.stepDist = 0;
-    this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null, onVoid: null };
-    this.inLava = false; this.analog = null; this.canGlide = false; this.gliding = false; this.prevSpace = false;
+    this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null, onVoid: null, onArmor: null };
+    this.armorPts = 0; this.inLava = false; this.analog = null; this.canGlide = false; this.gliding = false; this.prevSpace = false;
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
     this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
@@ -46,6 +46,7 @@ export class Player {
 
   damage(n, kx = 0, kz = 0) {
     if (this.mode === 'creative' || this.dead || this.invuln > 0) return;
+    if (this.armorPts > 0) { n *= Math.pow(0.96, this.armorPts); if (n > 0.3 && this.events.onArmor) this.events.onArmor(); } // la armadura absorbe daño y se desgasta
     this.hp = Math.max(0, this.hp - n);
     this.invuln = 0.5;
     this.vel.x += kx; this.vel.z += kz; if (kx || kz) this.vel.y = Math.max(this.vel.y, 5);

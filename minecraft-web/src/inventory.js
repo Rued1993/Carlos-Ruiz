@@ -1,7 +1,7 @@
-import { maxStack, toolOf } from './blocks.js';
+import { maxStack, toolOf, ITEMS } from './blocks.js';
 
 export class Inventory {
-  constructor() { this.slots = Array(36).fill(null); this.selected = 0; } // 0-8 = barra rápida
+  constructor() { this.slots = Array(36).fill(null); this.selected = 0; this.armor = [null, null, null, null]; } // 0-8 = barra rápida; armor: casco, peto, grebas, botas
   held() { return this.slots[this.selected]; }
 
   // Devuelve lo que no cupo
@@ -29,6 +29,11 @@ export class Inventory {
     if (s.d >= t.dur) { this.slots[this.selected] = null; return true; }
     return false;
   }
-  toJSON() { return { slots: this.slots, selected: this.selected }; }
-  load(o) { if (o) { this.slots = o.slots; this.selected = o.selected || 0; } }
+  count(id) { let n = 0; for (const s of this.slots) if (s && s.id === id) n += s.n; return n; }
+  take(id, n) { for (let i = 0; i < 36 && n > 0; i++) { const s = this.slots[i]; if (s && s.id === id) { const t = Math.min(n, s.n); s.n -= t; n -= t; if (s.n <= 0) this.slots[i] = null; } } return n === 0; }
+  armorPoints() { let p = 0; for (const a of this.armor) if (a && ITEMS[a.id] && ITEMS[a.id].armor) p += ITEMS[a.id].armor.pts; return p; }
+  // Cada golpe recibido desgasta cada pieza; devuelve las ranuras que se han roto
+  wearArmor(n = 1) { const broken = []; this.armor.forEach((a, i) => { if (!a) return; a.d = (a.d || 0) + n; if (a.d >= ITEMS[a.id].armor.dur) { this.armor[i] = null; broken.push(i); } }); return broken; }
+  toJSON() { return { slots: this.slots, selected: this.selected, armor: this.armor }; }
+  load(o) { if (o) { this.slots = o.slots; this.selected = o.selected || 0; this.armor = o.armor || [null, null, null, null]; } }
 }

@@ -7,7 +7,8 @@ const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', '
   'water', 'glass', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'bedrock', 'snow', 'snow_side',
   'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command',
   'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal',
-  'purpur', 'end_bricks', 'chest_top', 'chest_side', 'chest_open'];
+  'purpur', 'end_bricks', 'chest_top', 'chest_side', 'chest_open',
+  'sandstone', 'mossy_cobble', 'ancient_debris_top', 'ancient_debris_side', 'gold_block'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -104,6 +105,11 @@ const painters = {
   chest_top: (x, y) => { const edge = x < 1 || y < 1 || x > 14 || y > 14; return edge ? jitter([80, 52, 20], 6, x, y, 113) : jitter([160, 112, 50], 10, x, y, 114); },
   chest_side: (x, y) => { const latch = x >= 7 && x <= 8 && y >= 5 && y <= 8; if (latch) return [214, 214, 214]; if (y === 6 || y === 7) return jitter([96, 62, 24], 6, x, y, 115); const edge = x < 1 || x > 14 || y > 14; return edge ? jitter([80, 52, 20], 6, x, y, 116) : jitter([160, 112, 50], 10, x, y, 117); },
   chest_open: (x, y) => { const edge = x < 2 || y < 2 || x > 13 || y > 13; return edge ? jitter([120, 82, 34], 8, x, y, 118) : jitter([30, 18, 10], 8, x, y, 119); },
+  sandstone: (x, y) => { const band = y % 5 === 4; return jitter(band ? [196, 178, 120] : [216, 200, 140], 9, x, y, 120); },
+  mossy_cobble: (x, y) => { const cell = hash2(Math.floor(x / 4), Math.floor(y / 4), 121), edge = x % 4 === 3 || y % 4 === 3, moss = hash2(x >> 1, y >> 1, 122) > 0.55; return moss ? jitter([70, 120, 50], 14, x, y, 123).map((c) => (edge ? c - 25 : c)) : jitter([110 + cell * 40, 110 + cell * 40, 110 + cell * 40], 10, x, y, 11).map((c) => (edge ? c - 35 : c)); },
+  ancient_debris_top: (x, y) => { const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)); return d > 5.5 ? jitter([92, 66, 58], 8, x, y, 124) : d > 3 ? jitter([126, 92, 80], 8, x, y, 125) : jitter([70, 48, 44], 8, x, y, 126); },
+  ancient_debris_side: (x, y) => { const band = y % 5 === 2; return jitter(band ? [70, 48, 44] : [112, 80, 70], 9, x, y, 127); },
+  gold_block: (x, y) => { const edge = x < 1 || y < 1 || x > 14 || y > 14, hl = (x === 2 && y < 6) || (y === 2 && x < 6); return hl ? [255, 252, 200] : edge ? jitter([200, 150, 20], 6, x, y, 128) : jitter([250, 214, 60], 10, x, y, 129); },
   furnace_top: (x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? jitter([70, 70, 70], 8, x, y, 71) : stone(x, y).map((c) => c - 20)),
   furnace_front: (x, y) => {
     const edge = x === 0 || y === 0 || x === 15;

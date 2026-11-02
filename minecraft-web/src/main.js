@@ -22,6 +22,7 @@ import { MobManager, MOB_TYPES } from './mobs.js';
 import { UI } from './ui.js';
 import * as audio from './audio.js';
 import * as save from './save.js';
+import { armorId, ARMOR_TIERS } from './blocks.js';
 import { B, I, AIR, BLOCKS, ITEMS, LIQUID, SOLID, SMELT, FUEL, SMELT_TIME, info, isBlock, isFlat, maxStack, toolOf, breakTime, dropOf } from './blocks.js';
 
 const $ = (id) => document.getElementById(id);
@@ -282,9 +283,15 @@ function useItem() {
   const held = inv.held();
   if (!held) return;
   if (held.id === I.LIGHTER) { if (hit) lightPortal(hit); return; }
+  if (ITEMS[held.id] && ITEMS[held.id].armor) { // equipar armadura con clic derecho (intercambia con la pieza puesta)
+    const a = ITEMS[held.id].armor, cur = inv.armor[a.slot];
+    inv.armor[a.slot] = { ...held }; inv.slots[inv.selected] = cur ? { ...cur } : null; sound('craft'); ui.renderHotbar(); model.setArmor(inv.armor); ui.toast('Equipado: ' + ITEMS[held.id].name); return;
+  }
+  if (held.id === I.DBALL) { dragonWish(); return; }
   const food = ITEMS[held.id] && ITEMS[held.id].food;
   if (food) {
-    if (mode === 'survival' && player.food < 20) { player.eat(food); inv.consumeHeld(1); sound('eat'); ui.renderHotbar(); }
+    const heal = ITEMS[held.id].heal;
+    if (mode === 'survival' && (player.food < 20 || (heal && player.hp < 20))) { player.eat(food); if (heal) { player.hp = 20; particles.burst(player.pos.x, player.pos.y + 1, player.pos.z, [0.5, 1, 0.4], 18, 4); } inv.consumeHeld(1); sound('eat'); ui.renderHotbar(); }
     return;
   }
   if (!isBlock(held.id) || !hit) return;
@@ -446,10 +453,41 @@ function findPortalFrame(px, py, pz) {
 // Cofres de fortalezas y ciudades: botín único
 function rollLoot(hit) {
   const out = [], r = Math.random, add = (id, a, b, p = 1) => { if (r() < p) out.push([id, a + Math.floor(r() * (b - a + 1))]); };
-  if (dim === 'nether') { add(I.GOLD, 2, 8); add(I.IRON, 1, 5, 0.7); add(I.DIAMOND, 1, 2, 0.3); add(B.OBSIDIAN, 2, 4, 0.4); add(I.COAL, 3, 8, 0.6); add(I.EYE, 1, 1, 0.15); add(I.COOKED_PORK, 2, 4, 0.4); }
-  else if (dim === 'end') { add(I.DIAMOND, 2, 6, 0.7); add(I.GOLD, 3, 9); add(I.IRON, 2, 6, 0.8); add(I.PEARL, 1, 3, 0.5); add(I.EYE, 1, 2, 0.3); add(B.PURPUR, 6, 16, 0.7); if (world.getBlock(hit.x, hit.y - 1, hit.z) === B.END_BRICKS) out.push([I.ELYTRA, 1]); else add(I.ELYTRA, 1, 1, 0.06); }
-  else { add(I.GOLD, 1, 4); add(I.IRON, 1, 4); add(I.COAL, 2, 6); }
+  const gear = (tiers, p) => { if (r() < p) out.push([armorId(Math.floor(r() * 4), tiers[Math.floor(r() * tiers.length)]), 1]); };
+  if (r() < 0.07) out.push([I.DBALL, 1]);
+  if (dim === 'nether') { add(I.GOLD, 2, 8); add(I.IRON, 1, 5, 0.7); add(I.DIAMOND, 1, 2, 0.3); add(B.OBSIDIAN, 2, 4, 0.4); add(I.COAL, 3, 8, 0.6); add(I.EYE, 1, 1, 0.15); add(I.COOKED_PORK, 2, 4, 0.4); gear([1, 2], 0.5); if (r() < 0.12) out.push([I.SCRAP, 1]); }
+  else if (dim === 'end') { gear([2, 3], 0.55); add(I.DIAMOND, 2, 6, 0.7); add(I.GOLD, 3, 9); add(I.IRON, 2, 6, 0.8); add(I.PEARL, 1, 3, 0.5); add(I.EYE, 1, 2, 0.3); add(B.PURPUR, 6, 16, 0.7); if (world.getBlock(hit.x, hit.y - 1, hit.z) === B.END_BRICKS) out.push([I.ELYTRA, 1]); else add(I.ELYTRA, 1, 1, 0.06); }
+  else { add(I.GOLD, 1, 4); add(I.IRON, 1, 4); add(I.COAL, 2, 6); gear([0, 1, 2], 0.4); add(I.DONUT, 1, 3, 0.3); add(B.GOLD_BLOCK, 1, 1, 0.1); }
   return out;
+}
+// Las 7 esferas del dragón invocan a Shenlong y conceden un deseo
+const fxList = [];
+function dragonWish() {
+  if (inv.count(I.DBALL) < 7) { ui.toast('Necesitas las 7 esferas del dragón (' + inv.count(I.DBALL) + '/7)'); return; }
+  inv.take(I.DBALL, 7); sound('roar'); sound('thunder');
+  for (let i = 0; i < 3; i++) setTimeout(() => weather.strike(player, false, { x: player.pos.x + (Math.random() - 0.5) * 20, z: player.pos.z + (Math.random() - 0.5) * 20 }), i * 500);
+  const g = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: 0x3cc850 }), belly = new THREE.MeshBasicMaterial({ color: 0xe8e060 });
+  const segs = []; for (let i = 0; i < 34; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.5 - i * 0.025, 1.5 - i * 0.025, 1.5 - i * 0.025), i % 3 ? mat : belly); g.add(m); segs.push(m); }
+  const head = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 3.4), mat); const eye = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+  for (const x of [-0.9, 0.9]) { const e = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.3), eye); e.position.set(x, 0.4, 1.7); head.add(e); const h = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.8, 0.3), mat); h.position.set(x * 1.2, 1.6, -0.4); head.add(h); }
+  g.add(head); scene.add(g);
+  fxList.push({ g, segs, head, t: 0, life: 8, x: player.pos.x, y: player.pos.y, z: player.pos.z });
+  ui.toast('¡Sal, Shenlong! Pide tu deseo…');
+  setTimeout(() => {
+    inv.add(I.DIAMOND, 32); inv.add(I.SENZU, 5); inv.add(I.NETHERITE, 4); inv.add(I.ELYTRA, 1);
+    player.hp = 20; player.food = 20; addXp(250); ui.renderHotbar(); ui.toast('¡Deseo concedido! Vida completa, 32 diamantes, 4 netherita, élitros y 5 semillas');
+  }, 3500);
+}
+function updateFx(dt) {
+  for (let i = fxList.length - 1; i >= 0; i--) {
+    const f = fxList[i]; f.t += dt;
+    const rise = Math.min(1, f.t / 2) * Math.min(1, (f.life - f.t) / 2);
+    f.segs.forEach((m, k) => { const a = f.t * 0.9 + k * 0.32, r = 4 + k * 0.12; m.position.set(f.x + Math.cos(a) * r, f.y + k * 1.1 * rise - 2, f.z + Math.sin(a) * r); });
+    const k = f.segs.length - 1, a = f.t * 0.9 + k * 0.32;
+    f.head.position.set(f.x + Math.cos(a) * (4 + k * 0.12), f.y + (k + 1.5) * 1.1 * rise - 2, f.z + Math.sin(a) * (4 + k * 0.12)); f.head.rotation.y = -a + Math.PI;
+    f.g.visible = rise > 0.02;
+    if (f.t >= f.life) { scene.remove(f.g); fxList.splice(i, 1); }
+  }
 }
 function openChest(hit) {
   world.setBlock(hit.x, hit.y, hit.z, B.CHEST_OPEN); sound('craft');
@@ -815,7 +853,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
     explode, drop: (x, y, z, id, n) => drops.spawn(x, y, z, id, n), sound,
     puff: (x, y, z) => particles.burst(x, y, z, [0.9, 0.9, 0.9], 12, 3),
   });
-  ui = new UI({ inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect, onCraft: (id, n) => quests.event('craft', id, n) });
+  ui = new UI({ inv, player, getMode: () => mode, dropItem, sound, onSelect: syncSelect, onCraft: (id, n) => quests.event('craft', id, n), onArmorChange: () => model && model.setArmor(inv.armor) });
   xpLevel = 0; xpPts = 0;
 
   player.events.onHurt = () => { sound('hurt'); const v = $('vignette'); v.classList.add('hurt'); setTimeout(() => v.classList.remove('hurt'), 120); };
@@ -823,6 +861,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   player.events.onLand = (d) => sound(d > 3 ? 'hurt' : 'place');
   player.events.onSplash = () => sound('splash');
   player.events.onDeath = onDeath;
+  player.events.onArmor = () => { const br = inv.wearArmor(1); if (br.length) ui.toast('¡Se ha roto una pieza de tu armadura!'); if (ui.isOpen) ui.render(); };
   player.events.onVoid = () => { if (dim === 'end') { player.damage(6); const ty = world.topY(0, 30); player.pos.set(0.5, (ty > 0 ? ty : 64) + 1, 30.5); player.vel.set(0, 0, 0); ui.toast('Caíste al vacío…'); } else { player.pos.y = 70; player.vel.set(0, 0, 0); player.damage(4); } };
   mobs.dim = dim;
 
@@ -1074,7 +1113,7 @@ function frame(now) {
   fpsAcc += dt; fpsN++; if (fpsAcc >= 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
 
   if (state !== 'pause') {
-    { const hd = inv.held(); player.canGlide = !!(hd && hd.id === I.ELYTRA); }
+    { const hd = inv.held(); player.canGlide = !!(hd && hd.id === I.ELYTRA); player.armorPts = inv.armorPoints(); model.setArmor(inv.armor); updateFx(dt); }
     player.update(dt);
     model.update(dt, player, swing);
     applyCamera();

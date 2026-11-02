@@ -1,6 +1,7 @@
 // Modelo del jugador (visible en tercera persona), con animación de caminar y golpear.
 import * as THREE from 'three';
 import { iconTexture } from './icons.js';
+import { ITEMS, ARMOR_TIERS } from './blocks.js';
 
 const lam = (c, map) => new THREE.MeshLambertMaterial(map ? { color: c, map } : { color: c });
 function tex(draw) {
@@ -45,10 +46,30 @@ export class PlayerModel {
     this.item = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), this.itemMat);
     this.item.position.set(0, -0.68, 0.22); this.item.rotation.set(0, 0, 0.0); this.armR.add(this.item);
     this.item.visible = false; this.heldId = -1;
+    // Armadura: capas ligeramente más grandes que el cuerpo, teñidas con el color del material
+    const am = () => new THREE.MeshLambertMaterial({ color: 0xffffff });
+    this.armorMats = [am(), am(), am(), am()];
+    const ov = (w, h, d, mat, parent, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.visible = false; parent.add(m); return m; };
+    this.armorMeshes = [
+      [ov(0.58, 0.58, 0.58, this.armorMats[0], this.head, 0, 0.25, 0)],
+      [ov(0.56, 0.78, 0.31, this.armorMats[1], g, 0, 1.125, 0), ov(0.26, 0.5, 0.26, this.armorMats[1], this.armL, 0, -0.2, 0), ov(0.26, 0.5, 0.26, this.armorMats[1], this.armR, 0, -0.2, 0)],
+      [ov(0.52, 0.28, 0.3, this.armorMats[2], g, 0, 0.78, 0), ov(0.28, 0.5, 0.28, this.armorMats[2], this.legL, 0, -0.25, 0), ov(0.28, 0.5, 0.28, this.armorMats[2], this.legR, 0, -0.25, 0)],
+      [ov(0.29, 0.28, 0.31, this.armorMats[3], this.legL, 0, -0.61, 0.01), ov(0.29, 0.28, 0.31, this.armorMats[3], this.legR, 0, -0.61, 0.01)],
+    ];
+    this.armorKey = '';
     this.t = 0;
     scene.add(this.group);
     this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.group.visible = false;
+  }
+  setArmor(armor) {
+    const key = armor.map((a) => (a ? a.id : 0)).join(',');
+    if (key === this.armorKey) return; this.armorKey = key;
+    armor.forEach((a, i) => {
+      const it = a && ITEMS[a.id] && ITEMS[a.id].armor;
+      for (const m of this.armorMeshes[i]) m.visible = !!it;
+      if (it) { const c = ARMOR_TIERS[it.tier].color; this.armorMats[i].color.setRGB(c[0] / 255, c[1] / 255, c[2] / 255); }
+    });
   }
   setHeld(id) {
     if (id === this.heldId) return;

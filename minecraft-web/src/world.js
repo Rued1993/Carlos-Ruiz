@@ -290,6 +290,7 @@ export class World {
         const above = data[i + A], below = data[i - A];
         if (above === AIR && y > 32 && sand) data[i] = B.SOUL_SAND;
         else if (below === AIR && y > 84 && hash2(wx * 7 + y, wz * 3, seed + 310) < 0.02) data[i] = B.GLOWSTONE;
+        else if (y < 27 && hash2(wx * 11 + y, wz * 7 - y, seed + 312) < 0.0045) data[i] = B.ANCIENT_DEBRIS;
         else if (hash2(wx * 13 + y, wz * 5 - y, seed + 311) < 0.006) data[i] = B.GOLD_ORE;
       }
     }
