@@ -61,9 +61,15 @@ const materials = {
   trans: patchChunkMaterial(new THREE.MeshStandardMaterial({ map: texture, normalMap: pxNormal, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.1, metalness: 0.05 })),
   tint,
 };
+// Texturas en modo píxel: filtro NEAREST (sin suavizado) y sin mipmaps
+function forcePixelTexture(t) {
+  if (!t) return;
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.anisotropy = 1; t.needsUpdate = true;
+}
 function setTextureMode(hd, classic = false) {
   if (hd && !hdTex) hdTex = createHDTextures(renderer);
-  for (const m of [materials.opaque, materials.trans]) { m.map = hd ? hdTex.map : texture; m.normalMap = classic ? null : hd ? hdTex.normalMap : pxNormal; m.roughness = classic ? 1 : m === materials.trans ? 0.1 : 0.94; m.needsUpdate = true; }
+  if (classic) { forcePixelTexture(texture); forcePixelTexture(pxNormal); }
+  for (const m of [materials.opaque, materials.trans]) { m.flatShading = classic; /* caras planas, sin interpolar normales */ m.map = hd ? hdTex.map : texture; m.normalMap = classic ? null : hd ? hdTex.normalMap : pxNormal; m.roughness = classic ? 1 : m === materials.trans ? 0.1 : 0.94; m.needsUpdate = true; }
 }
 
 // ---------- Calidad gráfica: sombras, bloom, texturas HD, MSAA, escala ----------
@@ -94,6 +100,7 @@ function applyQuality() {
   if (sky) sky.setShadows(q.shadows, q.size || 1024, q.ext || 48);
   for (const m of [materials.opaque, materials.trans]) m.needsUpdate = true;
   setTextureMode(q.hd, !!q.classic);
+  if (q.classic) { renderer.shadowMap.enabled = false; renderer.shadowMap.needsUpdate = true; } // sin sombras dinámicas
   renderer.toneMapping = q.classic ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
   if (sky) sky.classic = !!q.classic;
   const post = q.bloom || q.grade || q.msaa;
@@ -822,7 +829,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, get xp() { return [xpLevel, xpPts]; } };
+  window.__game = { get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, get xp() { return [xpLevel, xpPts]; } };
   state = 'play'; showOverlay(null);
   canvas.requestPointerLock();
   setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
