@@ -153,6 +153,7 @@ export class Mob {
     this.group = new THREE.Group(); this.parts = {};
     this.def.build(this.group, this.parts);
     this.model = new THREE.Group(); this.model.add(this.group); scene.add(this.model);
+    this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.wanderT = 0; this.wanderDir = 0; this.moving = false;
     this.cool = 0; this.flash = 0; this.fuse = 0; this.walkT = 0; this.age = 0; this.onGround = false;
     this.sound = 3 + Math.random() * 10;

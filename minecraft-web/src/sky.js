@@ -77,10 +77,24 @@ export class Sky {
     this.clouds2 = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), this.cloudMat2);
     this.clouds2.rotation.x = -Math.PI / 2; scene.add(this.clouds2);
 
-    this.ambient = new THREE.AmbientLight(0xffffff, 1);
-    this.sunLight = new THREE.DirectionalLight(0xffffff, 0.6); this.sunLight.position.set(0.5, 1, 0.3);
-    scene.add(this.ambient, this.sunLight);
+    // Iluminación física: hemisférica (cielo/suelo) + luz direccional que es sol de día y luna de noche
+    this.hemi = new THREE.HemisphereLight(0xbfd8ff, 0x7a6a50, 2);
+    this.sunLight = new THREE.DirectionalLight(0xfff2dd, 2.8);
+    this.shadowExt = 64; this.shadowOn = false;
+    scene.add(this.hemi, this.sunLight, this.sunLight.target);
+    this.lightDir = new THREE.Vector3(0.5, 1, 0.3).normalize();
     this.sky = new THREE.Color(); this.tint = new THREE.Color();
+  }
+
+  setShadows(on, size, ext) {
+    const L = this.sunLight, changed = L.shadow.mapSize.x !== size || this.shadowExt !== ext;
+    this.shadowOn = on; this.shadowExt = ext;
+    if (on) {
+      L.shadow.mapSize.set(size, size);
+      const c = L.shadow.camera; c.left = -ext; c.right = ext; c.top = ext; c.bottom = -ext; c.near = 10; c.far = 340; c.updateProjectionMatrix();
+      L.shadow.bias = -0.0004; L.shadow.normalBias = 0.35 * (ext / 64) * (2048 / size) ** 0.5; L.shadow.radius = 2;
+      if (changed && L.shadow.map) { L.shadow.map.dispose(); L.shadow.map = null; }
+    }
   }
 
   update(dt, playerPos, fogRadius, underwater, wind = { x: 0, z: 0, s: 0.12 }) {
@@ -107,11 +121,22 @@ export class Sky {
 
     // Los materiales de bloques multiplican el color de vértice por el brillo del día
     const b = 0.2 + 0.8 * this.daylight;
-    this.tint.setRGB(b * (0.85 + 0.15 * this.daylight), b * (0.88 + 0.12 * this.daylight), 0.3 + 0.7 * b);
-    this.tint.addScalar(flash * 0.65);
-    this.materials.tint.value.copy(this.tint);
-    this.ambient.intensity = 0.35 + 0.65 * this.daylight + flash * 0.8;
-    this.sunLight.intensity = 0.15 + 0.5 * this.daylight;
+    // luz: sol por el día (cálido al amanecer/atardecer), luna fría de noche
+    const sunLevel = smooth(-0.04, 0.3, sinA) * (1 - 0.65 * wet), moonLevel = smooth(0.0, -0.3, sinA) * (1 - 0.7 * wet);
+    const low = Math.max(0, 1 - Math.abs(sinA) * 3.2) * (1 - wet);
+    const dayDir = new THREE.Vector3(cosA, sinA, 0.28).normalize();
+    const useSun = sinA > -0.04;
+    this.lightDir.copy(useSun ? dayDir : dayDir.clone().negate());
+    this.sunLight.color.setRGB(1, 0.95 - 0.38 * low, 0.88 - 0.62 * low); if (!useSun) this.sunLight.color.setRGB(0.55, 0.66, 1);
+    this.sunLight.intensity = (useSun ? 3.4 * sunLevel : 0.6 * moonLevel) + flash * 2.5;
+    this.hemi.color.copy(this.sky).lerp(WHITE, 0.6); this.hemi.groundColor.setRGB(0.42, 0.36, 0.28).multiplyScalar(0.4 + 0.6 * this.daylight);
+    this.hemi.intensity = 0.3 + 2.5 * this.daylight + 0.3 * moonLevel + flash * 3;
+    // la luz sigue al jugador (cuadriculada para evitar parpadeos de sombra)
+    const grid = this.shadowOn ? (2 * this.shadowExt) / Math.max(256, this.sunLight.shadow.mapSize.x) : 1;
+    const tx = Math.round(playerPos.x / grid) * grid, ty = Math.round(playerPos.y / grid) * grid, tz = Math.round(playerPos.z / grid) * grid;
+    this.sunLight.target.position.set(tx, ty, tz);
+    this.sunLight.position.set(tx + this.lightDir.x * 160, ty + this.lightDir.y * 160, tz + this.lightDir.z * 160);
+    this.sunLight.castShadow = this.shadowOn && this.sunLight.intensity > 0.05;
 
     this.root.position.copy(this.camera.position);
     const R = 220;

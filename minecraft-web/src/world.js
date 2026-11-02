@@ -404,8 +404,8 @@ export class World {
     if (!data) return;
     const x0 = cx * CS, z0 = cz * CS;
     const lists = [
-      { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], ind: [] }, // opaco
-      { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], ind: [] }, // transparente
+      { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], sk: [], ind: [] }, // opaco
+      { pos: [], nor: [], uv: [], col: [], bl: [], sw: [], sk: [], ind: [] }, // transparente
     ];
     const get = (wx, wy, wz) => {
       const lx = wx - x0, lz = wz - z0;
@@ -473,7 +473,7 @@ export class World {
                 L.pos.push(lx + 7 / 16 + c.p[0] * 2 / 16, y + c.p[1] * 10 / 16, lz + 7 / 16 + c.p[2] * 2 / 16);
                 L.nor.push(f.dir[0], f.dir[1], f.dir[2]);
                 L.uv.push(u0 + (u1 - u0) * c.uv[0], 6 / 16 + (10 / 16) * c.uv[1]);
-                L.col.push(0.8, 0.8, 0.8); L.bl.push(1); L.sw.push(0);
+                L.col.push(0.9, 0.9, 0.9); L.bl.push(1); L.sw.push(0); L.sk.push(1);
               }
               L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
             }
@@ -521,7 +521,7 @@ export class World {
               const v = f.shade * AO[ao[ci]] * (0.3 + 0.7 * lg[ci]);
               L.col.push(v * cr, v * cg, v * cb);
               L.bl.push(f.shade * AO[ao[ci]] * bg[ci]);
-              L.sw.push(id === B.LEAVES ? 1 : id === B.WATER ? 2 : 0);
+              L.sw.push(id === B.LEAVES ? 1 : id === B.WATER ? 2 : 0); L.sk.push(lg[ci]);
             }
             if (ao[0] + ao[3] > ao[1] + ao[2]) L.ind.push(n, n + 1, n + 3, n, n + 3, n + 2);
             else L.ind.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
@@ -531,7 +531,7 @@ export class World {
     const old = this.meshes.get(k);
     if (old) this.disposeMesh(old);
     const entry = { opaque: null, trans: null };
-    const make = (L, mat, order) => {
+    const make = (L, mat, order, cast) => {
       if (!L.ind.length) return null;
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(L.pos, 3));
@@ -540,16 +540,17 @@ export class World {
       geo.setAttribute('color', new THREE.Float32BufferAttribute(L.col, 3));
       geo.setAttribute('blight', new THREE.Float32BufferAttribute(L.bl, 1));
       geo.setAttribute('sway', new THREE.Float32BufferAttribute(L.sw, 1));
+      geo.setAttribute('skyl', new THREE.Float32BufferAttribute(L.sk, 1));
       geo.setIndex(L.ind);
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x0, 0, z0);
-      mesh.renderOrder = order;
+      mesh.renderOrder = order; mesh.castShadow = cast; mesh.receiveShadow = true;
       this.scene.add(mesh);
       return mesh;
     };
-    entry.opaque = make(lists[0], this.materials.opaque, 0);
-    entry.trans = make(lists[1], this.materials.trans, 1);
+    entry.opaque = make(lists[0], this.materials.opaque, 0, true);
+    entry.trans = make(lists[1], this.materials.trans, 1, false);
     this.meshes.set(k, entry);
     this.dirty.delete(k);
     if (this.onChunkMeshed) this.onChunkMeshed(cx, cz);

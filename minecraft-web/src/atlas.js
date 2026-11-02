@@ -131,3 +131,81 @@ export function createAtlas() {
   texture.generateMipmaps = false;
   return { canvas, texture };
 }
+
+// ---------------------------------------------------------------------------
+// Texturas HD (64 px por tile) y mapas de relieve (normal maps) generados desde el atlas base
+// ---------------------------------------------------------------------------
+const NORMAL_STRENGTH = {
+  stone: 3.4, cobble: 4.2, bricks: 4.0, bedrock: 4.5, coal_ore: 3.4, iron_ore: 3.4, gold_ore: 3.4, diamond_ore: 3.4,
+  planks: 2.4, table_top: 2.4, table_side: 2.4, log_side: 3.2, log_top: 2.2, leaves: 3.6, dirt: 2.2, grass_top: 2.6, grass_side: 2.4,
+  sand: 1.4, snow: 1.0, snow_side: 1.4, water: 0.9, glass: 0, torch: 0, cactus_side: 2.6, cactus_top: 2, furnace_top: 2.6, furnace_front: 3, command: 2.6,
+};
+function vnoise(x, y, seed) { // ruido de valor suave
+  const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = hash2(x0, y0, seed), b = hash2(x0 + 1, y0, seed), c = hash2(x0, y0 + 1, seed), d = hash2(x0 + 1, y0 + 1, seed);
+  return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+}
+
+export function createHDTextures(renderer) {
+  const S = 64, f = S / T;
+  const diff = document.createElement('canvas'); diff.width = S * TILE_COUNT; diff.height = S;
+  const dctx = diff.getContext('2d'), dimg = dctx.createImageData(diff.width, S);
+  const norm = document.createElement('canvas'); norm.width = diff.width; norm.height = S;
+  const nctx = norm.getContext('2d'), nimg = nctx.createImageData(norm.width, S);
+  NAMES.forEach((name, ti) => {
+    const base = Array.from({ length: T * T }, (_, i) => painters[name](i % T, Math.floor(i / T)));
+    const at = (x, y) => base[Math.max(0, Math.min(T - 1, y)) * T + Math.max(0, Math.min(T - 1, x))];
+    const height = new Float32Array(S * S);
+    for (let hy = 0; hy < S; hy++) for (let hx = 0; hx < S; hx++) {
+      const u = (hx + 0.5) / f - 0.5, v = (hy + 0.5) / f - 0.5, x0 = Math.floor(u), y0 = Math.floor(v), fx = u - x0, fy = v - y0;
+      const nearest = at(Math.floor(hx / f), Math.floor(hy / f));
+      const p00 = at(x0, y0), p10 = at(x0 + 1, y0), p01 = at(x0, y0 + 1), p11 = at(x0 + 1, y0 + 1);
+      const col = [0, 1, 2].map((c) => {
+        const bil = (p00[c] * (1 - fx) + p10[c] * fx) * (1 - fy) + (p01[c] * (1 - fx) + p11[c] * fx) * fy;
+        let val = nearest[c] * 0.5 + bil * 0.5;
+        const grain = (hash2(hx + ti * 97, hy, 1234) - 0.5) * 16 + (vnoise(hx * 0.35 + ti * 13, hy * 0.35, 77) - 0.5) * 22 + (vnoise(hx * 0.09, hy * 0.09 + ti * 5, 91) - 0.5) * 18;
+        return clamp(val + grain);
+      });
+      const alpha = nearest[3] === undefined ? 255 : nearest[3];
+      const o = (hy * diff.width + ti * S + hx) * 4;
+      dimg.data[o] = col[0]; dimg.data[o + 1] = col[1]; dimg.data[o + 2] = col[2]; dimg.data[o + 3] = alpha;
+      height[hy * S + hx] = (col[0] * 0.3 + col[1] * 0.59 + col[2] * 0.11) / 255;
+    }
+    // relieve: Sobel sobre la luminancia, con envoltura dentro del tile para que repita sin costuras
+    const st = NORMAL_STRENGTH[name] === undefined ? 2 : NORMAL_STRENGTH[name], H = (x, y) => height[((y + S) % S) * S + ((x + S) % S)];
+    for (let hy = 0; hy < S; hy++) for (let hx = 0; hx < S; hx++) {
+      const dx = (H(hx + 1, hy - 1) + 2 * H(hx + 1, hy) + H(hx + 1, hy + 1)) - (H(hx - 1, hy - 1) + 2 * H(hx - 1, hy) + H(hx - 1, hy + 1));
+      const dy = (H(hx - 1, hy + 1) + 2 * H(hx, hy + 1) + H(hx + 1, hy + 1)) - (H(hx - 1, hy - 1) + 2 * H(hx, hy - 1) + H(hx + 1, hy - 1));
+      let nx = -dx * st, ny = dy * st, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      const o = (hy * norm.width + ti * S + hx) * 4;
+      nimg.data[o] = (nx * 0.5 + 0.5) * 255; nimg.data[o + 1] = (ny * 0.5 + 0.5) * 255; nimg.data[o + 2] = (nz * 0.5 + 0.5) * 255; nimg.data[o + 3] = 255;
+    }
+  });
+  dctx.putImageData(dimg, 0, 0); nctx.putImageData(nimg, 0, 0);
+  const aniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+  const map = new THREE.CanvasTexture(diff);
+  map.colorSpace = THREE.SRGBColorSpace; map.magFilter = THREE.LinearFilter; map.minFilter = THREE.LinearMipmapLinearFilter; map.generateMipmaps = true; map.anisotropy = Math.min(8, aniso);
+  const normalMap = new THREE.CanvasTexture(norm);
+  normalMap.magFilter = THREE.LinearFilter; normalMap.minFilter = THREE.LinearMipmapLinearFilter; normalMap.generateMipmaps = true; normalMap.anisotropy = Math.min(8, aniso);
+  return { map, normalMap };
+}
+
+// Relieve para el atlas de píxeles (16 px): se usa en calidades bajas
+export function createPixelNormal(atlasCanvas) {
+  const ctx = atlasCanvas.getContext('2d'), W = atlasCanvas.width, data = ctx.getImageData(0, 0, W, T).data;
+  const norm = document.createElement('canvas'); norm.width = W; norm.height = T;
+  const nctx = norm.getContext('2d'), nimg = nctx.createImageData(W, T);
+  NAMES.forEach((name, ti) => {
+    const st = (NORMAL_STRENGTH[name] === undefined ? 2 : NORMAL_STRENGTH[name]) * 0.45;
+    const Hh = (x, y) => { const o = (((y + T) % T) * W + ti * T + ((x + T) % T)) * 4; return (data[o] * 0.3 + data[o + 1] * 0.59 + data[o + 2] * 0.11) / 255; };
+    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
+      const dx = Hh(x + 1, y) - Hh(x - 1, y), dy = Hh(x, y + 1) - Hh(x, y - 1);
+      let nx = -dx * st, ny = dy * st, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      const o = (y * W + ti * T + x) * 4;
+      nimg.data[o] = (nx * 0.5 + 0.5) * 255; nimg.data[o + 1] = (ny * 0.5 + 0.5) * 255; nimg.data[o + 2] = (nz * 0.5 + 0.5) * 255; nimg.data[o + 3] = 255;
+    }
+  });
+  nctx.putImageData(nimg, 0, 0);
+  const t = new THREE.CanvasTexture(norm); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return t;
+}

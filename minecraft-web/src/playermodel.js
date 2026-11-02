@@ -47,6 +47,7 @@ export class PlayerModel {
     this.item.visible = false; this.heldId = -1;
     this.t = 0;
     scene.add(this.group);
+    this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.group.visible = false;
   }
   setHeld(id) {

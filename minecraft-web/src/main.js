@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { createAtlas, tileColor } from './atlas.js';
+import { createAtlas, tileColor, createHDTextures, createPixelNormal } from './atlas.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { initIcons, iconTexture, tileURL } from './icons.js';
 import { PlayerModel } from './playermodel.js';
 import { Weather, WEATHER_NAMES } from './weather.js';
@@ -30,27 +35,81 @@ const { canvas: atlasCanvas, texture } = createAtlas();
 initIcons(atlasCanvas);
 document.documentElement.style.setProperty('--dirt', `url(${tileURL('dirt')})`);
 // Color final del vértice = luz de cielo * tinte del día + luz cálida de antorchas (que no se atenúa de noche)
-const tint = { value: new THREE.Color(1, 1, 1) };
+const tint = { value: new THREE.Color(1, 1, 1) }; // (el tinte del día ahora lo da la iluminación física)
 const gameU = { uTime: { value: 0 }, uWind: { value: 0.12 } };
+// MeshStandardMaterial + sombreador: viento en hojas, oleaje en el agua, luz de antorchas emisiva
+// y luz solar directa atenuada en cuevas (la luz de cielo viene por vértice).
 function patchChunkMaterial(m) {
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTint = tint; sh.uniforms.uTime = gameU.uTime; sh.uniforms.uWind = gameU.uWind;
+    sh.uniforms.uTime = gameU.uTime; sh.uniforms.uWind = gameU.uWind;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float blight;\nattribute float sway;\nuniform vec3 uTint;\nuniform float uTime;\nuniform float uWind;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvec4 wp = modelMatrix * vec4(position, 1.0);\nfloat sw = (sway > 1.5 ? 0.0 : sway) * uWind;\ntransformed.x += sin(uTime * 1.7 + wp.x * 0.9 + wp.z * 0.6 + wp.y * 0.5) * 0.075 * sw;\ntransformed.z += cos(uTime * 1.3 + wp.z * 0.8 + wp.x * 0.4) * 0.075 * sw;\ntransformed.y += sin(uTime * 2.1 + wp.x * 0.7 + wp.z * 0.7) * 0.03 * sw;\ntransformed.y += (sway > 1.5 ? 1.0 : 0.0) * sin(uTime * 1.9 + wp.x * 1.2 + wp.z * 1.0) * 0.045;')
-      .replace('#include <color_vertex>', '#include <color_vertex>\n#ifdef USE_COLOR\nvColor = color * uTint + vec3(1.0, 0.8, 0.5) * blight;\n#endif');
+      .replace('#include <common>', '#include <common>\nattribute float blight;\nattribute float sway;\nattribute float skyl;\nuniform float uTime;\nuniform float uWind;\nvarying float vBL;\nvarying float vSK;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBL = blight; vSK = skyl;\nvec4 wp = modelMatrix * vec4(position, 1.0);\nfloat sw = (sway > 1.5 ? 0.0 : sway) * uWind;\ntransformed.x += sin(uTime * 1.7 + wp.x * 0.9 + wp.z * 0.6 + wp.y * 0.5) * 0.075 * sw;\ntransformed.z += cos(uTime * 1.3 + wp.z * 0.8 + wp.x * 0.4) * 0.075 * sw;\ntransformed.y += sin(uTime * 2.1 + wp.x * 0.7 + wp.z * 0.7) * 0.03 * sw;\ntransformed.y += (sway > 1.5 ? 1.0 : 0.0) * sin(uTime * 1.9 + wp.x * 1.2 + wp.z * 1.0) * 0.045;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBL;\nvarying float vSK;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.78, 0.5) * vBL * 1.5 * sampledDiffuseColor.rgb;')
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse *= vSK;\nreflectedLight.directSpecular *= vSK;');
   };
-  m.customProgramCacheKey = () => 'chunk-light';
+  m.customProgramCacheKey = () => 'chunk-pbr';
   return m;
 }
+const pxNormal = createPixelNormal(atlasCanvas);
+let hdTex = null;
 const materials = {
-  opaque: patchChunkMaterial(new THREE.MeshBasicMaterial({ map: texture, vertexColors: true })),
-  trans: patchChunkMaterial(new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide })),
+  opaque: patchChunkMaterial(new THREE.MeshStandardMaterial({ map: texture, normalMap: pxNormal, vertexColors: true, roughness: 0.94, metalness: 0 })),
+  trans: patchChunkMaterial(new THREE.MeshStandardMaterial({ map: texture, normalMap: pxNormal, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.1, metalness: 0.05 })),
   tint,
 };
+function setTextureMode(hd) {
+  if (hd && !hdTex) hdTex = createHDTextures(renderer);
+  for (const m of [materials.opaque, materials.trans]) { m.map = hd ? hdTex.map : texture; m.normalMap = hd ? hdTex.normalMap : pxNormal; m.needsUpdate = true; }
+}
+
+// ---------- Calidad gráfica: sombras, bloom, texturas HD, MSAA, escala ----------
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.45;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const QUALITY = [
+  { name: 'Bajo', shadows: false, size: 0, ext: 0, bloom: false, hd: false, msaa: 0, pr: 1, grade: false },
+  { name: 'Medio', shadows: true, size: 1024, ext: 48, bloom: false, hd: false, msaa: 0, pr: 1, grade: false },
+  { name: 'Alto', shadows: true, size: 2048, ext: 64, bloom: true, hd: true, msaa: 2, pr: 1.25, grade: true },
+  { name: 'Ultra (hiperrealista)', shadows: true, size: 4096, ext: 80, bloom: true, hd: true, msaa: 4, pr: 2, grade: true },
+];
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVig: { value: 0.85 }, uSat: { value: 1.04 }, uGrain: { value: 0.035 }, uContrast: { value: 1.06 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; uniform float uTime, uVig, uSat, uGrain, uContrast; varying vec2 vUv;' +
+    'float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }' +
+    'void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));' +
+    'c.rgb = mix(vec3(l), c.rgb, uSat); c.rgb = (c.rgb - 0.18) * uContrast + 0.18; vec2 d = vUv - 0.5; c.rgb *= 1.0 - dot(d, d) * uVig;' +
+    'c.rgb += (h(vUv * 1000.0 + uTime) - 0.5) * uGrain; gl_FragColor = c; }',
+};
+let composer = null, bloomPass = null, gradePass = null, gradeOn = false, curQ = -1;
+function applyQuality() {
+  const q = QUALITY[settings.quality];
+  curQ = settings.quality;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, q.pr));
+  renderer.shadowMap.enabled = q.shadows;
+  if (sky) sky.setShadows(q.shadows, q.size || 1024, q.ext || 48);
+  for (const m of [materials.opaque, materials.trans]) m.needsUpdate = true;
+  setTextureMode(q.hd);
+  const post = q.bloom || q.grade || q.msaa;
+  if (composer) { composer.dispose(); composer = null; }
+  if (post) {
+    const w = innerWidth, h = innerHeight, pr = renderer.getPixelRatio();
+    const rt = new THREE.WebGLRenderTarget(w * pr, h * pr, { type: THREE.HalfFloatType, samples: q.msaa });
+    composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, camera));
+    if (q.bloom) { bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 0.42, 0.55, 0.88); composer.addPass(bloomPass); }
+    gradeOn = q.grade; if (q.grade) { gradePass = new ShaderPass(GradeShader); composer.addPass(gradePass); }
+    composer.addPass(new OutputPass());
+    composer.setSize(w, h);
+  }
+  const bq = document.getElementById('bQuality'); if (bq) bq.textContent = 'Gráficos: ' + q.name;
+  resize();
+}
 
 // ---------- Ajustes (persistentes) ----------
-const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0 };
+const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0, quality: 2 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
 const STORMY = new Set(['storm', 'dragon', 'wither', 'herobrine']);
@@ -501,6 +560,7 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   player.mode = mode;
   if (!model) model = new PlayerModel(scene);
   sky = new Sky(scene, camera, materials);
+  applyQuality();
   weather = new Weather(scene, {
     world: () => world, sky: () => sky, sound: (n, v) => audio.play(n, v),
     burst: (x, y, z) => { particles.burst(x, y, z, [1, 1, 0.8], 24, 6); particles.burst(x, y, z, [0.3, 0.3, 0.35], 14, 4); },
@@ -626,6 +686,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 addEventListener('beforeunload', () => { if (world && state !== 'menu') saveGame(); });
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
+  if (composer) composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
@@ -640,6 +701,7 @@ $('bExport').onclick = async () => {
 };
 $('bRespawn').onclick = () => { audio.unlock(); player.respawn(); state = 'play'; showOverlay(null); ui.renderStats(); canvas.requestPointerLock(); };
 $('bCam').onclick = () => setCamMode((camMode + 1) % 3);
+$('bQuality').onclick = () => { settings.quality = (settings.quality + 1) % QUALITY.length; saveSettings(); applyQuality(); ui && ui.toast('Gráficos: ' + QUALITY[settings.quality].name); };
 $('bPSummon').onclick = () => { showOverlay(null); state = 'play'; openPanel('summon'); };
 $('bPQuests').onclick = () => { showOverlay(null); state = 'play'; openPanel('quests'); };
 const bind = (id, label, key, fmt, apply) => {
@@ -716,7 +778,8 @@ function frame(now) {
     playedSec += dt;
     saveT += dt; if (saveT > 25) { saveT = 0; thumbReq = true; }
   }
-  renderer.render(scene, camera);
+  if (gradeOn) GradeShader.uniforms.uTime.value = (now % 10000) / 1000;
+  if (composer) composer.render(dt); else renderer.render(scene, camera);
   if (thumbReq) { thumbReq = false; captureThumb(); saveGame(); }
 }
 requestAnimationFrame(frame);

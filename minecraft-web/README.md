@@ -12,27 +12,14 @@ npm run build    # versión de producción en dist/
 
 ## Qué incluye
 
-- **Mundo:** terreno infinito por chunks, 3 biomas (llanura, desierto, nieve), océanos y playas, árboles, cactus, **cuevas** y **minerales** (carbón, hierro, oro, diamante) y lecho de roca.
-- **Iluminación:** luz del cielo y oclusión ambiental por vértice (las cuevas son oscuras), **ciclo día/noche** con sol, luna, estrellas y nubes.
-- **Agua:** nadar, ahogarse, niebla y tinte azul bajo el agua.
-- **Supervivencia:** vida, hambre, daño por caída, regeneración, muerte y reaparición, tiempos de minado según herramienta y nivel, durabilidad.
-- **Inventario y crafteo:** inventario de 36 ranuras, rejilla 2x2 y mesa de crafteo 3x3, recetas de herramientas (madera, piedra, hierro, diamante), tablones, palos, mesa, cristal, ladrillos.
-- **Mobs:** cerdos y vacas (sueltan comida), zombis (atacan, se queman al sol) y creepers (explotan y destruyen bloques); aparecen de noche y en cuevas.
-- **Horno y antorchas:** el horno funde mena de hierro/oro, cobble, arena, troncos y cocina la carne (usa carbón o madera como combustible); las antorchas dan luz cálida real que se propaga y no se apaga de noche.
-- **Cámaras:** primera persona, tercera persona por detrás y por delante (tecla **V**), con modelo de jugador animado.
-- **Interfaz:** menú rediseñado, HUD con corazones/comida/burbujas en pixel-art, ajustes de render, campo de visión, sensibilidad y volumen (se guardan).
-- **Clima:** lluvia y tormentas aleatorias (nieve en el bioma nevado) con rayos y trueno, viento que mece las hojas y empuja al jugador, cielo oscuro y sonido de lluvia/viento. Tecla **T** para cambiar el clima.
-- **5 jefes** (panel **B** para invocarlos al instante, o el bloque de comandos para la Tormenta Wither):
-  - **Tormenta Wither**: rayo tractor, cráneos explosivos, devora bloques y su bloque de comandos es el punto débil.
-  - **Ender Dragon**: vuela en círculos, pica en picado y lanza aliento; sus 4 cristales lo curan y hay que destruirlos.
-  - **Wither**: cráneos que envenenan; con poca vida se acoraza y te persigue.
-  - **Warden**: golpes devastadores y explosión sónica; oscurece la pantalla.
-  - **Guardián Ancestral**: láser con carga que causa fatiga de minería; sus espinas devuelven daño.
-- **Misiones (M):** 17 misiones (aprendiz, caza y jefes), con recompensas y XP; derrota a los 5 jefes para el logro final.
-- **Más mobs:** oveja, gallina, esqueleto (con arco), araña y enderman (se enfada si lo miras y se teletransporta).
-- **HUD y gráficos:** minimapa circular con mobs y jefes, nivel y XP, efectos de estado, rastreador de misiones, corazones/comida pixel-art, cielo con degradado y brillo solar, agua con oleaje, grietas al picar, hojas mecidas por el viento y antialiasing.
-- **Creativo:** bloques infinitos, rotura instantánea, vuelo y paleta con todos los bloques e ítems.
-- **Guardado automático** en el navegador (IndexedDB) y sonido procedural.
+- **Mundo enorme (128 de alto, sin límites):** océanos profundos, cordilleras de hasta ~120 bloques con cumbres nevadas, ríos, selva, bosques, desierto, tundra, cuevas, minerales y **pueblos** con casas, pozo y caminos. Distancia de render hasta 16 chunks.
+- **Varias partidas guardadas:** cada mundo con nombre, semilla opcional, miniatura, nivel y tiempo jugado; autoguardado, guardado manual, renombrar, borrar y **exportar/importar** a archivo `.mcw`. Las partidas antiguas se migran solas.
+- **10 jefes** (panel **B** para invocarlos al instante): Tormenta Wither, Ender Dragon, Wither, Warden, Guardián Ancestral, **Devastador, Invocador, Ghast Gigante, Herobrine y Rey Slime**, cada uno con fases y mecánicas propias (cristales que curan, bolas de fuego que se devuelven a golpes, colmillos y vex, ondas expansivas…).
+- **Misiones (M):** 22 misiones; derrota a los 10 jefes para el logro final.
+- **Gráficos hiperrealistas** (4 calidades en el menú de pausa): iluminación física con **sombras reales** de sol y luna, texturas HD con **mapas de relieve**, tonemapping cinematográfico, **bloom**, corrección de color, MSAA, antorchas con luz emisiva, agua con oleaje y reflejos del sol, tinte de vegetación por clima, cielo con degradado y niebla.
+- **Mobs:** cerdo, vaca, oveja, gallina, zombi, esqueleto (arco), araña, creeper, enderman y slime.
+- **Supervivencia, crafteo, horno, antorchas, clima con tormentas y rayos, minimapa, XP y efectos de estado.**
+- **Creativo:** bloques infinitos, vuelo y paleta con todo.
 
 ## Controles
 
@@ -63,11 +50,13 @@ npm run build    # versión de producción en dist/
 - `src/playermodel.js` – modelo del jugador para tercera persona
 - `src/boss.js` / `src/bosses.js` – jefes
 - `src/quests.js` – misiones
+- `src/save.js` – partidas múltiples, exportar/importar
 - `src/sky.js`, `src/atlas.js`, `src/icons.js`, `src/audio.js`, `src/save.js`, `src/entities.js`, `src/noise.js`
 
 ## Hoja de ruta
 
 - [ ] Agua que fluye, lava
 - [ ] Cultivos, camas, armaduras y arcos
-- [ ] Estructuras (aldeas, minas), más biomas
+- [ ] Minas, templos y más estructuras
+- [ ] Dimensiones (Nether y End)
 - [ ] Multijugador
