@@ -6,7 +6,8 @@ const T = 16;
 const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', 'log_top', 'leaves', 'planks', 'cobble',
   'water', 'glass', 'coal_ore', 'iron_ore', 'gold_ore', 'diamond_ore', 'bedrock', 'snow', 'snow_side',
   'cactus_side', 'cactus_top', 'bricks', 'table_top', 'table_side', 'torch', 'furnace_top', 'furnace_front', 'command',
-  'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal'];
+  'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal',
+  'purpur', 'end_bricks', 'chest_top', 'chest_side', 'chest_open'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -98,6 +99,11 @@ const painters = {
   end_frame_eye: (x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 2.3) return [14, 20, 18]; if (d < 4.4) return [96, 216, 150]; return x < 2 || y < 2 || x > 13 || y > 13 ? jitter([50, 100, 84], 10, x, y, 95) : jitter([96, 150, 124], 10, x, y, 96); },
   portal: (x, y) => { const v = Math.sin(x * 0.9 + y * 0.45) * 0.5 + Math.sin(y * 0.8 - x * 0.3) * 0.5; return [90 + v * 50 + hash2(x, y, 99) * 30, 20 + v * 14, 190 + v * 40, 175]; },
   end_portal: (x, y) => { const star = hash2(x, y, 100) > 0.9; return star ? [150, 255, 230, 255] : [6, 16, 22 + hash2(x, y, 101) * 20, 240]; },
+  purpur: (x, y) => { const g = (x % 8 < 1 || y % 8 < 1); return jitter(g ? [140, 96, 140] : [172, 128, 172], 10, x, y, 110); },
+  end_bricks: (x, y) => { const mortar = y % 4 === 3 || (x + (Math.floor(y / 4) % 2) * 4) % 8 === 7; return mortar ? jitter([186, 186, 128], 6, x, y, 111) : jitter([226, 226, 164], 10, x, y, 112); },
+  chest_top: (x, y) => { const edge = x < 1 || y < 1 || x > 14 || y > 14; return edge ? jitter([80, 52, 20], 6, x, y, 113) : jitter([160, 112, 50], 10, x, y, 114); },
+  chest_side: (x, y) => { const latch = x >= 7 && x <= 8 && y >= 5 && y <= 8; if (latch) return [214, 214, 214]; if (y === 6 || y === 7) return jitter([96, 62, 24], 6, x, y, 115); const edge = x < 1 || x > 14 || y > 14; return edge ? jitter([80, 52, 20], 6, x, y, 116) : jitter([160, 112, 50], 10, x, y, 117); },
+  chest_open: (x, y) => { const edge = x < 2 || y < 2 || x > 13 || y > 13; return edge ? jitter([120, 82, 34], 8, x, y, 118) : jitter([30, 18, 10], 8, x, y, 119); },
   furnace_top: (x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? jitter([70, 70, 70], 8, x, y, 71) : stone(x, y).map((c) => c - 20)),
   furnace_front: (x, y) => {
     const edge = x === 0 || y === 0 || x === 15;

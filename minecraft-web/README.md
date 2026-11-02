@@ -17,6 +17,9 @@ npm run build    # versión de producción en dist/
   - **El Nether:** cavernas inmensas, mar de lava, piedra luminosa, arena de almas, brasas flotando, **piglins zombificados** y **blazes**. 1 bloque = 8 del Overworld.
   - **El End:** isla flotante de piedra del End, 10 pilares de obsidiana con cristales, endermans y el **Ender Dragon** al entrar; al vencerlo se abre el portal de salida.
   - **Portales:** obsidiana (8 adoquines + 1 diamante = 2) en un marco 4x5, y se enciende con el **encendedor** (hierro + carbón). Para el End: 12 marcos (8 obsidiana + 1 diamante = 4) con **ojos de Ender** (perla + carbón). También puedes viajar al instante desde el panel **B**.
+- **Estructuras de dimensión:** **fortalezas del Nether** (sala central de 17x17, cuatro puentes con arcos y barandillas, torres con entresuelo, cofres; dentro aparecen esqueletos Wither y blazes) y **ciudades del End** (torres de purpur con escaleras y ventanas, cofres y una **nave voladora con élitros**; dentro aparecen shulkers). Los **cofres** se abren con clic derecho y dan botín único.
+- **Élitros:** con ellos en la mano, salta y pulsa saltar otra vez en el aire para planear; apunta con la cámara para dirigir el vuelo.
+- **Mando (PS4 DualShock 4 / DualSense):** funciona por USB o Bluetooth con la API Gamepad del navegador. Stick izquierdo mover, derecho mirar, R2 romper/atacar, L2 usar, ✕ saltar, △ inventario, L1/R1 ranuras… Cursor virtual y cruceta para menús e inventario, vibración, y un panel (tecla **P** o botón en la pausa) para ajustar sensibilidad, zona muerta, curva, invertir Y y **reasignar cualquier botón**, con probador en vivo.
 - **Varias partidas guardadas:** cada mundo con nombre, semilla opcional, miniatura, nivel y tiempo jugado; autoguardado, guardado manual, renombrar, borrar y **exportar/importar** a archivo `.mcw`. Las partidas antiguas se migran solas.
 - **16 jefes** (panel **B** para invocarlos al instante): Tormenta Wither, Ender Dragon, Wither, Warden, Guardián Ancestral, Devastador, Invocador, Ghast Gigante, Herobrine, Rey Slime y los nuevos **Gólem Colosal, Creeper Titán** (Overworld), **Rey Blaze, Rey Piglin** (Nether) y **Enderman Titán, Señor del Vacío** (End). Cada uno con fases y mecánicas propias: ondas de choque que hay que saltar, explosiones colosales, grietas del vacío, bolas de fuego que se devuelven a golpes, cristales que curan…
 - **Misiones (M):** misiones de aprendizaje, caza, dimensiones y jefes; derrota a los 16 jefes para el logro final.
@@ -62,5 +65,5 @@ npm run build    # versión de producción en dist/
 - [ ] Agua que fluye, lava
 - [ ] Cultivos, camas, armaduras y arcos
 - [ ] Minas, templos y más estructuras
-- [ ] Fortalezas del Nether, ciudades del End y elitros
+- [ ] Bastiones piglin, fragmentos de armadura y más estructuras
 - [ ] Multijugador

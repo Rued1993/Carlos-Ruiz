@@ -7,8 +7,9 @@ export const B = {
   BEDROCK: 15, SNOW: 16, CACTUS: 17, BRICKS: 18, TABLE: 19, TORCH: 20, FURNACE: 21, COMMAND: 22,
   OBSIDIAN: 23, NETHER_PORTAL: 24, NETHERRACK: 25, SOUL_SAND: 26, GLOWSTONE: 27, LAVA: 28, NETHER_BRICKS: 29,
   END_STONE: 30, END_FRAME: 31, END_FRAME_EYE: 32, END_PORTAL: 33,
+  PURPUR: 34, END_BRICKS: 35, CHEST: 36, CHEST_OPEN: 37,
 };
-export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, CHICKEN: 155, COOKED_CHICKEN: 156 };
+export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, ELYTRA: 109, CHICKEN: 155, COOKED_CHICKEN: 156 };
 
 export const BLOCKS = {};
 function block(id, name, tiles, hardness, tool = null, lvl = 0, extra = {}) {
@@ -47,6 +48,10 @@ block(B.END_STONE, 'Piedra del End', ['end_stone', 'end_stone', 'end_stone'], 3,
 block(B.END_FRAME, 'Marco del portal del End', ['end_frame_top', 'end_stone', 'end_frame_side'], Infinity);
 block(B.END_FRAME_EYE, 'Marco del End con ojo', ['end_frame_eye', 'end_stone', 'end_frame_side'], Infinity);
 block(B.END_PORTAL, 'Portal del End', ['end_portal', 'end_portal', 'end_portal'], Infinity, null, 0, { opaque: false, transparent: true, portal: true, glow: true });
+block(B.PURPUR, 'Purpur', ['purpur', 'purpur', 'purpur'], 1.5, 'pick', 1);
+block(B.END_BRICKS, 'Ladrillos del End', ['end_bricks', 'end_bricks', 'end_bricks'], 2, 'pick', 1);
+block(B.CHEST, 'Cofre', ['chest_top', 'chest_top', 'chest_side'], 2.5, 'axe');
+block(B.CHEST_OPEN, 'Cofre abierto', ['chest_open', 'chest_top', 'chest_side'], 2.5, 'axe');
 block(B.FURNACE, 'Horno', ['furnace_top', 'stone', 'furnace_front'], 3, 'pick', 1);
 
 // Tablas rápidas por id
@@ -75,6 +80,7 @@ item(I.STAR, 'Estrella de la tormenta');
 item(I.PEARL, 'Perla de Ender');
 item(I.LIGHTER, 'Encendedor', { stack: 1, uses: 64 });
 item(I.EYE, 'Ojo de Ender');
+item(I.ELYTRA, 'Élitros', { stack: 1 });
 item(I.CHICKEN, 'Pollo crudo', { food: 4 });
 item(I.COOKED_CHICKEN, 'Pollo asado', { food: 12 });
 item(I.APPLE, 'Manzana', { food: 8 });
@@ -183,6 +189,7 @@ export function dropOf(blockId, slot) {
     case B.COAL_ORE: return [I.COAL, 1];
     case B.DIAMOND_ORE: return [I.DIAMOND, 1];
     case B.LEAVES: return Math.random() < 0.1 ? [I.APPLE, 1] : null;
+    case B.CHEST_OPEN: return [B.CHEST, 1];
     case B.GLASS: case B.WATER: case B.LAVA: case B.NETHER_PORTAL: case B.END_PORTAL: case B.END_FRAME: case B.END_FRAME_EYE: return null;
     default: return [blockId, 1];
   }

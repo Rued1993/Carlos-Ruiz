@@ -19,7 +19,7 @@ export class Player {
     this.invuln = 0; this.dead = false;
     this.stepDist = 0;
     this.events = { onHurt: null, onLand: null, onStep: null, onSplash: null, onDeath: null, onVoid: null };
-    this.inLava = false;
+    this.inLava = false; this.analog = null; this.canGlide = false; this.gliding = false; this.prevSpace = false;
     this.spawn = new THREE.Vector3();
     this.wind = { x: 0, z: 0 };
     this.push = { x: 0, y: 0, z: 0 }; // fuerzas externas (rayo tractor)
@@ -73,8 +73,9 @@ export class Player {
     this.headUnder = w.isLiquid(fx, Math.floor(this.pos.y + EYE), fz);
     if (this.inWater && !wasWater && this.vel.y < -4 && this.events.onSplash) this.events.onSplash();
 
-    const fwd = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
-    const strafe = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+    const an = this.analog && (Math.abs(this.analog.x) > 0.001 || Math.abs(this.analog.y) > 0.001) ? this.analog : null;
+    const fwd = an ? an.y : (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+    const strafe = an ? an.x : (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     const sprinting = k.has('ShiftLeft') && fwd > 0 && !(this.mode === 'survival' && this.food <= 6);
     let speed = this.flying ? FLY : (sprinting ? SPRINT : WALK);
     if (this.inWater && !this.flying) speed *= 0.6;
@@ -82,10 +83,20 @@ export class Player {
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     let dx = -sin * fwd + cos * strafe, dz = -cos * fwd - sin * strafe;
     const len = Math.hypot(dx, dz);
-    if (len > 0) { dx /= len; dz /= len; }
-    this.vel.x = dx * speed + (this.inWater ? 0 : this.wind.x); this.vel.z = dz * speed + (this.inWater ? 0 : this.wind.z);
+    if (len > 0 && (!an || len > 1)) { dx /= len; dz /= len; }
+    if (!this.gliding) { this.vel.x = dx * speed + (this.inWater ? 0 : this.wind.x); this.vel.z = dz * speed + (this.inWater ? 0 : this.wind.z); }
 
-    if (this.flying) {
+    // Élitros: segundo salto en el aire con los élitros en la mano para planear
+    const space = k.has('Space');
+    if (space && !this.prevSpace && !this.onGround && !this.inWater && !this.flying && this.canGlide && !this.gliding) { this.gliding = true; const l = this.lookDir(); this.vel.set(l.x * 9, Math.max(l.y * 9, -2), l.z * 9); }
+    this.prevSpace = space;
+    if (this.gliding && (this.onGround || this.inWater || this.flying || !this.canGlide)) this.gliding = false;
+    if (this.gliding) {
+      const l = this.lookDir(), f = Math.min(1, dt * 1.4);
+      this.vel.x += (l.x * 22 - this.vel.x) * f; this.vel.z += (l.z * 22 - this.vel.z) * f;
+      this.vel.y += (l.y * 20 - 1.6 - this.vel.y) * Math.min(1, dt * 1.1);
+      this.fallStart = null;
+    } else if (this.flying) {
       this.vel.y = ((k.has('Space') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0)) * speed;
       this.fallStart = null;
     } else if (this.inWater) {

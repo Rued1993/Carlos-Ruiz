@@ -23,6 +23,8 @@ export const QUESTS = [
   { id: 'k_wskel', group: 'Dimensiones', title: 'Huesos negros', desc: 'Derrota a 2 esqueletos Wither', ev: 'kill', target: 'witherskeleton', n: 2, reward: [[I.DIAMOND, 4]], xp: 50 },
   { id: 'k_ghast', group: 'Dimensiones', title: 'Lágrimas de fuego', desc: 'Derrota a un Ghast', ev: 'kill', target: 'ghast', n: 1, reward: [[I.GOLD, 10]], xp: 50 },
   { id: 'k_shulker', group: 'Dimensiones', title: 'Caja sorpresa', desc: 'Derrota a 2 shulkers', ev: 'kill', target: 'shulker', n: 2, reward: [[I.PEARL, 2]], xp: 60 },
+  { id: 'chests', group: 'Dimensiones', title: 'Cazatesoros', desc: 'Abre 3 cofres de fortalezas o ciudades del End', ev: 'chest', target: 'x', n: 3, reward: [[I.DIAMOND, 4], [I.GOLD, 8]], xp: 70 },
+  { id: 'elytra', group: 'Dimensiones', title: '¡A volar!', desc: 'Consigue unos élitros (naves de las ciudades del End)', ev: 'collect', target: I.ELYTRA, n: 1, reward: [[I.STAR, 1]], xp: 120 },
   { id: 'd_end', group: 'Dimensiones', title: 'El fin de todo', desc: 'Entra al End (12 marcos con ojo de Ender)', ev: 'dim', target: 'end', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },
   // Jefes
   { id: 'b_storm', group: 'Jefes', title: 'Domador de la tormenta', desc: 'Derrota a la Tormenta Wither', ev: 'boss', target: 'storm', n: 1, reward: [[I.STAR, 1], [I.DIAMOND, 8]], xp: 150 },

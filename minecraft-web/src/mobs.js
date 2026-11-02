@@ -516,6 +516,18 @@ export class MobManager {
     if (mode !== 'survival') return;
     const w = this.world, hostile = this.list.length;
     if (hostile >= (this.dim === 'nether' ? 14 : 10)) return;
+    if (Math.random() < 0.55) { // dentro de fortalezas del Nether y ciudades del End
+      for (let tries = 0; tries < 8; tries++) {
+        const x = Math.floor(player.pos.x + (Math.random() - 0.5) * 44), z = Math.floor(player.pos.z + (Math.random() - 0.5) * 44);
+        for (let y = Math.min(CH - 6, Math.floor(player.pos.y) + 12); y > Math.max(3, Math.floor(player.pos.y) - 16); y--) {
+          const below = w.getBlock(x, y - 1, z), nb = this.dim === 'nether' && below === B.NETHER_BRICKS, eb = this.dim === 'end' && (below === B.PURPUR || below === B.END_BRICKS);
+          if ((nb || eb) && !w.isSolid(x, y, z) && !w.isSolid(x, y + 1, z) && !w.isSolid(x, y + 2, z)) {
+            if (Math.hypot(x - player.pos.x, z - player.pos.z) < 9) break;
+            this.add(nb ? (Math.random() < 0.65 ? 'witherskeleton' : 'blaze') : (Math.random() < 0.75 ? 'shulker' : 'endermite'), x + 0.5, y, z + 0.5); return;
+          }
+        }
+      }
+    }
     const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 18;
     const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);
     for (let y = Math.min(CH - 6, Math.floor(player.pos.y) + 22); y > 4; y--) {

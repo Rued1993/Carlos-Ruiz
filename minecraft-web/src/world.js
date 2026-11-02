@@ -293,11 +293,128 @@ export class World {
         else if (hash2(wx * 13 + y, wz * 5 - y, seed + 311) < 0.006) data[i] = B.GOLD_ORE;
       }
     }
+    const ctx = { data, x0, z0 };
+    for (const f of this.fortressesNear(x0, z0)) this.buildFortress(f, ctx);
     this.chunks.set(k, data); this.computeTops(k, data); this.scanTorches(k, data);
     return data;
   }
 
   // ---------- End: isla principal, pilares de obsidiana e islas flotantes ----------
+
+  // ---------- Estructuras: fortalezas del Nether y ciudades del End ----------
+  // Cajas rellenas recortadas al chunk actual
+  _fill(ctx, x1, y1, z1, x2, y2, z2, id) {
+    const xa = Math.max(Math.min(x1, x2), ctx.x0), xb = Math.min(Math.max(x1, x2), ctx.x0 + CS - 1), za = Math.max(Math.min(z1, z2), ctx.z0), zb = Math.min(Math.max(z1, z2), ctx.z0 + CS - 1);
+    const ya = Math.max(Math.min(y1, y2), 0), yb = Math.min(Math.max(y1, y2), CH - 1);
+    for (let y = ya; y <= yb; y++) for (let z = za; z <= zb; z++) for (let x = xa; x <= xb; x++) ctx.data[this.idx(x - ctx.x0, y, z - ctx.z0)] = id;
+  }
+  fortressAt(rx, rz) {
+    const key = 'f' + rx + ',' + rz;
+    if (!this.vcache) this.vcache = new Map();
+    if (this.vcache.has(key)) return this.vcache.get(key);
+    const seed = this.seed; let res = null;
+    if (hash2(rx, rz, seed + 4400) < 0.6) res = { x: rx * 224 + 112 + Math.floor((hash2(rx, rz, seed + 4401) - 0.5) * 80), z: rz * 224 + 112 + Math.floor((hash2(rx, rz, seed + 4402) - 0.5) * 80), y: 68 };
+    this.vcache.set(key, res); return res;
+  }
+  fortressesNear(x0, z0) {
+    const out = [];
+    for (let rx = Math.floor((x0 - 70) / 224); rx <= Math.floor((x0 + CS + 70) / 224); rx++) for (let rz = Math.floor((z0 - 70) / 224); rz <= Math.floor((z0 + CS + 70) / 224); rz++) { const f = this.fortressAt(rx, rz); if (f && Math.abs(f.x - x0 - 8) < 80 && Math.abs(f.z - z0 - 8) < 80) out.push(f); }
+    return out;
+  }
+  buildFortress(f, ctx) {
+    const F = (a, b, c, d, e, g, id) => this._fill(ctx, f.x + a, f.y + b, f.z + c, f.x + d, f.y + e, f.z + g, id), Y = 0, NB = B.NETHER_BRICKS;
+    // sala central 17x17
+    F(-8, Y + 1, -8, 8, Y + 9, 8, AIR); F(-8, Y - 2, -8, 8, Y, 8, NB); F(-8, Y + 8, -8, 8, Y + 8, 8, NB);
+    F(-8, Y + 1, -8, -8, Y + 7, 8, NB); F(8, Y + 1, -8, 8, Y + 7, 8, NB); F(-8, Y + 1, -8, 8, Y + 7, -8, NB); F(-8, Y + 1, 8, 8, Y + 7, 8, NB);
+    for (const [px, pz] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) { F(px, Y + 1, pz, px, Y + 7, pz, NB); F(px, Y + 7, pz, px, Y + 7, pz, B.GLOWSTONE); }
+    F(-1, Y + 8, -1, 1, Y + 8, 1, B.GLOWSTONE);
+    // puertas y puentes en las 4 direcciones
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [dx, dz] of dirs) {
+      const px = -dz, pz = dx; // perpendicular
+      // puerta
+      this._fill(ctx, f.x + dx * 8 - px * 1, f.y + 1, f.z + dz * 8 - pz * 1, f.x + dx * 8 + px * 1, f.y + 4, f.z + dz * 8 + pz * 1, AIR);
+      for (let d = 9; d <= 49; d++) {
+        const cx = f.x + dx * d, cz = f.z + dz * d;
+        this._fill(ctx, cx - px * 1, f.y + 1, cz - pz * 1, cx + px * 1, f.y + 6, cz + pz * 1, AIR); // pasillo despejado
+        this._fill(ctx, cx - px * 2, f.y, cz - pz * 2, cx + px * 2, f.y, cz + pz * 2, NB); // suelo de 5
+        this._fill(ctx, cx - px * 2, f.y + 1, cz - pz * 2, cx - px * 2, f.y + 2, cz - pz * 2, NB); this._fill(ctx, cx + px * 2, f.y + 1, cz + pz * 2, cx + px * 2, f.y + 2, cz + pz * 2, NB); // barandillas
+        if (d % 8 === 0) { this._fill(ctx, cx - px * 2, f.y + 1, cz - pz * 2, cx - px * 2, f.y + 5, cz - pz * 2, NB); this._fill(ctx, cx + px * 2, f.y + 1, cz + pz * 2, cx + px * 2, f.y + 5, cz + pz * 2, NB); this._fill(ctx, cx - px * 2, f.y + 5, cz - pz * 2, cx + px * 2, f.y + 5, cz + pz * 2, NB); }
+        if (d % 8 === 4) { for (const s of [-2, 2]) this._fill(ctx, cx + px * s, f.y - 46, cz + pz * s, cx + px * s, f.y - 1, cz + pz * s, NB); }
+      }
+      // torre al final del puente
+      const tx = f.x + dx * 54, tz = f.z + dz * 54;
+      this._fill(ctx, tx - 4, f.y + 1, tz - 4, tx + 4, f.y + 13, tz + 4, AIR); this._fill(ctx, tx - 4, f.y - 3, tz - 4, tx + 4, f.y, tz + 4, NB);
+      this._fill(ctx, tx - 4, f.y + 1, tz - 4, tx - 4, f.y + 12, tz + 4, NB); this._fill(ctx, tx + 4, f.y + 1, tz - 4, tx + 4, f.y + 12, tz + 4, NB); this._fill(ctx, tx - 4, f.y + 1, tz - 4, tx + 4, f.y + 12, tz - 4, NB); this._fill(ctx, tx - 4, f.y + 1, tz + 4, tx + 4, f.y + 12, tz + 4, NB);
+      this._fill(ctx, tx - 4, f.y + 13, tz - 4, tx + 4, f.y + 13, tz + 4, NB);
+      this._fill(ctx, tx - dx * 4 - px * 1, f.y + 1, tz - dz * 4 - pz * 1, tx - dx * 4 + px * 1, f.y + 4, tz - dz * 4 + pz * 1, AIR); // entrada hacia el puente
+      this._fill(ctx, tx - 2, f.y + 7, tz - 2, tx + 2, f.y + 7, tz + 2, NB); this._fill(ctx, tx - 1, f.y + 7, tz - 1, tx - 1, f.y + 7, tz, AIR); // entresuelo con hueco
+      for (let i = 0; i < 6; i++) this._fill(ctx, tx - 3, f.y + 1, tz - 3 + i, tx - 3, f.y + 1 + i, tz - 3 + i, NB); // escalera lateral
+      this._fill(ctx, tx - 3, f.y + 7, tz - 3, tx - 3, f.y + 7, tz + 2, AIR);
+      this._fill(ctx, tx, f.y + 12, tz, tx, f.y + 12, tz, B.GLOWSTONE);
+      this._fill(ctx, tx + 2, f.y + 1, tz + 2, tx + 2, f.y + 1, tz + 2, B.CHEST);
+      this._fill(ctx, tx - 2, f.y + 8, tz + 2, tx - 2, f.y + 8, tz + 2, B.CHEST);
+    }
+    // cofres en la sala central
+    this._fill(ctx, f.x - 7, f.y + 1, f.z - 7, f.x - 7, f.y + 1, f.z - 7, B.CHEST); this._fill(ctx, f.x + 7, f.y + 1, f.z + 7, f.x + 7, f.y + 1, f.z + 7, B.CHEST); this._fill(ctx, f.x + 7, f.y + 1, f.z - 7, f.x + 7, f.y + 1, f.z - 7, B.CHEST);
+  }
+
+  endIsland(wx, wz) { // altura de la superficie y base del suelo (o null) en el End
+    const seed = this.seed + 9001, r = Math.hypot(wx, wz);
+    if (r < 54) return { top: 64 + Math.floor(fbm(wx * 0.08, wz * 0.08, seed + 700, 2) * 3) - (r > 46 ? Math.floor(r - 46) : 0), bottom: 0 };
+    if (r > 240) { const n = fbm(wx * 0.011, wz * 0.011, seed + 701, 3); if (n > 0.63) return { top: 58 + Math.floor((n - 0.63) * 60) + Math.floor(fbm(wx * 0.06, wz * 0.06, seed + 702, 2) * 3), n }; }
+    return null;
+  }
+  endCityAt(rx, rz) {
+    const key = 'e' + rx + ',' + rz;
+    if (!this.vcache) this.vcache = new Map();
+    if (this.vcache.has(key)) return this.vcache.get(key);
+    let res = null; const seed = this.seed;
+    if (hash2(rx, rz, seed + 5500) < 0.7) {
+      let best = null;
+      for (let a = 8; a < 160; a += 10) for (let b = 8; b < 160; b += 10) {
+        const wx = rx * 160 + a, wz = rz * 160 + b; if (Math.hypot(wx, wz) < 270) continue;
+        const il = this.endIsland(wx, wz); if (il && il.n > 0.66 && (!best || il.n > best.n)) best = { x: wx, z: wz, n: il.n, top: il.top };
+      }
+      if (best) res = { x: best.x, z: best.z, y: best.top, ship: hash2(rx, rz, seed + 5501) < 0.55 };
+    }
+    this.vcache.set(key, res); return res;
+  }
+  endCitiesNear(x0, z0) {
+    const out = [];
+    for (let rx = Math.floor((x0 - 30) / 160); rx <= Math.floor((x0 + CS + 30) / 160); rx++) for (let rz = Math.floor((z0 - 30) / 160); rz <= Math.floor((z0 + CS + 30) / 160); rz++) { const c = this.endCityAt(rx, rz); if (c && Math.abs(c.x - x0 - 8) < 50 && Math.abs(c.z - z0 - 8) < 50) out.push(c); }
+    return out;
+  }
+  buildEndCity(c, ctx) {
+    const F = (a, b, d, e, g, h, id) => this._fill(ctx, c.x + a, c.y + b, c.z + d, c.x + e, c.y + g, c.z + h, id), P = B.PURPUR, EB = B.END_BRICKS;
+    F(-6, -12, -6, 6, 0, 6, P); // cimientos
+    F(-5, 1, -5, 5, 21, 5, AIR);
+    for (let fl = 0; fl < 3; fl++) {
+      const y0 = 1 + fl * 6;
+      F(-4, y0, -4, 4, y0, 4, P); // suelo
+      for (let y = y0 + 1; y <= y0 + 5; y++) {
+        const band = y === y0 + 3 ? EB : P;
+        F(-4, y, -4, 4, y, -4, band); F(-4, y, 4, 4, y, 4, band); F(-4, y, -4, -4, y, 4, band); F(4, y, -4, 4, y, 4, band);
+      }
+      for (const [wx, wz] of [[0, -4], [0, 4], [-4, 0], [4, 0]]) F(wx === 0 ? -1 : wx, y0 + 2, wz === 0 ? -1 : wz, wx === 0 ? 1 : wx, y0 + 4, wz === 0 ? 1 : wz, B.GLASS); // ventanas
+      F(-3, y0 + 5, -3, -3, y0 + 5, -3, B.GLOWSTONE); F(3, y0 + 5, 3, 3, y0 + 5, 3, B.GLOWSTONE);
+      for (let i = 0; i < 6; i++) F(-3 + i, y0 + 1, -3, -3 + i, y0 + 1 + i, -3, P); // escalera de columnas junto a la pared norte
+      F(-3, y0 + 6, -3, 1, y0 + 6, -2, AIR); // hueco en el suelo siguiente sobre la escalera
+    }
+    F(-4, 19, -4, 4, 19, 4, P); F(-3, 19, -3, -3, 19, -3, P); // techo
+    for (const [sx, sz] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) { F(sx, 20, sz, sx, 23, sz, P); F(sx, 24, sz, sx, 24, sz, B.GLOWSTONE); }
+    F(-1, 2, -1, 1, 4, -4, AIR); F(-1, 2, -4, 1, 4, -4, AIR); // puerta (lado norte, planta baja)
+    F(2, 2, 2, 2, 2, 2, B.CHEST); F(-2, 8, 2, -2, 8, 2, B.CHEST); F(2, 14, 2, 2, 14, 2, B.CHEST);
+    if (c.ship) { // pasarela y nave voladora con élitros
+      const fy = 13; F(5, fy, -1, 9, fy, 1, P);
+      F(10, fy, -3, 22, fy, 3, P); F(10, fy + 1, -3, 22, fy + 1, -3, EB); F(10, fy + 1, 3, 22, fy + 1, 3, EB); F(22, fy + 1, -3, 22, fy + 1, 3, EB);
+      F(20, fy, -2, 24, fy, 2, P); F(25, fy + 1, 0, 25, fy + 2, 0, EB); // proa
+      F(15, fy + 1, 0, 15, fy + 6, 0, EB); F(14, fy + 4, 0, 16, fy + 4, 0, EB); // mástil
+      F(21, fy + 1, 0, 21, fy + 1, 0, EB); F(21, fy + 2, 0, 21, fy + 2, 0, B.CHEST); // cofre sobre ladrillos (marca de nave: élitros)
+      F(10, fy - 1, -2, 20, fy - 2, 2, P);
+    }
+  }
+
   genEnd(cx, cz, k) {
     const seed = this.seed + 9001, data = new Uint8Array(CS * CS * CH), x0 = cx * CS, z0 = cz * CS;
     for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
@@ -316,6 +433,8 @@ export class World {
       for (let y = 62; y <= pl.top; y++) data[this.idx(lx, y, lz)] = B.OBSIDIAN;
       if (dx === 0 && dz === 0) data[this.idx(lx, pl.top + 1, lz)] = B.BEDROCK;
     }
+    const ctx = { data, x0, z0 };
+    for (const c of this.endCitiesNear(x0, z0)) this.buildEndCity(c, ctx);
     this.chunks.set(k, data); this.computeTops(k, data); this.scanTorches(k, data);
     return data;
   }

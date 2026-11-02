@@ -13,6 +13,7 @@ import { BOSS_INFO, BOSS_ORDER } from './bosses.js';
 import { Quests, QUESTS } from './quests.js';
 import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from './world.js';
 import { Ambient } from './ambient.js';
+import { Gamepads, PAD_ACTIONS, BTN_NAMES, defaultPadConfig } from './gamepad.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
 import { Sky } from './sky.js';
@@ -122,6 +123,7 @@ function applyQuality() {
 // ---------- Ajustes (persistentes) ----------
 const settings = { radius: 8, fov: 75, sens: 1, vol: 0.5, cam: 0, quality: 2 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('mcweb-settings') || '{}')); } catch {}
+{ const d = defaultPadConfig(); settings.pad = Object.assign(d, settings.pad || {}); settings.pad.map = Object.assign(defaultPadConfig().map, (settings.pad && settings.pad.map) || {}); }
 const saveSettings = () => { try { localStorage.setItem('mcweb-settings', JSON.stringify(settings)); } catch {} };
 const STORMY = new Set(['storm', 'dragon', 'wither', 'herobrine']);
 const LOOT = {
@@ -176,7 +178,7 @@ let xpLevel = 0, xpPts = 0, darkTarget = 0, mmT = 0, trackT = 0, wBudget = 2;
 let worldId = null, worldName = 'Mundo', playedSec = 0, createdAt = 0, thumbData = null, thumbReq = false, lastSaved = 0;
 const xpNeed = (l) => 6 + l * 4;
 function addXp(n) { xpPts += n; while (xpPts >= xpNeed(xpLevel)) { xpPts -= xpNeed(xpLevel); xpLevel++; if (ui) ui.toast('¡Nivel ' + xpLevel + '!'); sound('pop'); } }
-let world, player, inv, sky, mobs, drops, particles, ui, seed = 1, ambient;
+let world, player, inv, sky, mobs, drops, particles, ui, seed = 1, ambient, pads = null, padActive = false;
 let dims = {}, dim = 'overworld', extraSaved = { nether: new Map(), end: new Map() }, portalT = 0, travelCool = 0, dragonSpawned = false;
 const DIM_NAMES = { overworld: 'Overworld', nether: 'El Nether', end: 'El End' };
 const fkey = (x, y, z) => (dim === 'overworld' ? '' : dim + ':') + x + ',' + y + ',' + z;
@@ -193,7 +195,8 @@ function showOverlay(which) {
   o.classList.remove('hidden');
   for (const id of ['menu', 'pause', 'death']) $(id).classList.toggle('hidden', id !== which);
 }
-const sound = (n) => audio.play(n);
+const sound = (n) => { audio.play(n); if (pads) { if (n === 'hurt') pads.rumble(0.6, 0.35, 180); else if (n === 'explode') pads.rumble(1, 0.7, 450); else if (n === 'roar') pads.rumble(0.8, 0.5, 600); else if (n === 'hit') pads.rumble(0.25, 0.5, 70); else if (n === 'break') pads.rumble(0.15, 0.35, 60); else if (n === 'thunder') pads.rumble(0.7, 0.2, 500); } };
+function safeLock() { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch {} }
 
 function findSpawnColumn(sd) {
   for (let r = 0; r < 600; r += 5)
@@ -224,7 +227,7 @@ function dropItem(id, n, tossFrom = null) {
 }
 
 function explode(x, y, z, r, ds = 1) {
-  sound('explode');
+  sound('explode'); { const dd = Math.hypot(player.pos.x - x, player.pos.y - y, player.pos.z - z); if (dd < 40) pads.rumble(Math.min(1, 1.2 - dd / 40), 0.8, 500); }
   const R = Math.ceil(r) + 1;
   for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) {
     const dist = Math.hypot(dx, dy, dz);
@@ -275,6 +278,7 @@ function useItem() {
     openInventory('furnace', furnaces.get(key)); return;
   }
   if (hit && hit.id === B.END_FRAME) { useEyeOnFrame(hit); return; }
+  if (hit && hit.id === B.CHEST && !player.keys.has('ShiftLeft')) { openChest(hit); return; }
   const held = inv.held();
   if (!held) return;
   if (held.id === I.LIGHTER) { if (hit) lightPortal(hit); return; }
@@ -349,12 +353,12 @@ function openPanel(id) {
   if (state !== 'play') return;
   state = 'panel'; panelId = id; player.keys.clear(); mouse.left = mouse.right = false;
   document.exitPointerLock(); $(id).classList.remove('hidden');
-  if (id === 'summon') renderSummon(); else renderQuests();
+  if (id === 'summon') renderSummon(); else if (id === 'padcfg') renderPadCfg(); else renderQuests();
 }
 function closePanel(relock) {
   if (!panelId) return;
   $(panelId).classList.add('hidden'); panelId = null;
-  if (relock) { state = 'play'; canvas.requestPointerLock(); } else { state = 'pause'; showOverlay('pause'); }
+  if (relock) { state = 'play'; safeLock(); } else { state = 'pause'; showOverlay('pause'); }
 }
 function renderSummon() {
   $('bossCards').innerHTML = BOSS_ORDER.map((t) => {
@@ -438,6 +442,19 @@ function findPortalFrame(px, py, pz) {
     return cells;
   }
   return null;
+}
+// Cofres de fortalezas y ciudades: botín único
+function rollLoot(hit) {
+  const out = [], r = Math.random, add = (id, a, b, p = 1) => { if (r() < p) out.push([id, a + Math.floor(r() * (b - a + 1))]); };
+  if (dim === 'nether') { add(I.GOLD, 2, 8); add(I.IRON, 1, 5, 0.7); add(I.DIAMOND, 1, 2, 0.3); add(B.OBSIDIAN, 2, 4, 0.4); add(I.COAL, 3, 8, 0.6); add(I.EYE, 1, 1, 0.15); add(I.COOKED_PORK, 2, 4, 0.4); }
+  else if (dim === 'end') { add(I.DIAMOND, 2, 6, 0.7); add(I.GOLD, 3, 9); add(I.IRON, 2, 6, 0.8); add(I.PEARL, 1, 3, 0.5); add(I.EYE, 1, 2, 0.3); add(B.PURPUR, 6, 16, 0.7); if (world.getBlock(hit.x, hit.y - 1, hit.z) === B.END_BRICKS) out.push([I.ELYTRA, 1]); else add(I.ELYTRA, 1, 1, 0.06); }
+  else { add(I.GOLD, 1, 4); add(I.IRON, 1, 4); add(I.COAL, 2, 6); }
+  return out;
+}
+function openChest(hit) {
+  world.setBlock(hit.x, hit.y, hit.z, B.CHEST_OPEN); sound('craft');
+  for (const [id, n] of rollLoot(hit)) drops.spawn(hit.x + 0.5, hit.y + 1, hit.z + 0.5, id, n);
+  particles.burst(hit.x + 0.5, hit.y + 1, hit.z + 0.5, [1, 0.85, 0.3], 14, 4); ui.toast('¡Cofre abierto!'); quests.event('chest', 'x');
 }
 function lightPortal(hit) {
   if (dim === 'end') { ui.toast('El fuego no prende aquí'); return false; }
@@ -694,7 +711,7 @@ function openInventory(size, furnace = null) {
 }
 function closeInventory(relock) {
   ui.close();
-  if (relock) { state = 'play'; canvas.requestPointerLock(); }
+  if (relock) { state = 'play'; safeLock(); }
   else { state = 'pause'; showOverlay('pause'); }
 }
 
@@ -829,17 +846,17 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, get xp() { return [xpLevel, xpPts]; } };
+  window.__game = { get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, openChest, rollLoot, get xp() { return [xpLevel, xpPts]; } };
   state = 'play'; showOverlay(null);
-  canvas.requestPointerLock();
-  setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play') { state = 'pause'; showOverlay('pause'); } }, 1500);
+  safeLock();
+  setTimeout(() => { if (document.pointerLockElement !== canvas && state === 'play' && !padActive) { state = 'pause'; showOverlay('pause'); } }, 1500);
 }
 
 // ---------- Eventos ----------
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (locked) { if (state === 'pause' || state === 'play') { state = 'play'; showOverlay(null); } }
-  else { player && player.keys.clear(); mouse.left = mouse.right = false; if (state === 'play') { state = 'pause'; showOverlay('pause'); } }
+  else { player && player.keys.clear(); mouse.left = mouse.right = false; if (state === 'play' && !padActive) { state = 'pause'; showOverlay('pause'); } }
 });
 document.addEventListener('mousemove', (e) => {
   if (state !== 'play' || document.pointerLockElement !== canvas) return;
@@ -847,10 +864,12 @@ document.addEventListener('mousemove', (e) => {
   player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch - e.movementY * 0.0022 * settings.sens));
 });
 document.addEventListener('keydown', (e) => {
+  if (e.isTrusted) padActive = false;
   audio.unlock();
   if (state === 'panel') {
     if (e.code === 'Escape') closePanel(false);
     else if ((e.code === 'KeyB' && panelId === 'summon') || (e.code === 'KeyM' && panelId === 'quests')) closePanel(true);
+    else if (e.code === 'KeyP' && panelId === 'padcfg') closePanel(false);
     return;
   }
   if (state === 'inv') {
@@ -863,6 +882,7 @@ document.addEventListener('keydown', (e) => {
   switch (e.code) {
     case 'KeyE': openInventory(2); return;
     case 'KeyB': openPanel('summon'); return;
+    case 'KeyP': openPanel('padcfg'); return;
     case 'KeyM': openPanel('quests'); return;
     case 'F3': e.preventDefault(); $('info').classList.toggle('hidden'); return;
     case 'KeyT': if (!e.repeat) { const st = weather.cycle(); ui.toast('Clima: ' + WEATHER_NAMES[st]); } return;
@@ -877,10 +897,13 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => player && player.keys.delete(e.code));
 document.addEventListener('wheel', (e) => { if (state === 'play') { inv.selected = (inv.selected + Math.sign(e.deltaY) + 9) % 9; syncSelect(); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+function pressLeft() { mouse.left = true; swing = swing || 0.001; if (attackCool <= 0) { if (attack()) { attackCool = 0.4; mouse.left = false; } } }
+function pressRight() { mouse.right = true; placeCool = 0.22; useItem(); }
 document.addEventListener('mousedown', (e) => {
+  if (e.isTrusted) padActive = false;
+  if (e.isTrusted && state === 'play' && document.pointerLockElement !== canvas) { safeLock(); return; } // el ratón vuelve a tomar el control
   if (state !== 'play' || document.pointerLockElement !== canvas) return;
-  if (e.button === 0) { mouse.left = true; swing = swing || 0.001; if (attackCool <= 0) { if (attack()) { attackCool = 0.4; mouse.left = false; } } }
-  else if (e.button === 2) { mouse.right = true; placeCool = 0.22; useItem(); }
+  if (e.button === 0) pressLeft(); else if (e.button === 2) pressRight();
 });
 document.addEventListener('mouseup', (e) => { if (e.button === 0) mouse.left = false; if (e.button === 2) mouse.right = false; });
 document.addEventListener('visibilitychange', () => { if (document.hidden && state !== 'menu') saveGame(); });
@@ -892,7 +915,9 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-$('bResume').onclick = () => { audio.unlock(); canvas.requestPointerLock(); };
+function resumeGame() { audio.unlock(); showOverlay(null); state = 'play'; safeLock(); }
+$('bResume').onclick = resumeGame;
+$('bPPad').onclick = () => { showOverlay(null); state = 'play'; openPanel('padcfg'); };
 $('bSave').onclick = async () => { thumbReq = true; await new Promise((r) => setTimeout(r, 120)); await saveGame(); location.reload(); };
 $('bSaveNow').onclick = async () => { await saveWithFeedback(); $('bSaveNow').textContent = '💾 Guardado ✔'; setTimeout(() => ($('bSaveNow').textContent = '💾 Guardar partida'), 1500); };
 $('bExport').onclick = async () => {
@@ -900,7 +925,7 @@ $('bExport').onclick = async () => {
   const blob = await save.exportWorld(worldId), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = worldName.replace(/[^\w\-]+/g, '_') + '.mcw'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 };
-$('bRespawn').onclick = async () => { audio.unlock(); showOverlay(null); if (dim !== 'overworld') { state = 'play'; await changeDimension('overworld', { respawn: true }); } player.respawn(); if (dim === 'overworld') { const g = groundSpawn(Math.floor(player.spawn.x), Math.floor(player.spawn.z)); player.pos.copy(g); } state = 'play'; ui.renderStats(); canvas.requestPointerLock(); };
+$('bRespawn').onclick = async () => { audio.unlock(); showOverlay(null); if (dim !== 'overworld') { state = 'play'; await changeDimension('overworld', { respawn: true }); } player.respawn(); if (dim === 'overworld') { const g = groundSpawn(Math.floor(player.spawn.x), Math.floor(player.spawn.z)); player.pos.copy(g); } state = 'play'; ui.renderStats(); safeLock(); };
 $('bCam').onclick = () => setCamMode((camMode + 1) % 3);
 $('bQuality').onclick = () => { settings.quality = (settings.quality + 1) % QUALITY.length; saveSettings(); applyQuality(); ui && ui.toast('Gráficos: ' + QUALITY[settings.quality].name); };
 $('bPSummon').onclick = () => { showOverlay(null); state = 'play'; openPanel('summon'); };
@@ -916,15 +941,140 @@ bind('rSens', 'vSens', 'sens', (v) => v.toFixed(1));
 bind('rVol', 'vVol', 'vol', (v) => Math.round(v * 100), (v) => audio.setVolume(v));
 $('bCam').textContent = 'Cámara: ' + CAM_NAMES[camMode];
 
+// ===================================================================== MANDO (PS4)
+pads = new Gamepads(settings.pad);
+const padHeld = new Set(), cur = { x: innerWidth / 2, y: innerHeight / 2 };
+let padSprint = false, padLeft = false, padRight = false, lastUiKey = '', padHover = null;
+const clamp01 = (v, a, b) => Math.max(a, Math.min(b, v));
+const tap = (code) => { document.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true })); document.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true })); };
+function setPadKey(code, on) { if (on) { if (!padHeld.has(code)) { padHeld.add(code); player.keys.add(code); } } else if (padHeld.has(code)) { padHeld.delete(code); player.keys.delete(code); } }
+function releasePad() { if (!player) return; for (const c of [...padHeld]) setPadKey(c, false); player.analog = null; padSprint = false; if (padLeft) { padLeft = false; mouse.left = false; } if (padRight) { padRight = false; mouse.right = false; } }
+function padPause() {
+  if (state === 'play') { state = 'pause'; showOverlay('pause'); try { document.exitPointerLock(); } catch {} }
+  else if (state === 'pause') resumeGame();
+  else padBack();
+}
+function padBack() {
+  if (state === 'inv') tap('KeyE');
+  else if (state === 'panel') closePanel(panelId !== 'padcfg');
+  else if (state === 'pause') resumeGame();
+}
+function padTargets() {
+  return [...document.querySelectorAll('button, input[type=range], .slot[data-g]')].filter((e) => {
+    if (e.disabled || e.offsetParent === null) return false; const r = e.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  });
+}
+function snapCursor() {
+  const list = padTargets(); if (!list.length) return;
+  const t = list.find((e) => e.classList.contains('primary')) || list.find((e) => e.dataset.g === 'inv' && e.parentElement.id === 'invHot') || list[0];
+  const r = t.getBoundingClientRect(); cur.x = r.left + r.width / 2; cur.y = r.top + r.height / 2;
+}
+function padNavigate(dir) { // salta al elemento más cercano en esa dirección
+  let best = null, bs = 1e9;
+  for (const e of padTargets()) {
+    const r = e.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, vx = cx - cur.x, vy = cy - cur.y;
+    const along = vx * dir[0] + vy * dir[1]; if (along < 5) continue;
+    const score = along + Math.abs(vx * dir[1] - vy * dir[0]) * 2.4; if (score < bs) { bs = score; best = [cx, cy]; }
+  }
+  if (best) { cur.x = best[0]; cur.y = best[1]; }
+}
+function padClick(button) { // clic con el cursor virtual (izq. = cruz, der. = cuadrado)
+  const el = document.elementFromPoint(cur.x, cur.y); if (!el) return; audio.unlock();
+  const range = el.closest && el.closest('input[type=range]');
+  if (range && button === 0) {
+    const r = range.getBoundingClientRect(), f = clamp01((cur.x - r.left) / r.width, 0, 1), mn = +range.min, mx = +range.max, st = +range.step || 1;
+    range.value = Math.round((mn + f * (mx - mn)) / st) * st; range.dispatchEvent(new Event('input', { bubbles: true })); return;
+  }
+  const o = { bubbles: true, cancelable: true, clientX: cur.x, clientY: cur.y, button, view: window };
+  el.dispatchEvent(new MouseEvent('mousedown', o)); el.dispatchEvent(new MouseEvent('mouseup', o));
+  if (button === 0) el.dispatchEvent(new MouseEvent('click', o)); else el.dispatchEvent(new MouseEvent('contextmenu', o));
+}
+function padUi(s, dt) { // menús, inventario y paneles con cursor virtual + cruceta
+  const pc = $('padcursor'); pc.classList.remove('hidden');
+  const key = state + '|' + [...document.querySelectorAll('#overlay > div:not(.hidden)')].map((e) => e.id).join(',') + '|' + (panelId || '');
+  if (key !== lastUiKey) { lastUiKey = key; snapCursor(); }
+  const L = pads.stick(s.axes, 0, 1, 1.25), R = pads.stick(s.axes, 2, 3, 1);
+  let moved = false;
+  if (L.m > 0) { cur.x = clamp01(cur.x + L.x * dt * 1100, 0, innerWidth - 1); cur.y = clamp01(cur.y + L.y * dt * 1100, 0, innerHeight - 1); moved = true; }
+  pc.style.left = cur.x + 'px'; pc.style.top = cur.y + 'px';
+  const el = document.elementFromPoint(cur.x, cur.y), tg = el && el.closest ? el.closest('button, .slot[data-g], input') : null;
+  if (tg !== padHover) { if (padHover) padHover.classList.remove('padhover'); padHover = tg; if (tg) tg.classList.add('padhover'); }
+  if (moved && el) el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: cur.x, clientY: cur.y }));
+  if (R.m > 0) { let n = el; while (n && n !== document.body) { if (n.scrollHeight > n.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) { n.scrollTop += R.y * dt * 800; break; } n = n.parentElement; } }
+  [[12, [0, -1]], [13, [0, 1]], [14, [-1, 0]], [15, [1, 0]]].forEach(([b, d]) => { if (s.edge[b]) padNavigate(d); });
+  if (pads.edge('jump')) padClick(0);
+  if (pads.edge('fall')) padClick(2);
+  if (pads.edge('drop') || pads.edge('inventory') && state === 'inv') padBack();
+  if (pads.edge('pause')) padPause();
+}
+function padGame(s, dt) {
+  const L = pads.stick(s.axes, 0, 1, 1), R = pads.stick(s.axes, 2, 3), cfg = settings.pad;
+  player.analog = L.m > 0 ? { x: L.x, y: -L.y } : null;
+  if (pads.edge('sprint')) padSprint = !padSprint;
+  if (L.m < 0.2) padSprint = false;
+  setPadKey('ShiftLeft', padSprint && L.y < -0.2);
+  if (R.m > 0) { player.yaw -= R.x * cfg.lookX * settings.sens * dt; player.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, player.pitch - R.y * cfg.lookY * settings.sens * dt * (cfg.invertY ? -1 : 1))); }
+  setPadKey('Space', pads.down('jump')); setPadKey('KeyQ', pads.down('fall') && player.flying);
+  const atk = pads.down('attack'), use = pads.down('use');
+  if (atk && !padLeft) pressLeft(); if (!atk && padLeft) mouse.left = false; padLeft = atk;
+  if (use && !padRight) pressRight(); if (!use && padRight) mouse.right = false; padRight = use;
+  if (pads.edge('prev')) { inv.selected = (inv.selected + 8) % 9; syncSelect(); }
+  if (pads.edge('next')) { inv.selected = (inv.selected + 1) % 9; syncSelect(); }
+  const map = { inventory: 'KeyE', drop: 'KeyQ', summon: 'KeyB', quests: 'KeyM', camera: 'KeyV', fly: 'KeyF', weather: 'KeyT', debug: 'F3', mode: 'KeyG', config: 'KeyP' };
+  for (const [a, code] of Object.entries(map)) if (pads.edge(a)) tap(code);
+  if (pads.edge('pause')) padPause();
+}
+function padFrame(dt) {
+  const s = pads.poll(), pc = $('padcursor');
+  if (!s.connected) { releasePad(); pc.classList.add('hidden'); return; }
+  if (s.busy) return; // asignando un botón
+  if (s.any && !padActive) { padActive = true; }
+  if (panelId === 'padcfg') updatePadTest(s);
+  if (state === 'play' && world && player) { pc.classList.add('hidden'); if (padActive || s.any) padGame(s, dt); }
+  else { releasePad(); if (['menu', 'pause', 'inv', 'panel', 'dead'].includes(state)) padUi(s, dt); else pc.classList.add('hidden'); }
+}
+addEventListener('gamepadconnected', (e) => { padActive = true; if (ui) ui.toast('🎮 Mando conectado'); $('msg') && state === 'menu' && ($('msg').textContent = '🎮 Mando conectado: mueve el cursor con el stick izquierdo y pulsa ✕'); });
+addEventListener('gamepaddisconnected', () => { releasePad(); if (ui) ui.toast('🎮 Mando desconectado'); });
+
+// Panel de configuración del mando
+function renderPadCfg() {
+  const cfg = settings.pad, st = $('padStatus');
+  st.className = pads.connected ? 'ok' : 'bad';
+  st.textContent = pads.connected ? '✔ Conectado: ' + pads.id : '✖ No hay mando: conéctalo por USB/Bluetooth y pulsa cualquier botón (los navegadores no lo ven hasta entonces).';
+  $('padMap').innerHTML = PAD_ACTIONS.map((a) => `<div class="prow"><span>${a.label}</span><b>${BTN_NAMES[cfg.map[a.id]] || 'Botón ' + cfg.map[a.id]}</b><button data-pa="${a.id}">Cambiar</button></div>`).join('');
+  const sl = (id, lab, key, fmt) => { const el = $(id); el.value = cfg[key]; $(lab).textContent = fmt(cfg[key]); el.oninput = (e) => { cfg[key] = +e.target.value; $(lab).textContent = fmt(cfg[key]); saveSettings(); }; };
+  sl('pLookX', 'vLookX', 'lookX', (v) => v.toFixed(1)); sl('pLookY', 'vLookY', 'lookY', (v) => v.toFixed(1)); sl('pDead', 'vDead', 'deadzone', (v) => v.toFixed(2)); sl('pCurve', 'vCurve', 'curve', (v) => v.toFixed(1));
+  $('pInvert').textContent = 'Invertir Y: ' + (cfg.invertY ? 'sí' : 'no'); $('pRumble').textContent = 'Vibración: ' + (cfg.rumble ? 'sí' : 'no');
+  $('padTest').innerHTML = BTN_NAMES.map((n, i) => `<span class="chip" data-b="${i}">${n}</span>`).join('') + '<div class="axis" data-ax="0"><i></i></div><div class="axis" data-ax="1"><i></i></div><div class="axis" data-ax="2"><i></i></div><div class="axis" data-ax="3"><i></i></div>';
+}
+function updatePadTest(s) {
+  document.querySelectorAll('#padTest .chip').forEach((c) => c.classList.toggle('on', !!s.down[+c.dataset.b]));
+  document.querySelectorAll('#padTest .axis').forEach((a) => { const v = (s.axes[+a.dataset.ax] || 0); a.firstElementChild.style.left = ((v + 1) / 2) * (a.clientWidth - 8) + 'px'; });
+  const st = $('padStatus'); if (st && pads.connected && !st.classList.contains('ok')) renderPadCfg();
+}
+$('padcfg').addEventListener('click', (e) => {
+  const cfg = settings.pad, b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.pa) {
+    if (!pads.connected) { ui.toast('Conecta el mando y pulsa un botón'); return; }
+    const id = b.dataset.pa; b.textContent = 'Pulsa un botón…'; b.classList.add('listen');
+    pads.listen((i) => { const old = cfg.map[id]; const other = Object.keys(cfg.map).find((k) => k !== id && cfg.map[k] === i); if (other) cfg.map[other] = old; cfg.map[id] = i; saveSettings(); renderPadCfg(); });
+  } else if (b.id === 'pInvert') { cfg.invertY = !cfg.invertY; saveSettings(); renderPadCfg(); }
+  else if (b.id === 'pRumble') { cfg.rumble = !cfg.rumble; saveSettings(); renderPadCfg(); if (cfg.rumble) pads.rumble(0.6, 0.6, 250); }
+  else if (b.id === 'pReset') { const d = defaultPadConfig(); Object.assign(cfg, d); cfg.map = d.map; saveSettings(); renderPadCfg(); }
+});
+
 // ---------- Bucle ----------
 let last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  padFrame(dt);
   if (!world || state === 'menu' || state === 'loading') return;
   fpsAcc += dt; fpsN++; if (fpsAcc >= 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
 
   if (state !== 'pause') {
+    { const hd = inv.held(); player.canGlide = !!(hd && hd.id === I.ELYTRA); }
     player.update(dt);
     model.update(dt, player, swing);
     applyCamera();
