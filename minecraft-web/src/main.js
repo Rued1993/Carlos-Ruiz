@@ -287,7 +287,7 @@ function obBroken() {
   }
   if (ob.count % 25 === 0) { // cofre de recompensa
     const out = rollLoot({ x: 0, y: 64, z: 0 });
-    for (const [id, n] of out) drops.spawn(0.5, 65.5, 0.5, id, n);
+    for (const [id, n] of out) drops.spawn(0.5, 65.8, 0.5, id, n);
     ui.toast('🎁 ¡Recompensa de One Block!');
   }
   const bt = OB_BOSSES[ob.count];
@@ -314,7 +314,10 @@ function breakBlock(hit) {
   sound('break');
   if (mode === 'survival') {
     const d = dropOf(id, held);
-    if (d) drops.spawn(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, d[0], d[1]);
+    if (d) {
+      if (kind === 'oneblock' && hit.x === 0 && hit.y === 64 && hit.z === 0) { const left = inv.add(d[0], d[1]); if (left) drops.spawn(0.5, 65.6, 0.5, d[0], left); ui.renderHotbar(); sound('pop'); } // directo al inventario: nada se cae al vacío
+      else drops.spawn(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, d[0], d[1]);
+    }
     if (toolOf(held) && BLOCKS[id].hardness > 0) { if (inv.wearHeld(1)) { sound('break'); ui.toast('¡Se ha roto la herramienta!'); } ui.renderHotbar(); }
   }
   // Un cactus sin base se rompe
