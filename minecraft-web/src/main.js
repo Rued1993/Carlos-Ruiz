@@ -61,9 +61,9 @@ const materials = {
   trans: patchChunkMaterial(new THREE.MeshStandardMaterial({ map: texture, normalMap: pxNormal, vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.1, metalness: 0.05 })),
   tint,
 };
-function setTextureMode(hd) {
+function setTextureMode(hd, classic = false) {
   if (hd && !hdTex) hdTex = createHDTextures(renderer);
-  for (const m of [materials.opaque, materials.trans]) { m.map = hd ? hdTex.map : texture; m.normalMap = hd ? hdTex.normalMap : pxNormal; m.needsUpdate = true; }
+  for (const m of [materials.opaque, materials.trans]) { m.map = hd ? hdTex.map : texture; m.normalMap = classic ? null : hd ? hdTex.normalMap : pxNormal; m.roughness = classic ? 1 : m === materials.trans ? 0.1 : 0.94; m.needsUpdate = true; }
 }
 
 // ---------- Calidad gráfica: sombras, bloom, texturas HD, MSAA, escala ----------
@@ -74,6 +74,7 @@ const QUALITY = [
   { name: 'Medio', shadows: true, size: 1024, ext: 48, bloom: false, hd: false, msaa: 0, pr: 1, grade: false },
   { name: 'Alto', shadows: true, size: 2048, ext: 64, bloom: true, hd: true, msaa: 2, pr: 1.25, grade: true },
   { name: 'Ultra (hiperrealista)', shadows: true, size: 4096, ext: 80, bloom: true, hd: true, msaa: 4, pr: 2, grade: true },
+  { name: 'Clásico (píxel)', shadows: false, size: 0, ext: 0, bloom: false, hd: false, msaa: 0, pr: 1, grade: false, classic: true },
 ];
 const GradeShader = {
   uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVig: { value: 0.85 }, uSat: { value: 1.04 }, uGrain: { value: 0.035 }, uContrast: { value: 1.06 } },
@@ -92,7 +93,9 @@ function applyQuality() {
   renderer.shadowMap.enabled = q.shadows;
   if (sky) sky.setShadows(q.shadows, q.size || 1024, q.ext || 48);
   for (const m of [materials.opaque, materials.trans]) m.needsUpdate = true;
-  setTextureMode(q.hd);
+  setTextureMode(q.hd, !!q.classic);
+  renderer.toneMapping = q.classic ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+  if (sky) sky.classic = !!q.classic;
   const post = q.bloom || q.grade || q.msaa;
   if (composer) { composer.dispose(); composer = null; }
   if (post) {

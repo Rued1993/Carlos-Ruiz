@@ -164,6 +164,10 @@ export class Sky {
     this.sunLight.target.position.set(tx, ty, tz);
     this.sunLight.position.set(tx + this.lightDir.x * 160, ty + this.lightDir.y * 160, tz + this.lightDir.z * 160);
     this.sunLight.castShadow = this.shadowOn && this.sunLight.intensity > 0.05;
+    if (this.classic) { // modo clásico: iluminación plana (solo la luz baked por vértice)
+      this.sunLight.intensity = 0; this.sunLight.castShadow = false; this.hemi.color.set(0xffffff); this.hemi.groundColor.set(0xffffff);
+      this.hemi.intensity = (0.2 + 0.8 * this.daylight) * 3.1 + flash * 3;
+    }
 
     this.root.position.copy(this.camera.position);
     const R = 220;
