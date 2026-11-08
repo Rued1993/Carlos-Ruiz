@@ -6,8 +6,11 @@ const PREFIX = 'vxl-', CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 function peerOpts() { // por defecto, el servidor de señalización público de PeerJS; ?peerhost=… para uno propio o pruebas
   const q = new URLSearchParams(location.search), dbg = q.get('peerdebug') ? 3 : 0;
-  if (q.get('peerhost')) return { debug: dbg, host: q.get('peerhost'), port: +q.get('peerport') || 9000, path: q.get('peerpath') || '/', secure: q.get('peersecure') === '1' };
-  return { debug: dbg };
+  // STUN para redes normales y TURN público de respaldo (redes móviles / NAT estricto)
+  const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }, { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }], iceCandidatePoolSize: 4 };
+  if (q.get('peerhost')) return { debug: dbg, config, host: q.get('peerhost'), port: +q.get('peerport') || 9000, path: q.get('peerpath') || '/', secure: q.get('peersecure') === '1' };
+  return { debug: dbg, config };
 }
 const cleanName = (n) => String(n || 'Jugador').replace(/[<>&"]/g, '').trim().slice(0, 16) || 'Jugador';
 const num = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
@@ -67,14 +70,18 @@ class Hub {
 }
 
 // Anfitrión: crea la sala. Devuelve { net, welcome, code }
-export function createRoom(hostName, seed, mode) {
+export function createRoom(hostName, seed, mode, onStatus = () => {}) {
   return new Promise((resolve, reject) => {
     let tries = 0;
     const attempt = () => {
+      onStatus('Conectando con el servicio de salas…');
       const code = newCode(), peer = new Peer(PREFIX + code, peerOpts()); let done = false;
-      const to = setTimeout(() => { if (!done) { done = true; try { peer.destroy(); } catch {} reject(new Error('No se pudo contactar con el servicio de salas')); } }, 10000);
+      const to = setTimeout(() => { if (!done) { done = true; try { peer.destroy(); } catch {} reject(new Error('No se pudo contactar con el servicio de salas (revisa tu conexión a internet)')); } }, 15000);
       peer.on('open', () => {
         if (done) return; done = true; clearTimeout(to);
+        peer.on('disconnected', () => { try { peer.reconnect(); } catch {} }); // si se cae la señalización, la sala vuelve a ser visible
+        setInterval(() => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } }, 8000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } });
         const net = new Adapter(); const hub = new Hub(peer, hostName, seed, mode, net);
         net.send = (m) => hub.handle(0, m); net.close = () => hub.close(); net.isHost = true; net.code = code; net.hub = hub;
         resolve({ net, code, welcome: { t: 'welcome', id: 0, seed, mode, time: 0.08, edits: [], players: [], color: hub.players.get(0).color } });
@@ -85,17 +92,19 @@ export function createRoom(hostName, seed, mode) {
   });
 }
 // Invitado: entra con el código. Devuelve { net, welcome }
-export function joinRoom(code, name) {
+export function joinRoom(code, name, onStatus = () => {}) {
   return new Promise((resolve, reject) => {
     code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (code.length !== 5) return reject(new Error('El código de sala tiene 5 caracteres'));
-    const peer = new Peer(peerOpts()), net = new Adapter(); let done = false;
+    onStatus('Conectando con el servicio de salas…');
+    const peer = new Peer(peerOpts()), net = new Adapter(); let done = false, stage = 0;
     const fail = (m) => { if (!done) { done = true; try { peer.destroy(); } catch {} reject(new Error(m)); } };
-    const to = setTimeout(() => fail('No se encontró la sala (¿código correcto y anfitrión conectado?)'), 12000);
+    const to = setTimeout(() => fail(stage === 0 ? 'No se pudo contactar con el servicio de salas (revisa tu internet)' : stage === 1 ? 'La sala no responde: comprueba el código y que el anfitrión tenga el juego abierto y en primer plano' : 'No se pudo abrir la conexión directa con el anfitrión (red muy restrictiva). Prueben con la misma Wi-Fi o con datos distintos'), 30000);
     peer.on('error', (e) => fail(e.type === 'peer-unavailable' ? 'No existe una sala con ese código' : 'Error de conexión: ' + (e.type || e.message)));
     peer.on('open', () => {
+      stage = 1; onStatus('Buscando la sala ' + code + '…');
       const conn = peer.connect(PREFIX + code, { reliable: true });
-      conn.on('open', () => conn.send({ t: 'join', name }));
+      conn.on('open', () => { stage = 2; onStatus('Conectado: entrando a la sala…'); conn.send({ t: 'join', name }); });
       conn.on('data', (m) => {
         if (m && m.t === 'welcome' && !done) { done = true; clearTimeout(to); net.id = m.id; net.send = (o) => { if (conn.open) conn.send(o); }; net.close = () => { try { peer.destroy(); } catch {} }; net.code = code; resolve({ net, welcome: m }); return; }
         if (m && m.t === 'full') { fail('La sala está llena'); return; }
