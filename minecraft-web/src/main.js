@@ -681,7 +681,8 @@ function mpSetup() { // enlaza los mensajes del servidor con el juego (se llama 
   net.on('players', (m) => { for (const q of m.list) { const r = mp.remotes.get(q.id); if (!r) continue; r.target.set(q.p[0], q.p[1], q.p[2]); r.yaw = q.yaw; r.pitch = q.pitch; r.dim = q.dim; r.model.setHeld(q.held || 0); if (!r.init) { r.pos.copy(r.target); r.init = true; } } });
   net.on('join', (m) => mpAddRemote(m.id, m.name, m.color));
   net.on('leave', (m) => mpRemoveRemote(m.id));
-  net.on('edit', (m) => { const w = dims[m.dim]; if (w) { w.silent = true; w.setBlock(m.x, m.y, m.z, m.id); w.silent = false; } else { mp.edits[m.dim] = mp.edits[m.dim] || new Map(); const k = mpKey(m.x, m.z); let c = mp.edits[m.dim].get(k); if (!c) mp.edits[m.dim].set(k, (c = new Map())); c.set((m.y * 16 + (m.z - Math.floor(m.z / 16) * 16)) * 16 + (m.x - Math.floor(m.x / 16) * 16), m.id); } });
+  const onEdit = (m) => { const w = dims[m.dim]; if (w) { w.silent = true; w.setBlock(m.x, m.y, m.z, m.id); w.silent = false; } else { mp.edits[m.dim] = mp.edits[m.dim] || new Map(); const k = mpKey(m.x, m.z); let c = mp.edits[m.dim].get(k); if (!c) mp.edits[m.dim].set(k, (c = new Map())); c.set((m.y * 16 + (m.z - Math.floor(m.z / 16) * 16)) * 16 + (m.x - Math.floor(m.x / 16) * 16), m.id); } };
+  net.on('edit', onEdit); net.on('editb', (m) => { for (const [dm, x, y, z, id] of m.list) onEdit({ dim: dm, x, y, z, id }); });
   net.on('chat', (m) => { chatLine('<b>' + esc(m.name) + '</b>: ' + esc(m.text)); });
   net.on('sys', (m) => chatLine(esc(m.text), 'sys'));
   net.on('time', (m) => { if (sky && Math.abs(sky.time - m.time) > 0.01) sky.time = m.time; });

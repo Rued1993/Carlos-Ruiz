@@ -12,11 +12,13 @@
     "dev:clean": "vite --mode clean --host"
   },
   "dependencies": {
+    "mqtt": "^5.16.1",
     "peerjs": "^1.5.5",
     "three": "^0.170.0",
     "ws": "^8.22.1"
   },
   "devDependencies": {
+    "aedes": "^1.2.0",
     "peer": "^1.0.2",
     "vite": "^6.0.0"
   }

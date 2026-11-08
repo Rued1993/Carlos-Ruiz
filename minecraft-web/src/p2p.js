@@ -1,6 +1,7 @@
 // Multijugador sin servidor propio: el anfitrión crea una sala con un código y los demás entran con él (WebRTC vía PeerJS).
 // El navegador del anfitrión hace de servidor: guarda los bloques editados, reparte posiciones, chat y hora del día.
 import Peer from 'peerjs';
+import mqtt from 'mqtt';
 
 const PREFIX = 'vxl-', CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
@@ -15,8 +16,31 @@ function peerOpts() { // por defecto, el servidor de señalización público de 
 const cleanName = (n) => String(n || 'Jugador').replace(/[<>&"]/g, '').trim().slice(0, 16) || 'Jugador';
 const num = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 
-// Interfaz común con src/net.js: on(tipo, fn), send(obj), close(), id
-class Adapter { constructor() { this.handlers = {}; this.id = 0; } on(t, fn) { this.handlers[t] = fn; } dispatch(m) { const h = this.handlers[m.t]; if (h) h(m); } }
+// Interfaz común con src/net.js: on(tipo, fn), send(obj), close(), id. Guarda los mensajes que llegan antes de que el juego los escuche.
+class Adapter {
+  constructor() { this.handlers = {}; this.id = 0; this.queue = []; }
+  on(t, fn) { this.handlers[t] = fn; const rest = []; for (const m of this.queue) { if (m.t === t) fn(m); else rest.push(m); } this.queue = rest; }
+  dispatch(m) { const h = this.handlers[m.t]; if (h) h(m); else if (this.queue.length < 3000) this.queue.push(m); }
+}
+
+// ---- Respaldo por relé MQTT sobre WebSocket (funciona en cualquier red, sin P2P ni TURN) ----
+const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081'];
+function brokerList() { const q = new URLSearchParams(location.search).get('mqtt'); return q ? [q] : BROKERS; }
+function mqttOpen(onStatus, will) { // prueba los brokers públicos uno tras otro
+  return new Promise((resolve, reject) => {
+    const list = brokerList(); let i = 0;
+    const next = () => {
+      if (i >= list.length) return reject(new Error('No se pudo contactar con ningún relé público'));
+      const url = list[i++]; onStatus('Conectando con el relé de respaldo (' + i + '/' + list.length + ')…');
+      const c = mqtt.connect(url, { clientId: 'vxl' + Math.random().toString(36).slice(2, 10), connectTimeout: 6000, reconnectPeriod: 0, clean: true, ...(will ? { will } : {}) });
+      let ok = false; const t = setTimeout(() => { if (!ok) { try { c.end(true); } catch {} next(); } }, 7000);
+      c.on('connect', () => { ok = true; clearTimeout(t); c.removeAllListeners('error'); resolve(c); });
+      c.on('error', () => { if (!ok) { clearTimeout(t); try { c.end(true); } catch {} next(); } });
+    };
+    next();
+  });
+}
+const T = (code, tail) => 'vxlv1/' + code + '/' + tail;
 
 class Hub {
   constructor(peer, hostName, seed, mode, local) {
@@ -28,24 +52,31 @@ class Hub {
       conn.on('close', () => { if (id !== null) this.drop(id); });
       conn.on('error', () => { if (id !== null) this.drop(id); });
     });
-    this.iv1 = setInterval(() => this.tickPlayers(), 100);
+    this.last = new Map(); this.vconns = new Map();
+    this.iv1 = setInterval(() => { this.tickPlayers(); const now = Date.now(); for (const [id, t] of this.last) if (now - t > 15000 && id !== 0) this.drop(id); }, 100);
     this.iv2 = setInterval(() => this.broadcast({ t: 'time', time: this.getTime() }, -1), 5000);
   }
-  deliver(id, m) { if (id === 0) this.local.dispatch(m); else { const p = this.players.get(id); if (p && p.conn && p.conn.open) p.conn.send(m); } }
+  deliver(id, m) { if (id === 0) this.local.dispatch(m); else { const p = this.players.get(id); if (p && p.conn && p.conn.open) { try { p.conn.send(m); } catch {} } } }
+  // Mensaje llegado por el relé MQTT: cid identifica al invitado
+  recvVirtual(cid, m, sender) { let v = this.vconns.get(cid); if (!v) { v = { id: null, conn: { open: true, send: (o) => sender(cid, o), close() {} } }; this.vconns.set(cid, v); } v.id = this.recv(v.conn, m, v.id); }
   broadcast(m, except) { for (const id of this.players.keys()) if (id !== except) this.deliver(id, m); }
-  drop(id) { const p = this.players.get(id); if (!p) return; this.players.delete(id); this.broadcast({ t: 'leave', id }); this.broadcast({ t: 'sys', text: p.name + ' ha salido' }); }
+  drop(id) { const p = this.players.get(id); if (!p) return; this.players.delete(id); this.last.delete(id); for (const [cid, v] of this.vconns) if (v.id === id) this.vconns.delete(cid); this.broadcast({ t: 'leave', id }); this.broadcast({ t: 'sys', text: p.name + ' ha salido' }); }
   recv(conn, m, id) {
     if (!m || typeof m.t !== 'string') return id;
     if (m.t === 'join' && id === null) {
       if (this.players.size >= 8) { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 300); return null; }
       id = this.next++; const name = cleanName(m.name), color = Math.floor(Math.random() * 360);
       this.players.set(id, { conn, name, p: [0, 80, 0], yaw: 0, pitch: 0, dim: 'overworld', held: 0, color });
+      this.last.set(id, Date.now());
       const edits = Object.entries(this.edits).map(([k, v]) => { const [d, x, y, z] = k.split('|'); return [d, +x, +y, +z, v]; });
-      conn.send({ t: 'welcome', id, seed: this.seed, mode: this.mode, time: this.getTime(), edits, color, players: [...this.players].filter(([i]) => i !== id).map(([i, p]) => ({ id: i, name: p.name, color: p.color })) });
+      conn.send({ t: 'welcome', id, seed: this.seed, mode: this.mode, time: this.getTime(), edits: edits.slice(0, 200), color, players: [...this.players].filter(([i]) => i !== id).map(([i, p]) => ({ id: i, name: p.name, color: p.color })) });
+      for (let i = 200; i < edits.length; i += 300) conn.send({ t: 'editb', list: edits.slice(i, i + 300) }); // el resto de ediciones, por lotes
       this.broadcast({ t: 'join', id, name, color }, id); this.broadcast({ t: 'sys', text: name + ' se ha unido' });
       return id;
     }
     if (id === null) return id;
+    this.last.set(id, Date.now());
+    if (m.t === 'bye') { this.drop(id); return null; }
     this.handle(id, m); return id;
   }
   handle(id, m) { // mensajes de un jugador (id 0 = el anfitrión)
@@ -66,7 +97,7 @@ class Hub {
     const list = [...this.players].map(([id, p]) => ({ id, p: p.p.map((v) => Math.round(v * 100) / 100), yaw: Math.round(p.yaw * 100) / 100, pitch: Math.round(p.pitch * 100) / 100, dim: p.dim, held: p.held }));
     for (const id of this.players.keys()) this.deliver(id, { t: 'players', list: list.filter((q) => q.id !== id) });
   }
-  close() { clearInterval(this.iv1); clearInterval(this.iv2); try { this.peer.destroy(); } catch {} }
+  close() { clearInterval(this.iv1); clearInterval(this.iv2); try { this.peer.destroy(); } catch {} if (this.mq) { try { this.mq.publish(T(this.code, 'host'), '', { retain: true }); this.mq.end(true); } catch {} } }
 }
 
 // Anfitrión: crea la sala. Devuelve { net, welcome, code }
@@ -82,7 +113,12 @@ export function createRoom(hostName, seed, mode, onStatus = () => {}) {
         peer.on('disconnected', () => { try { peer.reconnect(); } catch {} }); // si se cae la señalización, la sala vuelve a ser visible
         setInterval(() => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } }, 8000);
         document.addEventListener('visibilitychange', () => { if (!document.hidden && peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } });
-        const net = new Adapter(); const hub = new Hub(peer, hostName, seed, mode, net);
+        const net = new Adapter(); const hub = new Hub(peer, hostName, seed, mode, net); hub.code = code;
+        mqttOpen(() => {}, { topic: T(code, 'host'), payload: '', retain: true, qos: 0 }).then((mq) => { // relé de respaldo: los invitados que no consigan conexión directa entran por aquí
+          hub.mq = mq; const send = (cid, o) => { try { mq.publish(T(code, 'g/' + cid), JSON.stringify(o)); } catch {} };
+          mq.subscribe(T(code, 'h')); mq.publish(T(code, 'host'), '1', { retain: true });
+          mq.on('message', (topic, buf) => { if (topic !== T(code, 'h')) return; try { const { c, m } = JSON.parse(buf.toString()); if (c && m) hub.recvVirtual(c, m, send); } catch {} });
+        }).catch(() => {});
         net.send = (m) => hub.handle(0, m); net.close = () => hub.close(); net.isHost = true; net.code = code; net.hub = hub;
         resolve({ net, code, welcome: { t: 'welcome', id: 0, seed, mode, time: 0.08, edits: [], players: [], color: hub.players.get(0).color } });
       });
@@ -92,15 +128,13 @@ export function createRoom(hostName, seed, mode, onStatus = () => {}) {
   });
 }
 // Invitado: entra con el código. Devuelve { net, welcome }
-export function joinRoom(code, name, onStatus = () => {}) {
+function joinWebRtc(code, name, onStatus, ms) {
   return new Promise((resolve, reject) => {
-    code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (code.length !== 5) return reject(new Error('El código de sala tiene 5 caracteres'));
     onStatus('Conectando con el servicio de salas…');
     const peer = new Peer(peerOpts()), net = new Adapter(); let done = false, stage = 0;
     const fail = (m) => { if (!done) { done = true; try { peer.destroy(); } catch {} reject(new Error(m)); } };
     const to = setTimeout(() => fail(stage === 0 ? 'No se pudo contactar con el servicio de salas (revisa tu internet)' : stage === 1 ? 'La sala no responde: comprueba el código y que el anfitrión tenga el juego abierto y en primer plano' : 'No se pudo abrir la conexión directa con el anfitrión (red muy restrictiva). Prueben con la misma Wi-Fi o con datos distintos'), 30000);
-    peer.on('error', (e) => fail(e.type === 'peer-unavailable' ? 'No existe una sala con ese código' : 'Error de conexión: ' + (e.type || e.message)));
+    peer.on('error', (e) => fail(e.type === 'peer-unavailable' ? 'No hay conexión directa con esa sala' : 'Error de conexión: ' + (e.type || e.message)));
     peer.on('open', () => {
       stage = 1; onStatus('Buscando la sala ' + code + '…');
       const conn = peer.connect(PREFIX + code, { reliable: true });
@@ -113,4 +147,36 @@ export function joinRoom(code, name, onStatus = () => {}) {
       conn.on('close', () => { if (done && net.handlers.close) net.handlers.close(); else fail('Conexión cerrada'); });
     });
   });
+}
+
+function joinMqtt(code, name, onStatus) {
+  return mqttOpen(onStatus).then((mq) => new Promise((resolve, reject) => {
+    const cid = 'g' + Math.random().toString(36).slice(2, 10), net = new Adapter(); let done = false, present = false;
+    const fail = (m) => { if (!done) { done = true; try { mq.end(true); } catch {} reject(new Error(m)); } };
+    const to = setTimeout(() => fail(present ? 'El anfitrión no respondió: debe tener el juego abierto y en primer plano' : 'No existe una sala con ese código (o el anfitrión ya salió)'), 14000);
+    mq.subscribe([T(code, 'host'), T(code, 'g/' + cid)]);
+    mq.on('message', (topic, buf) => {
+      const s = buf.toString();
+      if (topic === T(code, 'host')) { if (s === '1' && !present) { present = true; onStatus('Sala encontrada: entrando…'); mq.publish(T(code, 'h'), JSON.stringify({ c: cid, m: { t: 'join', name } })); } return; }
+      let m; try { m = JSON.parse(s); } catch { return; }
+      if (m.t === 'welcome' && !done) {
+        done = true; clearTimeout(to); net.id = m.id; net.code = code;
+        net.send = (o) => { try { mq.publish(T(code, 'h'), JSON.stringify({ c: cid, m: o })); } catch {} };
+        net.close = () => { try { net.send({ t: 'bye' }); mq.end(true); } catch {} };
+        resolve({ net, welcome: m }); return;
+      }
+      if (m.t === 'full') { fail('La sala está llena'); return; }
+      net.dispatch(m);
+    });
+    mq.on('close', () => { if (done && net.handlers.close) net.handlers.close(); });
+  }));
+}
+// Invitado: entra con el código. Primero intenta la conexión directa; si no se consigue en pocos segundos, usa el relé.
+export async function joinRoom(code, name, onStatus = () => {}) {
+  code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 5) throw new Error('El código de sala tiene 5 caracteres');
+  let first = null;
+  if (new URLSearchParams(location.search).get('nowebrtc') !== '1') { try { return await joinWebRtc(code, name, onStatus, 9000); } catch (e) { first = e; } }
+  onStatus('Probando la conexión de respaldo…');
+  try { return await joinMqtt(code, name, onStatus); } catch (e2) { throw new Error(e2.message + (first ? ' (directa: ' + first.message + ')' : '')); }
 }
