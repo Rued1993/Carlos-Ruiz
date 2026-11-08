@@ -24,13 +24,15 @@ class Adapter {
 }
 
 // ---- Respaldo por relé MQTT sobre WebSocket (funciona en cualquier red, sin P2P ni TURN) ----
-const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081'];
+const BROKERS = ['wss://mqtt.eclipseprojects.io:443/mqtt', 'wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081'];
+// Relé propio (opcional): servidor WebSocket de server/relay.js o relay/deno.ts
+function customRelay() { let u = new URLSearchParams(location.search).get('relay'); if (!u) { try { u = localStorage.getItem('vxl-relay'); } catch {} } u = (u || '').trim(); return /^wss?:\/\//.test(u) ? u.replace(/\/+$/, '') : ''; }
 function brokerList() { const q = new URLSearchParams(location.search).get('mqtt'); return q ? [q] : BROKERS; }
 function mqttOpen(onStatus, will) { // prueba los brokers públicos uno tras otro
   return new Promise((resolve, reject) => {
     const list = brokerList(); let i = 0;
     const next = () => {
-      if (i >= list.length) return reject(new Error('No se pudo contactar con ningún relé público'));
+      if (i >= list.length) return reject(new Error('No se pudo contactar con ningún relé público (su red parece bloquear estas conexiones: prueba con otra Wi-Fi o con datos móviles, o configura un «Relé propio»)'));
       const url = list[i++]; onStatus('Conectando con el relé de respaldo (' + i + '/' + list.length + ')…');
       const c = mqtt.connect(url, { clientId: 'vxl' + Math.random().toString(36).slice(2, 10), connectTimeout: 6000, reconnectPeriod: 0, clean: true, ...(will ? { will } : {}) });
       let ok = false; const t = setTimeout(() => { if (!ok) { try { c.end(true); } catch {} next(); } }, 7000);
@@ -97,7 +99,7 @@ class Hub {
     const list = [...this.players].map(([id, p]) => ({ id, p: p.p.map((v) => Math.round(v * 100) / 100), yaw: Math.round(p.yaw * 100) / 100, pitch: Math.round(p.pitch * 100) / 100, dim: p.dim, held: p.held }));
     for (const id of this.players.keys()) this.deliver(id, { t: 'players', list: list.filter((q) => q.id !== id) });
   }
-  close() { clearInterval(this.iv1); clearInterval(this.iv2); try { this.peer.destroy(); } catch {} if (this.mq) { try { this.mq.publish(T(this.code, 'host'), '', { retain: true }); this.mq.end(true); } catch {} } }
+  close() { this.closed = true; try { this.rws && this.rws.close(); } catch {} clearInterval(this.iv1); clearInterval(this.iv2); try { this.peer.destroy(); } catch {} if (this.mq) { try { this.mq.publish(T(this.code, 'host'), '', { retain: true }); this.mq.end(true); } catch {} } }
 }
 
 // Anfitrión: crea la sala. Devuelve { net, welcome, code }
@@ -114,6 +116,14 @@ export function createRoom(hostName, seed, mode, onStatus = () => {}) {
         setInterval(() => { if (peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } }, 8000);
         document.addEventListener('visibilitychange', () => { if (!document.hidden && peer.disconnected && !peer.destroyed) { try { peer.reconnect(); } catch {} } });
         const net = new Adapter(); const hub = new Hub(peer, hostName, seed, mode, net); hub.code = code;
+        const rurl = customRelay();
+        if (rurl) { // relé propio: el anfitrión mantiene una conexión WebSocket con reintentos
+          const sendTo = (c, o) => { try { if (hub.rws && hub.rws.readyState === 1) hub.rws.send(JSON.stringify({ c, m: o })); } catch {} };
+          const connect = () => { if (hub.closed) return; const ws = new WebSocket(rurl + '?room=' + code + '&role=host'); hub.rws = ws;
+            ws.onmessage = (e) => { try { const f = JSON.parse(e.data); if (f.bye) { const v = hub.vconns.get(f.c); if (v && v.id !== null) hub.drop(v.id); } else if (f.c && f.m) hub.recvVirtual(f.c, f.m, sendTo); } catch {} };
+            ws.onclose = () => { if (!hub.closed) setTimeout(connect, 3000); }; };
+          connect();
+        }
         mqttOpen(() => {}, { topic: T(code, 'host'), payload: '', retain: true, qos: 0 }).then((mq) => { // relé de respaldo: los invitados que no consigan conexión directa entran por aquí
           hub.mq = mq; const send = (cid, o) => { try { mq.publish(T(code, 'g/' + cid), JSON.stringify(o)); } catch {} };
           mq.subscribe(T(code, 'h')); mq.publish(T(code, 'host'), '1', { retain: true });
@@ -171,11 +181,26 @@ function joinMqtt(code, name, onStatus) {
     mq.on('close', () => { if (done && net.handlers.close) net.handlers.close(); });
   }));
 }
+function joinWsRelay(code, name, onStatus, url) {
+  return new Promise((resolve, reject) => {
+    onStatus('Conectando con tu relé…'); const net = new Adapter(); let done = false;
+    const ws = new WebSocket(url + '?room=' + code + '&role=guest');
+    const fail = (m) => { if (!done) { done = true; try { ws.close(); } catch {} reject(new Error(m)); } };
+    const to = setTimeout(() => fail('El relé no respondió'), 15000);
+    ws.onopen = () => { onStatus('Relé conectado: entrando a la sala…'); ws.send(JSON.stringify({ m: { t: 'join', name } })); };
+    ws.onerror = () => fail('No se pudo conectar con el relé propio');
+    ws.onclose = (e) => { if (!done) fail(e.code === 4404 ? 'No existe una sala con ese código en tu relé' : 'El relé cerró la conexión'); else if (net.handlers.close) net.handlers.close(); };
+    ws.onmessage = (e) => { let f; try { f = JSON.parse(e.data); } catch { return; } const m = f.m; if (!m) return;
+      if (m.t === 'welcome' && !done) { done = true; clearTimeout(to); net.id = m.id; net.code = code; net.send = (o) => { if (ws.readyState === 1) ws.send(JSON.stringify({ m: o })); }; net.close = () => { try { net.send({ t: 'bye' }); ws.close(); } catch {} }; resolve({ net, welcome: m }); return; }
+      if (m.t === 'full') { fail('La sala está llena'); return; } net.dispatch(m); };
+  });
+}
 // Invitado: entra con el código. Primero intenta la conexión directa; si no se consigue en pocos segundos, usa el relé.
 export async function joinRoom(code, name, onStatus = () => {}) {
   code = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length !== 5) throw new Error('El código de sala tiene 5 caracteres');
   let first = null;
+  const rurl = customRelay(); if (rurl) { try { return await joinWsRelay(code, name, onStatus, rurl); } catch (e) { first = e; } }
   if (new URLSearchParams(location.search).get('nowebrtc') !== '1') { try { return await joinWebRtc(code, name, onStatus, 9000); } catch (e) { first = e; } }
   onStatus('Probando la conexión de respaldo…');
   try { return await joinMqtt(code, name, onStatus); } catch (e2) { throw new Error(e2.message + (first ? ' (directa: ' + first.message + ')' : '')); }

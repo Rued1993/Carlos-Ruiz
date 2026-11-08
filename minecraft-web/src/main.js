@@ -1667,15 +1667,17 @@ requestAnimationFrame(frame);
   $('bOneBlock').onclick = () => fresh('survival', 'oneblock');
   try { $('mpUrl').value = localStorage.getItem('mcweb-mpurl') || ''; $('mpName').value = localStorage.getItem('mcweb-mpname') || ''; } catch {}
   const mpName = () => { const n = $('mpName').value.trim() || 'Jugador' + Math.floor(Math.random() * 900 + 100); try { localStorage.setItem('mcweb-mpname', $('mpName').value.trim()); } catch {} return n; };
+  try { $('mpRelay').value = localStorage.getItem('vxl-relay') || ''; } catch {}
+  const saveRelay = () => { try { localStorage.setItem('vxl-relay', $('mpRelay').value.trim()); } catch {} };
   const mpStat = (t, bad) => { const e = $('mpStatus'); e.textContent = t; e.style.color = bad ? '#ff8a7a' : '#ffe84a'; $('msg').textContent = t; try { e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {} };
   const busy = (on) => { for (const id of ['bHost', 'bJoin']) { const b = $(id); b.disabled = on; b.style.opacity = on ? 0.6 : 1; } };
   $('bHost').onclick = async () => {
-    audio.unlock(); const name = mpName(); busy(true); mpStat('Creando sala…');
+    audio.unlock(); saveRelay(); const name = mpName(); busy(true); mpStat('Creando sala…');
     try { const seed0 = 1 + Math.floor(Math.random() * 900000), { net, welcome, code } = await createRoom(name, seed0, 'survival', mpStat); mpStat('Sala creada: ' + code); startGame({ id: null, name: 'Sala ' + code, seed: seed0, mode: 'survival', saved: new Map(), meta: null, net, welcome }); }
     catch (e) { mpStat('⚠ ' + e.message, true); } finally { busy(false); }
   };
   $('bJoin').onclick = async () => {
-    audio.unlock(); const name = mpName(); busy(true); mpStat('Conectando…');
+    audio.unlock(); saveRelay(); const name = mpName(); busy(true); mpStat('Conectando…');
     try { const { net, welcome } = await joinRoom($('mpCode').value, name, mpStat); startGame({ id: null, name: 'Sala ' + net.code, seed: welcome.seed, mode: welcome.mode, saved: new Map(), meta: null, net, welcome }); }
     catch (e) { mpStat('⚠ ' + e.message, true); } finally { busy(false); }
   };
