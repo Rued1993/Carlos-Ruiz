@@ -11,10 +11,11 @@ export const B = {
   PURPUR: 34, END_BRICKS: 35, CHEST: 36, CHEST_OPEN: 37,
   SANDSTONE: 38, MOSSY_COBBLE: 39, ANCIENT_DEBRIS: 40, GOLD_BLOCK: 41,
   BREWING: 85, ENCH_TABLE: 86, LAPIS_ORE: 87,
+  TNT: 98, BED: 99, TRAPDOOR: 187, TRAPDOOR_OPEN: 188, GATE: 192, GATE_OPEN: 196, FARMLAND: 244, WHEAT_CROP: 245,
   RED_SAND: 88, TERRA_ORANGE: 89, TERRA_RED: 90, TERRA_YELLOW: 91, TERRA_WHITE: 92, TERRA_BROWN: 93, CHERRY_LOG: 94, CHERRY_LEAVES: 95, CHERRY_PLANKS: 96, MUD: 97,
 };
 export const I = { STICK: 100, COAL: 101, IRON: 102, GOLD: 103, DIAMOND: 104, APPLE: 150, PORK: 151, BEEF: 152, COOKED_PORK: 153, STEAK: 154, STAR: 105, PEARL: 106, LIGHTER: 107, EYE: 108, ELYTRA: 109,
-  DONUT: 160, DUFF: 161, SENZU: 162, DBALL: 163, NETHERITE: 170, SCRAP: 171, LEATHER: 172, BOTTLE: 173, WART: 174, BLAZE_POWDER: 175, MAGMA_CREAM: 176, LAPIS: 177, BOOK: 178, CHICKEN: 155, COOKED_CHICKEN: 156 };
+  DONUT: 160, DUFF: 161, SENZU: 162, DBALL: 163, NETHERITE: 170, SCRAP: 171, LEATHER: 172, BOTTLE: 173, WART: 174, BLAZE_POWDER: 175, MAGMA_CREAM: 176, LAPIS: 177, BOOK: 178, HOE_STONE: 116, HOE_IRON: 117, HOE_DIAMOND: 118, BOW: 119, ARROW: 126, BUCKET: 127, WATER_BUCKET: 128, LAVA_BUCKET: 129, SEEDS: 136, WHEAT: 137, BREAD: 138, SHEARS: 139, COMPASS: 146, CHICKEN: 155, COOKED_CHICKEN: 156 };
 
 export const BLOCKS = {};
 function block(id, name, tiles, hardness, tool = null, lvl = 0, extra = {}) {
@@ -105,14 +106,33 @@ block(FENCE, 'Valla', BLOCKS[B.PLANKS].tiles, 2, 'axe', 0, { opaque: false, flat
 SHAPE[FENCE] = { kind: 'fence' };
 for (let o = 0; o < 4; o++) for (const [base, open, hi] of [[DOOR_LO, false, false], [DOOR_LO_OPEN, true, false], [DOOR_HI, false, true], [DOOR_HI_OPEN, true, true]]) {
   const id = base + o;
-  block(id, 'Puerta de madera', BLOCKS[B.PLANKS].tiles, 2, 'axe', 0, { opaque: false, flat: true, hidden: id !== DOOR_LO, dropAs: DOOR_LO });
+  block(id, 'Puerta de madera', ['planks', 'planks', hi ? 'door_hi' : 'door_lo'], 2, 'axe', 0, { opaque: false, flat: true, hidden: id !== DOOR_LO, dropAs: DOOR_LO });
   SHAPE[id] = { kind: 'door', o, open, hi };
 }
+// Escotilla (suelo; abierta: panel vertical), portón de valla, cama, cultivos, TNT y tierra de labranza
+block(B.TRAPDOOR, 'Escotilla de madera', ['trapdoor', 'trapdoor', 'trapdoor'], 2, 'axe', 0, { opaque: false });
+SHAPE[B.TRAPDOOR] = { kind: 'trapdoor', open: false, o: 0 };
+for (let o = 0; o < 4; o++) { block(B.TRAPDOOR_OPEN + o, 'Escotilla de madera', ['trapdoor', 'trapdoor', 'trapdoor'], 2, 'axe', 0, { opaque: false, hidden: true, dropAs: B.TRAPDOOR }); SHAPE[B.TRAPDOOR_OPEN + o] = { kind: 'trapdoor', open: true, o }; }
+for (let a = 0; a < 2; a++) for (const open of [false, true]) { const id = (open ? B.GATE_OPEN : B.GATE) + a; block(id, 'Portón', ['planks', 'planks', 'planks'], 2, 'axe', 0, { opaque: false, flat: true, hidden: id !== B.GATE, dropAs: B.GATE }); SHAPE[id] = { kind: 'gate', axis: a, open }; }
+block(B.BED, 'Cama', ['bed_top', 'planks', 'bed_side'], 0.3, 'axe', 0, { opaque: false });
+SHAPE[B.BED] = { kind: 'bed' };
+block(B.TNT, 'TNT', ['tnt_top', 'tnt_top', 'tnt_side'], 0.1);
+block(B.FARMLAND, 'Tierra de labranza', ['farmland', 'dirt', 'dirt'], 0.6, 'shovel', 0, { dropAs: B.DIRT });
+for (let st = 0; st < 4; st++) { block(B.WHEAT_CROP + st, 'Trigo', ['wheat', 'wheat', 'wheat'], 0.02, null, 0, { opaque: false, hidden: true, crop: st }); SHAPE[B.WHEAT_CROP + st] = { kind: 'crop', stage: st }; }
 // Cajas (en coordenadas 0..1 de la celda) de cada forma. nb(dx, dz) indica si la valla conecta en esa dirección.
 export function shapeBoxes(id, nb, collide) {
   const s = SHAPE[id];
   if (s.kind === 'slab') return [s.top ? [0, 0.5, 0, 1, 1, 1] : [0, 0, 0, 1, 0.5, 1]];
   if (s.kind === 'stairs') return [[0, 0, 0, 1, 0.5, 1], [[0, 0.5, 0, 1, 1, 0.5], [0.5, 0.5, 0, 1, 1, 1], [0, 0.5, 0.5, 1, 1, 1], [0, 0.5, 0, 0.5, 1, 1]][s.o]];
+  if (s.kind === 'bed') return [[0, 0, 0, 1, 0.56, 1]];
+  if (s.kind === 'crop') return collide ? [] : [[0.08, 0, 0.08, 0.92, [0.2, 0.4, 0.65, 0.95][s.stage], 0.92]];
+  if (s.kind === 'trapdoor') return s.open ? [[[0, 0, 0, 1, 1, 0.1875], [0.8125, 0, 0, 1, 1, 1], [0, 0, 0.8125, 1, 1, 1], [0, 0, 0, 0.1875, 1, 1]][s.o]] : [[0, 0, 0, 1, 0.1875, 1]];
+  if (s.kind === 'gate') {
+    const ph = collide ? 1.5 : 1, bars = s.axis === 0 ? [[0, 0, 0.4375, 0.125, ph, 0.5625], [0.875, 0, 0.4375, 1, ph, 0.5625]] : [[0.4375, 0, 0, 0.5625, ph, 0.125], [0.4375, 0, 0.875, 0.5625, ph, 1]];
+    if (!s.open) bars.push(s.axis === 0 ? [0.125, 0.3, 0.4375, 0.875, collide ? 1.5 : 0.95, 0.5625] : [0.4375, 0.3, 0.125, 0.5625, collide ? 1.5 : 0.95, 0.875]);
+    else bars.push(s.axis === 0 ? [0, 0.3, 0.5625, 0.125, 0.95, 0.9] : [0.5625, 0.3, 0, 0.9, 0.95, 0.125]);
+    return bars;
+  }
   if (s.kind === 'fence') {
     const hgt = collide ? 1.5 : 1, out = [[0.375, 0, 0.375, 0.625, hgt, 0.625]];
     if (nb(0, -1)) out.push(collide ? [0.4375, 0, 0, 0.5625, 1.5, 0.375] : [0.4375, 0.375, 0, 0.5625, 0.5625, 0.375], ...(collide ? [] : [[0.4375, 0.6875, 0, 0.5625, 0.875, 0.375]]));
@@ -135,8 +155,8 @@ export const EMIT = new Uint8Array(256);   // emiten luz
 export const BLOCKLIGHT = new Uint8Array(256); // bloquean la luz del cielo (opacos, losas, escaleras y puertas)
 for (const b of Object.values(BLOCKS)) {
   OPAQUE[b.id] = b.opaque ? 1 : 0;
-  BLOCKLIGHT[b.id] = b.opaque || (SHAPE[b.id] && SHAPE[b.id].kind !== 'fence') ? 1 : 0;
-  SOLID[b.id] = b.liquid || b.torch || b.portal ? 0 : 1;
+  BLOCKLIGHT[b.id] = b.opaque || (SHAPE[b.id] && !['fence', 'crop', 'gate', 'trapdoor'].includes(SHAPE[b.id].kind)) ? 1 : 0;
+  SOLID[b.id] = b.liquid || b.torch || b.portal || b.crop !== undefined ? 0 : 1;
   if (b.portal) GHOST[b.id] = 1;
   if (b.emit) EMIT[b.id] = b.emit;
   LIQUID[b.id] = b.liquid ? 1 : 0;
@@ -162,6 +182,14 @@ item(I.DBALL, 'Esfera del dragón', { stack: 7 });
 item(I.NETHERITE, 'Lingote de netherita');
 item(I.SCRAP, 'Fragmento de netherita');
 item(I.LEATHER, 'Cuero');
+item(I.HOE_STONE, 'Azada de piedra', { stack: 1, tool: { type: 'hoe', tier: 1, speed: 1, dur: 120, lvl: 0, dmg: 2 }, color: [150, 150, 150] });
+item(I.HOE_IRON, 'Azada de hierro', { stack: 1, tool: { type: 'hoe', tier: 2, speed: 1, dur: 250, lvl: 0, dmg: 2 }, color: [216, 216, 216] });
+item(I.HOE_DIAMOND, 'Azada de diamante', { stack: 1, tool: { type: 'hoe', tier: 3, speed: 1, dur: 1500, lvl: 0, dmg: 2 }, color: [90, 240, 230] });
+item(I.BOW, 'Arco', { stack: 1, tool: { type: 'bow', tier: 0, speed: 1, dur: 380, lvl: 0, dmg: 1 }, color: [150, 100, 50] });
+item(I.ARROW, 'Flecha'); item(I.BUCKET, 'Cubo', { stack: 16 }); item(I.WATER_BUCKET, 'Cubo de agua', { stack: 1 }); item(I.LAVA_BUCKET, 'Cubo de lava', { stack: 1 });
+item(I.SEEDS, 'Semillas'); item(I.WHEAT, 'Trigo'); item(I.BREAD, 'Pan', { food: 8 });
+item(I.SHEARS, 'Tijeras', { stack: 1, tool: { type: 'shears', tier: 1, speed: 4, dur: 240, lvl: 0, dmg: 1 }, color: [210, 210, 220] });
+item(I.COMPASS, 'Brújula', { stack: 1 });
 item(I.BOTTLE, 'Botella de cristal'); item(I.WART, 'Verruga del Nether'); item(I.BLAZE_POWDER, 'Polvo de blaze'); item(I.MAGMA_CREAM, 'Crema de magma'); item(I.LAPIS, 'Lapislázuli'); item(I.BOOK, 'Libro');
 // ---------- Pociones: botella + verruga del Nether + ingrediente (en el soporte de pociones) ----------
 export const POTIONS = [
@@ -256,6 +284,17 @@ ARMOR_TYPES.forEach((at, ai) => ARMOR_TIERS.forEach((tier, ti) => {
 }));
 recipe(['SG', 'GS'], { S: I.SCRAP, G: I.GOLD }, I.NETHERITE);
 recipe(['G G', ' G '], { G: B.GLASS }, I.BOTTLE, 3);
+recipe(['MM', ' S', ' S'], { M: B.COBBLE, S: I.STICK }, I.HOE_STONE); recipe(['MM', ' S', ' S'], { M: I.IRON, S: I.STICK }, I.HOE_IRON); recipe(['MM', ' S', ' S'], { M: I.DIAMOND, S: I.STICK }, I.HOE_DIAMOND);
+recipe([' SL', 'S L', ' SL'], { S: I.STICK, L: I.LEATHER }, I.BOW);
+recipe(['C', 'S', 'L'], { C: I.COAL, S: I.STICK, L: I.LEATHER }, I.ARROW, 4);
+recipe(['I I', ' I '], { I: I.IRON }, I.BUCKET);
+recipe(['WWW'], { W: I.WHEAT }, I.BREAD);
+recipe([' I', 'I '], { I: I.IRON }, I.SHEARS);
+recipe([' I ', 'ICI', ' I '], { I: I.IRON, C: I.COAL }, I.COMPASS);
+recipe(['LLL', 'PPP'], { L: I.LEATHER, P: B.PLANKS }, B.BED);
+recipe(['CSC', 'SCS', 'CSC'], { C: I.COAL, S: B.SAND }, B.TNT);
+recipe(['PPP', 'PPP'], { P: B.PLANKS }, B.TRAPDOOR, 2);
+recipe(['SPS', 'SPS'], { S: I.STICK, P: B.PLANKS }, B.GATE);
 recipe(['L', 'L', 'L'], { L: I.LEATHER }, I.BOOK);
 recipe([' P ', 'CCC'], { P: I.BLAZE_POWDER, C: B.COBBLE }, B.BREWING);
 recipe([' B ', 'DOD', 'OOO'], { B: I.BOOK, D: I.DIAMOND, O: B.OBSIDIAN }, B.ENCH_TABLE);
@@ -349,6 +388,8 @@ export function dropOf(blockId, slot) {
     case B.CHERRY_LEAVES: return Math.random() < 0.05 ? [I.APPLE, 1] : null;
     case B.CHEST_OPEN: return [B.CHEST, 1];
     case B.GOLD_BLOCK: return [I.GOLD, 9];
+    case B.GRASS: return Math.random() < 0.1 ? [I.SEEDS, 1] : [B.DIRT, 1];
+    case B.WHEAT_CROP: case B.WHEAT_CROP + 1: case B.WHEAT_CROP + 2: case B.WHEAT_CROP + 3: return [I.SEEDS, 1 + (Math.random() < 0.5 ? 1 : 0)];
     case B.LAPIS_ORE: return [I.LAPIS, 4 + Math.floor(Math.random() * 5)];
     case B.SOUL_SAND: return Math.random() < 0.2 ? [I.WART, 1] : [B.SOUL_SAND, 1];
     case B.GLASS: case B.WATER: case B.LAVA: case B.NETHER_PORTAL: case B.END_PORTAL: case B.END_FRAME: case B.END_FRAME_EYE: return null;

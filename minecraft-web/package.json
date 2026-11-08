@@ -12,10 +12,12 @@
     "dev:clean": "vite --mode clean --host"
   },
   "dependencies": {
+    "peerjs": "^1.5.5",
     "three": "^0.170.0",
     "ws": "^8.22.1"
   },
   "devDependencies": {
+    "peer": "^1.0.2",
     "vite": "^6.0.0"
   }
 }

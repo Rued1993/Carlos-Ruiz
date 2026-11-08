@@ -5,6 +5,7 @@ import { B, I, OPAQUE, LIQUID } from './blocks.js';
 import { CH, biomeAt } from './world.js';
 import { CLEAN, clean } from './flavor.js';
 import { restyleMob } from './restyle.js';
+import { EXTRA_MOBS, BIOME_PASSIVE, BIOME_NIGHT } from './mobs2.js';
 
 const lam = (c, map) => new THREE.MeshLambertMaterial(map ? { color: c, map } : { color: c });
 function limb(group, w, h, d, color, x, y, z) { // pivote arriba
@@ -366,6 +367,7 @@ export const MOB_TYPES = {
 };
 
 const AMONG_COLORS = [0xc51111, 0x132ed1, 0x117f2d, 0xed54ba, 0xef7d0e, 0xf5f557, 0x3f474e, 0xd6e0f0, 0x6b2fbb, 0x71491e, 0x38fedc, 0x50ef39];
+Object.assign(MOB_TYPES, EXTRA_MOBS); // criaturas originales (animales y monstruos)
 // Edición limpia: sin crossovers de otras franquicias
 const CROSS_MOBS = ['crewmate', 'impostor', 'homer', 'bart', 'marge', 'lisa', 'maggie', 'flanders', 'saibaman', 'dog'];
 if (CLEAN) for (const k of CROSS_MOBS) delete MOB_TYPES[k];
@@ -420,6 +422,16 @@ export class MobManager {
     this.list = []; this.spawnT = 0; this.arrows = []; this.dim = 'overworld';
   }
   add(type, x, y, z) { const m = new Mob(type, x, y, z, this.scene); this.list.push(m); return m; }
+  // Invoca n criaturas de un tipo alrededor del jugador (invasiones). Devuelve las criaturas creadas.
+  spawnGroup(type, n, px, pz, minD = 16, maxD = 26) {
+    const out = [], w = this.world;
+    for (let tries = 0; out.length < n && tries < n * 8; tries++) {
+      const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD), x = Math.floor(px + Math.cos(a) * d), z = Math.floor(pz + Math.sin(a) * d), top = w.topY(x, z);
+      if (top <= 0 || w.isLiquid(x, top + 1, z) || w.isSolid(x, top + 1, z) || w.isSolid(x, top + 2, z)) continue;
+      const m = this.add(type, x + 0.5, MOB_TYPES[type].fly ? top + 6 : top + 1, z + 0.5); m.invader = true; out.push(m);
+    }
+    return out;
+  }
   clear() { for (const m of this.list) m.dispose(this.scene); this.list = []; for (const a of this.arrows) this.scene.remove(a.mesh); this.arrows = []; }
 
   raycast(origin, dir, maxDist) {
@@ -700,14 +712,18 @@ export class MobManager {
       const [x, z] = pickColumn(16, 40); const top = w.topY(x, z);
       if (top > 0) {
         const id = w.getBlock(x, top, z);
-        if ((id === B.GRASS || id === B.SNOW) && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z)) this.add(Math.random() < (CROSSOVER_PASSIVE.length ? 0.28 : 0) ? CROSSOVER_PASSIVE[Math.floor(Math.random() * CROSSOVER_PASSIVE.length)] : ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)], x + 0.5, top + 1, z + 0.5);
+        const bio = w.dim === 'overworld' ? biomeAt(x, z, w.seed) : null, pool = bio && BIOME_PASSIVE[bio], okGround = id === B.GRASS || id === B.SNOW || id === B.MUD || id === B.SAND || id === B.RED_SAND;
+        if (okGround && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z)) {
+          const r = Math.random(), t = pool && pool.length && r < 0.4 ? pool[Math.floor(Math.random() * pool.length)] : (id === B.GRASS || id === B.SNOW) ? (Math.random() < (CROSSOVER_PASSIVE.length ? 0.28 : 0) ? CROSSOVER_PASSIVE[Math.floor(Math.random() * CROSSOVER_PASSIVE.length)] : ['pig', 'cow', 'sheep', 'chicken'][Math.floor(Math.random() * 4)]) : null;
+          if (t && MOB_TYPES[t]) this.add(t, x + 0.5, top + 1, z + 0.5);
+        }
       }
     }
     if (mode !== 'survival' || hostile >= 8) return;
     if (day < 0.3) { // noche: superficie
       const [x, z] = pickColumn(20, 36); const top = w.topY(x, z);
       if (top > 0 && !w.isSolid(x, top + 1, z) && !w.isLiquid(x, top + 1, z) && OPAQUE[w.getBlock(x, top, z)])
-        this.add(this.world.dim === 'overworld' && Math.random() < 0.5 && biomeAt(x, z, this.world.seed) === 'swamp' ? 'slime' : HOSTILE_NIGHT[Math.floor(Math.random() * HOSTILE_NIGHT.length)], x + 0.5, top + 1, z + 0.5);
+        { const nb = w.dim === 'overworld' ? BIOME_NIGHT[biomeAt(x, z, w.seed)] : null; this.add(nb && Math.random() < 0.55 ? nb[Math.floor(Math.random() * nb.length)] : (w.dim === 'overworld' && Math.random() < 0.3 && biomeAt(x, z, w.seed) === 'swamp') ? 'slime' : HOSTILE_NIGHT[Math.floor(Math.random() * HOSTILE_NIGHT.length)], x + 0.5, top + 1, z + 0.5); }
     } else if (hostile < 4) { // cuevas: bajo la superficie, siempre
       const a = Math.random() * Math.PI * 2, d = 14 + Math.random() * 14;
       const x = Math.floor(player.pos.x + Math.cos(a) * d), z = Math.floor(player.pos.z + Math.sin(a) * d);

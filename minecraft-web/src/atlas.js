@@ -9,7 +9,8 @@ const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'log_side', '
   'obsidian', 'netherrack', 'soul_sand', 'glowstone', 'lava', 'nether_bricks', 'end_stone', 'end_frame_top', 'end_frame_side', 'end_frame_eye', 'portal', 'end_portal',
   'purpur', 'end_bricks', 'chest_top', 'chest_side', 'chest_open',
   'sandstone', 'mossy_cobble', 'ancient_debris_top', 'ancient_debris_side', 'gold_block', 'brew_top', 'brew_side', 'ench_top', 'ench_side', 'lapis_ore',
-  'red_sand', 'terra_orange', 'terra_red', 'terra_yellow', 'terra_white', 'terra_brown', 'cherry_log_side', 'cherry_log_top', 'cherry_leaves', 'cherry_planks', 'mud'];
+  'red_sand', 'terra_orange', 'terra_red', 'terra_yellow', 'terra_white', 'terra_brown', 'cherry_log_side', 'cherry_log_top', 'cherry_leaves', 'cherry_planks', 'mud',
+  'door_lo', 'door_hi', 'trapdoor', 'tnt_top', 'tnt_side', 'bed_top', 'bed_side', 'farmland', 'wheat'];
 export const TILE_INDEX = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 export const TILE_COUNT = NAMES.length;
 
@@ -122,6 +123,16 @@ const painters = {
   cherry_leaves: (x, y) => { const sp = hash2(x >> 1, y >> 1, 158) > 0.72; return jitter(sp ? [252, 214, 226] : [236, 150, 184], 22, x, y, 159); },
   cherry_planks: (x, y) => jitter([228, 176, 170], 8, x, y, 160).map((c) => (y % 4 === 3 ? c - 30 : c)),
   mud: (x, y) => { const wet = hash2(x >> 1, y >> 1, 161) > 0.8; return jitter(wet ? [48, 38, 34] : [66, 52, 44], 9, x, y, 162); },
+  // Puerta: dos paneles hundidos, travesaños y manija; la parte alta lleva una ventana
+  door_lo: (x, y) => { const edge = x < 1 || x > 14 || y < 1 || y > 14, panel = (x >= 3 && x <= 12 && ((y >= 2 && y <= 6) || (y >= 9 && y <= 13))); if (x >= 11 && x <= 12 && y >= 7 && y <= 8) return [214, 190, 90]; return edge ? jitter([92, 60, 30], 6, x, y, 170) : panel ? jitter([142, 104, 58], 7, x, y, 171) : jitter([168, 128, 74], 7, x, y, 172); },
+  door_hi: (x, y) => { const edge = x < 1 || x > 14 || y < 1 || y > 14, win = x >= 4 && x <= 11 && y >= 3 && y <= 9; if (win) return (x === 7 || x === 8 || y === 6) ? jitter([120, 84, 44], 5, x, y, 173) : [186, 224, 240, 205]; return edge ? jitter([92, 60, 30], 6, x, y, 174) : jitter([168, 128, 74], 7, x, y, 175); },
+  trapdoor: (x, y) => { const edge = x < 1 || x > 14 || y < 1 || y > 14, bar = x === 4 || x === 11 || y === 7 || y === 8; return edge ? jitter([90, 58, 28], 6, x, y, 176) : bar ? jitter([132, 96, 52], 6, x, y, 177) : jitter([170, 130, 76], 7, x, y, 178); },
+  tnt_top: (x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); return d < 2 ? [60, 60, 60] : jitter([210, 60, 50], 8, x, y, 179); },
+  tnt_side: (x, y) => { if (y >= 5 && y <= 10) return (x + y) % 3 ? [236, 232, 222] : [60, 60, 60]; return jitter([206, 58, 48], 8, x, y, 180); },
+  bed_top: (x, y) => { if (y < 5) return jitter([240, 240, 244], 5, x, y, 181); return jitter([196, 50, 60], 8, x, y, 182); },
+  bed_side: (x, y) => { if (y < 9) return y < 5 ? jitter([240, 240, 244], 5, x, y, 183) : jitter([196, 50, 60], 8, x, y, 184); return jitter([150, 110, 60], 8, x, y, 185); },
+  farmland: (x, y) => jitter(y % 4 === 0 ? [74, 50, 34] : [100, 70, 46], 8, x, y, 186),
+  wheat: (x, y) => { if (x % 4 === 3) return [0, 0, 0, 0]; const t = hash2(x, y, 187) > 0.5; return t ? jitter([200, 170, 70], 14, x, y, 188) : jitter([150, 150, 60], 14, x, y, 189); },
   lapis_ore: ore([38, 76, 190], 140),
   brew_top: (x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 2.2) return [250, 190, 40]; if (d < 4.6) return jitter([70, 70, 74], 6, x, y, 141); return x < 1 || y < 1 || x > 14 || y > 14 ? jitter([40, 40, 44], 6, x, y, 142) : stone(x, y).map((c) => c - 30); },
   brew_side: (x, y) => { if (y > 11) return stone(x, y).map((c) => c - 25); const rod = x >= 7 && x <= 8; if (rod) return jitter([250, 180, 40], 12, x, y, 143); const bottle = (x >= 2 && x <= 4 && y >= 5) || (x >= 11 && x <= 13 && y >= 5); if (bottle) return [215, 235, 245, 255]; return [0, 0, 0, 0]; },

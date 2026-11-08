@@ -15,8 +15,10 @@ import { World, terrainHeight, terrainInfo, biomeAt, endPillars, SEA, CH } from 
 import { Ambient } from './ambient.js';
 import { ChunkPool } from './chunkpool.js';
 import { Net } from './net.js';
+import { createRoom, joinRoom } from './p2p.js';
 import { CLEAN, clean, watchDom } from './flavor.js';
 import { TouchControls } from './touch.js';
+import { INVASIONS } from './mobs2.js';
 import { Gamepads, PAD_ACTIONS, BTN_NAMES, defaultPadConfig } from './gamepad.js';
 import { Player } from './player.js';
 import { Inventory } from './inventory.js';
@@ -324,7 +326,9 @@ function breakBlock(hit) {
   particles.blockBreak(hit.x, hit.y, hit.z, id); buzz(10);
   sound('break');
   if (mode === 'survival') {
-    const d = skipDrop ? null : dropOf(id, held);
+    let d = skipDrop ? null : dropOf(id, held);
+    if (held && held.id === I.SHEARS && (id === B.LEAVES || id === B.CHERRY_LEAVES)) d = [id, 1]; // las tijeras recogen las hojas enteras
+    if (id === B.WHEAT_CROP + 3) drops.spawn(hit.x + 0.5, hit.y + 0.4, hit.z + 0.5, I.WHEAT, 1 + Math.floor(Math.random() * 2)); // cultivo maduro
     if (d && held && held.ench && held.ench.fortuna && (id === B.COAL_ORE || id === B.DIAMOND_ORE || id === B.LAPIS_ORE)) d[1] += Math.floor(Math.random() * (held.ench.fortuna + 1)); // Fortuna
     if (d) {
       if (kind === 'oneblock' && hit.x === 0 && hit.y === 64 && hit.z === 0) { const left = inv.add(d[0], d[1]); if (left) drops.spawn(0.5, 65.6, 0.5, d[0], left); ui.renderHotbar(); sound('pop'); } // directo al inventario: nada se cae al vacío
@@ -349,6 +353,12 @@ function useItem() {
   if (hit && SHAPE[hit.id] && SHAPE[hit.id].kind === 'door' && !player.keys.has('ShiftLeft')) { toggleDoor(hit.x, hit.y, hit.z); return; }
   if (hit && hit.id === B.BREWING && !player.keys.has('ShiftLeft')) { openPanel('brew'); return; }
   if (hit && hit.id === B.ENCH_TABLE && !player.keys.has('ShiftLeft')) { openPanel('ench'); return; }
+  if (hit && !player.keys.has('ShiftLeft')) {
+    const sh = SHAPE[hit.id];
+    if (sh && (sh.kind === 'gate' || sh.kind === 'trapdoor')) { toggleOpenable(hit.x, hit.y, hit.z); return; }
+    if (hit.id === B.BED) { useBed(hit); return; }
+  }
+  if (hit && hit.id === B.TNT && inv.held() && inv.held().id === I.LIGHTER) { igniteTnt(hit.x, hit.y, hit.z, 3); return; }
   if (hit && hit.id === B.END_FRAME) { useEyeOnFrame(hit); return; }
   if (hit && hit.id === B.CHEST && !player.keys.has('ShiftLeft')) { openChest(hit); return; }
   if (!player.keys.has('ShiftLeft')) {
@@ -361,6 +371,11 @@ function useItem() {
   }
   const held = inv.held();
   if (!held) return;
+  if (held.id === I.BOW) { shootBow(); return; }
+  if (held.id === I.BUCKET || held.id === I.WATER_BUCKET || held.id === I.LAVA_BUCKET) { useBucket(held, hit, eye, dir); return; }
+  { const tl = toolOf(held);
+    if (tl && tl.type === 'hoe' && hit && (hit.id === B.GRASS || hit.id === B.DIRT) && hit.normal[1] === 1 && world.getBlock(hit.x, hit.y + 1, hit.z) === AIR) { world.setBlock(hit.x, hit.y, hit.z, B.FARMLAND); sound('place'); if (mode === 'survival' && inv.wearHeld(1)) ui.toast('¡Se ha roto la azada!'); ui.renderHotbar(); return; } }
+  if (held.id === I.SEEDS && hit && hit.id === B.FARMLAND && hit.normal[1] === 1 && world.getBlock(hit.x, hit.y + 1, hit.z) === AIR) { world.setBlock(hit.x, hit.y + 1, hit.z, B.WHEAT_CROP); sound('place'); if (mode === 'survival') { inv.consumeHeld(1); ui.renderHotbar(); } return; }
   if (held.id === I.LIGHTER) { if (hit) lightPortal(hit); return; }
   if (ITEMS[held.id] && ITEMS[held.id].armor) { // equipar armadura con clic derecho (intercambia con la pieza puesta)
     const a = ITEMS[held.id].armor, cur = inv.armor[a.slot];
@@ -388,6 +403,7 @@ function useItem() {
       const top = hit.normal[1] === -1 ? true : hit.normal[1] === 1 ? false : pt.y - Math.floor(pt.y) > 0.5;
       putId = top ? SLAB_TOP(shp.m) : SLAB_BOTTOM(shp.m);
     } else if (shp.kind === 'stairs') putId = STAIR_ID(shp.m, o);
+    else if (shp.kind === 'gate') putId = B.GATE + (Math.abs(look.z) > Math.abs(look.x) ? 0 : 1);
     else if (shp.kind === 'door') {
       if (world.getBlock(px, py + 1, pz) !== AIR || py + 1 >= CH) return;
       putId = DOOR_LO + o;
@@ -548,7 +564,80 @@ function trackBiome(dt) { // misiones de exploración de biomas
   bioT -= dt; if (bioT > 0 || dim !== 'overworld' || kind === 'oneblock') return; bioT = 2;
   quests.event('biome', terrainInfo(Math.floor(player.pos.x), Math.floor(player.pos.z), seed).biome, 1);
 }
+// ---------- Más herramientas y bloques: arco, cubos, cama, TNT, portones, cultivos, brújula ----------
+const parrows = []; let bowCool = 0, cropT = 0;
+function shootBow() {
+  if (bowCool > 0) return;
+  if (mode === 'survival' && inv.count(I.ARROW) < 1) { ui.toast('Necesitas flechas'); return; }
+  if (mode === 'survival') { inv.take(I.ARROW, 1); if (inv.wearHeld(1)) ui.toast('¡Se ha roto el arco!'); ui.renderHotbar(); }
+  bowCool = 0.55; const dir = player.lookDir(), p = player.eye.clone().addScaledVector(dir, 0.7);
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.7), new THREE.MeshLambertMaterial({ color: 0xb89058 })); mesh.position.copy(p); scene.add(mesh);
+  parrows.push({ mesh, vel: dir.clone().multiplyScalar(34), life: 4 }); sound('shoot'); swing = Math.max(swing, 0.001);
+}
+function updateArrows(dt) {
+  bowCool = Math.max(0, bowCool - dt);
+  for (let i = parrows.length - 1; i >= 0; i--) {
+    const a = parrows[i], prev = a.mesh.position.clone(); a.life -= dt; a.vel.y -= 14 * dt;
+    a.mesh.position.addScaledVector(a.vel, dt); a.mesh.lookAt(a.mesh.position.clone().add(a.vel));
+    const p = a.mesh.position; let gone = a.life <= 0 || world.isSolid(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z));
+    if (!gone) for (const m of mobs.list) if (Math.abs(p.x - m.pos.x) < m.hw + 0.25 && Math.abs(p.z - m.pos.z) < m.hw + 0.25 && p.y > m.pos.y - 0.1 && p.y < m.pos.y + m.h + 0.1) { mobs.damage(m, 7 + dmgBonus() * 0.5, prev.x, prev.z); particles.burst(p.x, p.y, p.z, [0.8, 0.1, 0.1], 5, 2); gone = true; break; }
+    if (!gone && boss) { const d = a.vel.clone().normalize(), hb = boss.raycast(prev, d, a.vel.length() * dt + 0.3); if (hb) { boss.hit(8, hb.crit, hb); gone = true; sound('hit'); } }
+    if (gone) { scene.remove(a.mesh); a.mesh.geometry.dispose(); parrows.splice(i, 1); }
+  }
+}
+function useBucket(held, hit, eye, dir) {
+  const swapTo = (id) => { if (mode === 'survival') { inv.consumeHeld(1); const left = inv.add(id, 1); if (left) dropItem(id, left); ui.renderHotbar(); } };
+  if (held.id === I.BUCKET) {
+    const lh = world.raycast(eye, dir, 5.5, true);
+    if (lh && (lh.id === B.WATER || lh.id === B.LAVA)) { world.setBlock(lh.x, lh.y, lh.z, AIR); sound('splash'); if (mode === 'survival') { inv.consumeHeld(1); inv.add(lh.id === B.WATER ? I.WATER_BUCKET : I.LAVA_BUCKET, 1); ui.renderHotbar(); } }
+    return;
+  }
+  if (!hit) return;
+  const x = hit.x + hit.normal[0], y = hit.y + hit.normal[1], z = hit.z + hit.normal[2], there = world.getBlock(x, y, z);
+  if (there !== AIR && !LIQUID[there]) return;
+  world.setBlock(x, y, z, held.id === I.WATER_BUCKET ? B.WATER : B.LAVA); sound('splash');
+  if (mode === 'survival') { inv.consumeHeld(1); const left = inv.add(I.BUCKET, 1); if (left) dropItem(I.BUCKET, left); ui.renderHotbar(); }
+}
+function toggleOpenable(x, y, z) {
+  const id = world.getBlock(x, y, z), s = SHAPE[id]; let nid;
+  if (s.kind === 'gate') nid = (s.open ? B.GATE : B.GATE_OPEN) + s.axis;
+  else { const l = player.lookDir(), o = Math.abs(l.x) > Math.abs(l.z) ? (l.x > 0 ? 1 : 3) : (l.z > 0 ? 2 : 0); nid = s.open ? B.TRAPDOOR : B.TRAPDOOR_OPEN + o; }
+  world.setBlock(x, y, z, nid); sound(s.open ? 'place' : 'break');
+}
+function useBed(hit) {
+  player.spawn.set(hit.x + 0.5, hit.y + 1, hit.z + 0.5);
+  const t = sky.time;
+  if (!mp && t > 0.5 && t < 0.97) { sky.time = 0.03; player.hp = 20; weather.set && weather.set('clear'); ui.toast('😴 Has dormido hasta la mañana'); sound('levelup'); }
+  else ui.toast(mp ? 'Punto de reaparición fijado' : 'Solo se duerme de noche. Punto de reaparición fijado');
+}
+function igniteTnt(x, y, z, fuse) {
+  if (world.getBlock(x, y, z) !== B.TNT) return;
+  world.setBlock(x, y, z, AIR); sound('hiss'); particles.burst(x + 0.5, y + 1, z + 0.5, [1, 0.6, 0.2], 14, 3);
+  const mk = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.98, 0.98), new THREE.MeshBasicMaterial({ color: 0xff4030 })); mk.position.set(x + 0.5, y + 0.5, z + 0.5); scene.add(mk);
+  let n = 0; const iv = setInterval(() => { mk.visible = !mk.visible; if (++n > fuse * 5) clearInterval(iv); }, 200);
+  setTimeout(() => {
+    scene.remove(mk); mk.geometry.dispose(); clearInterval(iv);
+    for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 4; dy++) for (let dz = -4; dz <= 4; dz++) if ((dx || dy || dz) && world.getBlock(x + dx, y + dy, z + dz) === B.TNT) igniteTnt(x + dx, y + dy, z + dz, 0.6 + Math.random() * 0.8); // reacción en cadena
+    explode(x + 0.5, y + 0.5, z + 0.5, 4.2, 0.9);
+  }, fuse * 1000);
+}
+function growCrops(dt) {
+  cropT -= dt; if (cropT > 0) return; cropT = 1.5;
+  for (let i = 0; i < 18; i++) {
+    const x = Math.floor(player.pos.x + (Math.random() - 0.5) * 48), z = Math.floor(player.pos.z + (Math.random() - 0.5) * 48), y = world.topY(x, z);
+    if (y < 1) continue; const id = world.getBlock(x, y + 1, z);
+    if (id >= B.WHEAT_CROP && id < B.WHEAT_CROP + 3 && world.getBlock(x, y, z) === B.FARMLAND && Math.random() < 0.4) world.setBlock(x, y + 1, z, id + 1);
+  }
+}
+function updateCompass() {
+  const el = $('compass'); if (!el) return;
+  if (inv.count(I.COMPASS) < 1) { el.classList.add('hidden'); return; }
+  const dx = player.spawn.x - player.pos.x, dz = player.spawn.z - player.pos.z, d = Math.hypot(dx, dz);
+  const ang = Math.atan2(-dx, -dz) - player.yaw, arrows = ['⬆', '↗', '➡', '↘', '⬇', '↙', '⬅', '↖'], k = (Math.round((((ang % 6.2832) + 6.2832) % 6.2832) / 0.7854) + 8) % 8;
+  el.textContent = '🧭 ' + arrows[k] + ' ' + Math.round(d) + ' m'; el.classList.remove('hidden');
+}
 function updateTracker() {
+  updateCompass();
   $('tracker').innerHTML = quests.active(3).map((q) => `<div class="qt"><b>${q.title}</b>${q.desc} (${quests.progress[q.id] || 0}/${q.n})<div class="qb"><i style="width:${((quests.progress[q.id] || 0) / q.n) * 100}%"></i></div></div>`).join('');
 }
 
@@ -1137,7 +1226,8 @@ async function startGame({ id, name, seed: sd, mode: md, saved, meta, created, p
   else player.vel.set(0, 0, 0);
 
   ui.renderHotbar(); ui.renderStats(); updateHand(0); setCamMode(camMode);
-  window.__game = { get mp() { return mp; }, get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, openChest, rollLoot, get xp() { return [xpLevel, xpPts]; } };
+  window.__game = { get invasion() { return { mobs: invMobs, t: invT, force: () => { invT = 0; } }; }, get mp() { return mp; }, get world() { return world; }, player, inv, sky, mobs, drops, ui, camera, scene, renderer, get mode() { return mode; }, set mode(v) { mode = v; player.mode = v; }, get state() { return state; }, set state(v) { state = v; }, explode, saveGame, openInventory, mouse, useItem, breakBlock, furnaces, setCam: setCamMode, get weather() { return weather; }, get boss() { return boss; }, summon: (x, y, z) => spawnBossOf('storm', x, y, z), summonBoss, summonMob, get quests() { return quests; }, materials, renderer, get composer() { return composer; }, changeDimension, get dim() { return dim; }, get dims() { return dims; }, lightPortal, findPortalFrame, useEyeOnFrame, buildNetherPortal, openPanel, closePanel, addXp, terrainInfo, openChest, rollLoot, get xp() { return [xpLevel, xpPts]; } };
+  if (mp && net.code) { const rc = $('roomCode'); rc.textContent = (net.isHost ? '🏠 Sala: ' : '🔑 Sala: ') + net.code + ' · toca para copiar'; rc.classList.remove('hidden'); rc.onclick = () => { try { navigator.clipboard.writeText(net.code); ui.toast('Código copiado: ' + net.code); } catch {} }; if (net.hub) net.hub.getTime = () => sky.time; } else $('roomCode').classList.add('hidden');
   if (mp) { mpSetup(); for (const p of welcome.players) mpAddRemote(p.id, p.name, p.color); sky.time = welcome.time; chatLine('Conectado · ' + (welcome.players.length + 1) + ' jugador(es). Enter = chat', 'sys'); }
   state = 'play'; showOverlay(null);
   safeLock(); keepAwake();
@@ -1191,6 +1281,31 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => player && player.keys.delete(e.code));
 document.addEventListener('wheel', (e) => { if (state === 'play') { inv.selected = (inv.selected + Math.sign(e.deltaY) + 9) % 9; syncSelect(); } });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+// ---------- Invasiones aleatorias de monstruos ----------
+let invT = 150 + Math.random() * 120, invMobs = [], invN = 0, invName = '', invElite = false;
+function invasionTick(dt) {
+  if (mode !== 'survival' || dim !== 'overworld' || kind === 'oneblock' || state !== 'play') return;
+  const el = $('invasion');
+  if (invMobs.length) { // seguimiento de la invasión en curso
+    invMobs = invMobs.filter((m) => mobs.list.includes(m));
+    if (invMobs.length) { el.classList.remove('hidden'); el.classList.toggle('elite', invElite); el.textContent = '⚔ ' + (invElite ? '¡CON JEFE ÉLITE! ' : 'Invasión: ') + invMobs.length + ' restante' + (invMobs.length > 1 ? 's' : ''); return; }
+    el.classList.add('hidden'); invN++; addXp(40 + (invElite ? 40 : 0)); sound('levelup');
+    const bx = player.pos.x, by = player.pos.y + 1, bz = player.pos.z;
+    for (const [id, n, p] of [[I.GOLD, 3 + Math.floor(Math.random() * 4), 1], [I.DIAMOND, 1 + Math.floor(Math.random() * 2), invElite ? 1 : 0.25], [I.APPLE, 2, 0.6], [I.LAPIS, 3, 0.4], [I.STAR, 1, invElite ? 0.3 : 0]]) if (Math.random() < p) drops.spawn(bx, by, bz, id, n);
+    ui.toast('¡Invasión repelida! Recompensa entregada'); invT = 180 + Math.random() * 180; return;
+  }
+  el.classList.add('hidden');
+  if (boss || ritual || weather.boss) return;
+  invT -= dt; if (invT > 0) return;
+  const bio = terrainInfo(Math.floor(player.pos.x), Math.floor(player.pos.z), seed).biome;
+  const pool = INVASIONS.filter((v) => (!v.biomes || v.biomes.includes(bio)) && v.mobs.filter((t, i) => i % 2 === 0).every((t) => MOB_TYPES[t]));
+  const inv = pool[Math.floor(Math.random() * pool.length)]; if (!inv) { invT = 60; return; }
+  invMobs = []; invElite = invN % 3 === 2;
+  for (let i = 0; i < inv.mobs.length; i += 2) invMobs.push(...mobs.spawnGroup(inv.mobs[i], inv.mobs[i + 1] + Math.floor(invN / 4), player.pos.x, player.pos.z));
+  if (invElite && invMobs[0]) { const e = invMobs[0]; e.hp *= 3; e.group.scale.setScalar(1.6); e.hw *= 1.5; e.h *= 1.5; e.elite = true; }
+  if (!invMobs.length) { invT = 40; return; }
+  invName = inv.name; ui.toast(inv.name); sound('roar');
+}
 // ---------- Controles táctiles y mejoras para móvil ----------
 let touchMode = settings.touch === 'on' || (settings.touch !== 'off' && COARSE), touchMove = null, touchSprint = false, touchAuto = false, touchUI = null, wakeLock = null, fsTries = 0, lowFpsT = 0;
 const buzz = (ms) => { if (touchMode && navigator.vibrate) try { navigator.vibrate(ms); } catch {} };
@@ -1517,7 +1632,7 @@ function frame(now) {
       $('darkness').style.opacity = darkTarget;
     }
     mmT -= dt; if (mmT <= 0) { mmT = 0.4; drawMinimap(); }
-    trackBiome(dt);
+    trackBiome(dt); invasionTick(dt); updateArrows(dt); growCrops(dt);
     trackT -= dt; if (trackT <= 0) { trackT = 0.5; updateTracker(); }
     playedSec += dt;
     saveT += dt; if (saveT > 25) { saveT = 0; thumbReq = true; }
@@ -1550,6 +1665,17 @@ requestAnimationFrame(frame);
   $('bCreative').onclick = () => fresh('creative');
   $('bOneBlock').onclick = () => fresh('survival', 'oneblock');
   try { $('mpUrl').value = localStorage.getItem('mcweb-mpurl') || ''; $('mpName').value = localStorage.getItem('mcweb-mpname') || ''; } catch {}
+  const mpName = () => { const n = $('mpName').value.trim() || 'Jugador' + Math.floor(Math.random() * 900 + 100); try { localStorage.setItem('mcweb-mpname', $('mpName').value.trim()); } catch {} return n; };
+  $('bHost').onclick = async () => {
+    audio.unlock(); const name = mpName(); $('msg').textContent = 'Creando sala…';
+    try { const seed0 = 1 + Math.floor(Math.random() * 900000), { net, welcome, code } = await createRoom(name, seed0, 'survival'); startGame({ id: null, name: 'Sala ' + code, seed: seed0, mode: 'survival', saved: new Map(), meta: null, net, welcome }); }
+    catch (e) { $('msg').textContent = '⚠ ' + e.message; }
+  };
+  $('bJoin').onclick = async () => {
+    audio.unlock(); const name = mpName(); $('msg').textContent = 'Buscando la sala…';
+    try { const { net, welcome } = await joinRoom($('mpCode').value, name); startGame({ id: null, name: 'Sala ' + net.code, seed: welcome.seed, mode: welcome.mode, saved: new Map(), meta: null, net, welcome }); }
+    catch (e) { $('msg').textContent = '⚠ ' + e.message; }
+  };
   $('bMulti').onclick = async () => {
     audio.unlock();
     let url = $('mpUrl').value.trim(); if (!url) { $('msg').textContent = 'Escribe la dirección del servidor'; return; }

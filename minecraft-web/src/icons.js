@@ -49,7 +49,21 @@ function drawItem(id) {
   const handle = () => { for (let i = 2; i <= 11; i++) px(x, [[i, 15 - i]], stick); };
   const info = ITEMS[id] || {};
   const pot = POTIONS.find((p) => p.id === id);
-  if (pot || id === I.BOTTLE) { // botella: cuello, cuerpo redondo y líquido de color
+  const tint = (c) => rgb(c);
+  if (id === I.BOW) { for (let i = 0; i < 12; i++) { const bx = 3 + Math.round(Math.sin(i / 11 * Math.PI) * 5); px(x, [[bx, 2 + i]], '#8a5a2a'); px(x, [[3 + Math.round(Math.sin(i / 11 * Math.PI) * 5) + 1, 2 + i]], '#6a4018'); } for (let i = 0; i < 12; i++) px(x, [[3, 2 + i]], 'rgba(235,235,235,.9)'); px(x, [[4, 7], [5, 7], [6, 7], [7, 7], [8, 7]], '#c8c8c8'); px(x, [[9, 6], [9, 8]], '#c8c8c8'); }
+  else if (id === I.ARROW) { for (let i = 2; i <= 12; i++) px(x, [[i, 14 - i]], '#8a6a38'); px(x, [[12, 2], [13, 2], [12, 3], [13, 1], [11, 2]], '#d0d0d8'); px(x, [[2, 13], [3, 13], [2, 12], [1, 13], [3, 14]], '#e8e8e8'); }
+  else if (id === I.BUCKET || id === I.WATER_BUCKET || id === I.LAVA_BUCKET) {
+    const fill = id === I.WATER_BUCKET ? '#3a78e0' : id === I.LAVA_BUCKET ? '#ff7a18' : null;
+    for (let yy = 4; yy <= 12; yy++) { const inset = Math.floor((yy - 4) / 3); for (let xx = 3 + inset; xx <= 12 - inset; xx++) px(x, [[xx, yy]], (xx === 3 + inset || xx === 12 - inset || yy === 12) ? '#8a8a92' : fill && yy <= 6 ? fill : '#b8b8c0'); }
+    px(x, [[4, 3], [5, 2], [6, 2], [7, 2], [8, 2], [9, 2], [10, 2], [11, 3]], '#707078'); if (fill) for (let xx = 5; xx <= 10; xx++) px(x, [[xx, 4]], fill);
+  } else if (id === I.SEEDS) { for (const [a, b] of [[4, 6], [8, 4], [10, 9], [6, 11], [11, 6], [5, 9]]) px(x, [[a, b], [a + 1, b], [a, b + 1]], '#6a9a30');
+  } else if (id === I.WHEAT) { for (const dx of [-3, 0, 3]) { for (let yy = 3; yy <= 14; yy++) px(x, [[8 + dx + (yy < 6 ? 0 : 0), yy]], '#c8a848'); for (let yy = 2; yy <= 6; yy++) px(x, [[7 + dx, yy], [9 + dx, yy]], '#e8c860'); } px(x, [[5, 11], [6, 11], [10, 11], [11, 11]], '#80602a');
+  } else if (id === I.BREAD) { for (let yy = 6; yy <= 11; yy++) for (let xx = 2; xx <= 13; xx++) { const r = (yy === 6 || yy === 11) ? xx > 3 && xx < 12 : true; if (r) px(x, [[xx, yy]], yy < 8 ? '#d89a4a' : '#c0802e'); } px(x, [[5, 7], [8, 7], [11, 7]], '#a86a20');
+  } else if (id === I.SHEARS) { for (let i = 0; i < 9; i++) { px(x, [[4 + i, 3 + i], [11 - i, 3 + i]], '#c8c8d0'); } px(x, [[3, 12], [4, 13], [5, 12], [11, 12], [12, 13], [13, 12]], '#c03030');
+  } else if (id === I.COMPASS) { for (let yy = 2; yy <= 13; yy++) for (let xx = 2; xx <= 13; xx++) { const d = Math.hypot(xx - 7.5, yy - 7.5); if (d < 6) px(x, [[xx, yy]], d > 5 ? '#6a6a72' : '#d8d8de'); } px(x, [[7, 4], [7, 5], [7, 6], [8, 5]], '#d03030'); px(x, [[7, 9], [7, 10], [7, 11], [8, 10]], '#303038');
+  } else if (info.tool && info.tool.type === 'hoe') { const c = rgb(info.color || [150, 150, 150]); for (let i = 2; i <= 12; i++) px(x, [[i, 14 - i]], stick); px(x, [[7, 4], [8, 3], [9, 3], [10, 4], [11, 4], [11, 5]], c);
+  } else if (id === B.GATE) { for (const xx of [2, 12]) for (let yy = 3; yy <= 13; yy++) px(x, [[xx, yy], [xx + 1, yy]], '#a8803f'); for (const yy of [5, 6, 10, 11]) for (let xx = 4; xx <= 11; xx++) px(x, [[xx, yy]], '#b8904a'); for (const [a, b] of [[7, 7], [8, 8], [7, 9], [8, 6]]) px(x, [[a, b]], '#8a6a30');
+  } else if (pot || id === I.BOTTLE) { // botella: cuello, cuerpo redondo y líquido de color
     const col = pot ? pot.color : null, glass = '#cfe6f0', rim = '#8aa4b0';
     px(x, [[6, 1], [7, 1], [8, 1], [9, 1]], '#9a7040'); for (let yy = 2; yy <= 4; yy++) px(x, [[7, yy], [8, yy]], glass); px(x, [[6, 4], [9, 4]], rim);
     for (let yy = 5; yy <= 13; yy++) for (let xx = 3; xx <= 12; xx++) { const d = Math.hypot(xx - 7.5, yy - 9.2); if (d < 4.6) { const liquid = col && yy >= 7; px(x, [[xx, yy]], liquid ? rgb(col.map((v) => v * (d > 3.6 ? 0.7 : 1))) : (d > 3.8 ? rim : 'rgba(207,230,240,.55)')); } }
